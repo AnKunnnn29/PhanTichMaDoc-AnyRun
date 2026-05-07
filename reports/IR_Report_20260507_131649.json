@@ -1,0 +1,309 @@
+{
+  "generated_at": "2026-05-07T13:16:49.538316",
+  "task_uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "analysis_url": "https://app.any.run/tasks/550e8400-e29b-41d4-a716-446655440000",
+  "severity": "HIGH",
+  "malware_name": "Emotet",
+  "summary": "Phát hiện mã độc 'Emotet' với mức độ 'Cao'. Mã độc thực hiện 12 kỹ thuật MITRE ATT&CK, kết nối 4 IP/4 domain C2, và tạo 3 file độc hại trên hệ thống.",
+  "ioc_blocklist": {
+    "ip_addresses": [
+      "185.220.101.45",
+      "193.56.255.42",
+      "91.121.88.203",
+      "45.33.32.156"
+    ],
+    "domains": [
+      "malicious-c2.ru",
+      "evil-dropper.net",
+      "botnet-panel.top",
+      "update-cdn-service.com"
+    ],
+    "urls": [
+      "http://malicious-c2.ru/update/check",
+      "http://evil-dropper.net/payload/stage2.bin",
+      "https://botnet-panel.top/api/v2/report"
+    ],
+    "file_hashes": [
+      "d41d8cd98f00b204e9800998ecf8427e",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    ],
+    "filenames": [
+      "payload.dll",
+      "svchost32.exe",
+      "Invoice_2024_Q4.doc"
+    ]
+  },
+  "mitre_techniques": [
+    {
+      "id": "T1566.001",
+      "name": "Spearphishing Attachment",
+      "tactic": "Initial Access"
+    },
+    {
+      "id": "T1059.001",
+      "name": "PowerShell",
+      "tactic": "Execution"
+    },
+    {
+      "id": "T1059.003",
+      "name": "Windows Command Shell",
+      "tactic": "Execution"
+    },
+    {
+      "id": "T1055.001",
+      "name": "Dynamic-link Library Injection",
+      "tactic": "Defense Evasion"
+    },
+    {
+      "id": "T1547.001",
+      "name": "Registry Run Keys / Startup Folder",
+      "tactic": "Persistence"
+    },
+    {
+      "id": "T1082",
+      "name": "System Information Discovery",
+      "tactic": "Discovery"
+    },
+    {
+      "id": "T1057",
+      "name": "Process Discovery",
+      "tactic": "Discovery"
+    },
+    {
+      "id": "T1083",
+      "name": "File and Directory Discovery",
+      "tactic": "Discovery"
+    },
+    {
+      "id": "T1016",
+      "name": "System Network Configuration Discovery",
+      "tactic": "Discovery"
+    },
+    {
+      "id": "T1041",
+      "name": "Exfiltration Over C2 Channel",
+      "tactic": "Exfiltration"
+    },
+    {
+      "id": "T1071.001",
+      "name": "Web Protocols (HTTP/S C2)",
+      "tactic": "Command and Control"
+    },
+    {
+      "id": "T1573.001",
+      "name": "Symmetric Cryptography",
+      "tactic": "Command and Control"
+    }
+  ],
+  "actions": [
+    {
+      "priority": 1,
+      "phase": "Xác định (Identification)",
+      "category": "Thu thập bằng chứng",
+      "title": "Xác nhận và ghi lại thông tin mẫu mã độc",
+      "description": "Xác nhận đây là mã độc loại 'Emotet' với mức độ nguy hiểm 'Cao' (threat level 2/4). Lưu trữ report đầy đủ từ Any.Run để phục vụ điều tra.",
+      "commands": [],
+      "notes": [
+        "Any.Run report URL: https://app.any.run/tasks/550e8400-e29b-41d4-a716-446655440000",
+        "Thời gian phân tích: 120s trên Windows 10 x64 (Build 19041)",
+        "MITRE techniques: 12 kỹ thuật được phát hiện"
+      ]
+    },
+    {
+      "priority": 1,
+      "phase": "Xác định (Identification)",
+      "category": "Phân tích mẫu",
+      "title": "Lưu trữ hash và thông tin file mã độc",
+      "description": "File 'Invoice_2024_Q4.doc' (MS Word Document, 442.0 KB) đã được xác nhận là mã độc.",
+      "commands": [
+        "certutil -hashfile \"<đường_dẫn_file>\" MD5",
+        "certutil -hashfile \"<đường_dẫn_file>\" SHA256",
+        "# Kiểm tra trên VirusTotal: https://www.virustotal.com/gui/file/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "notes": [
+        "MD5=d41d8cd98f00b204e9800998ecf8427e | SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ]
+    },
+    {
+      "priority": 1,
+      "phase": "Ngăn chặn (Containment)",
+      "category": "Cô lập mạng",
+      "title": "Chặn kết nối C2 tại tường lửa",
+      "description": "Phát hiện 4 địa chỉ IP và 4 domain nghi ngờ C2. Chặn ngay các kết nối này tại firewall và DNS.",
+      "commands": [
+        "netsh advfirewall firewall add rule name=\"Block_IR_185.220.101.45\" dir=out action=block remoteip=185.220.101.45",
+        "netsh advfirewall firewall add rule name=\"Block_IR_193.56.255.42\" dir=out action=block remoteip=193.56.255.42",
+        "netsh advfirewall firewall add rule name=\"Block_IR_91.121.88.203\" dir=out action=block remoteip=91.121.88.203",
+        "netsh advfirewall firewall add rule name=\"Block_IR_45.33.32.156\" dir=out action=block remoteip=45.33.32.156",
+        "# Chặn DNS - thêm vào file hosts:",
+        "0.0.0.0 malicious-c2.ru",
+        "0.0.0.0 evil-dropper.net",
+        "0.0.0.0 botnet-panel.top",
+        "0.0.0.0 update-cdn-service.com"
+      ],
+      "notes": [
+        "Kiểm tra tất cả thiết bị trong mạng nội bộ xem có kết nối đến các IP/domain trên không.",
+        "Xem xét cô lập hoàn toàn máy bị nhiễm khỏi mạng LAN."
+      ]
+    },
+    {
+      "priority": 1,
+      "phase": "Ngăn chặn (Containment)",
+      "category": "Cô lập tiến trình",
+      "title": "Dừng các tiến trình bị inject mã độc",
+      "description": "Phát hiện 2 tiến trình bị inject: rundll32.exe, svchost.exe. Cần dừng ngay trước khi tiến hành xóa.",
+      "commands": [
+        "taskkill /F /IM \"rundll32.exe\" /T",
+        "taskkill /F /IM \"svchost.exe\" /T"
+      ],
+      "notes": [
+        "Ghi lại process tree trước khi kill bằng Process Hacker/ProcMon."
+      ]
+    },
+    {
+      "priority": 1,
+      "phase": "Ngăn chặn (Containment)",
+      "category": "MITRE ATT&CK - T1055",
+      "title": "[Process Injection] Phân tích bộ nhớ",
+      "description": "Phát hiện kỹ thuật process injection. Dump memory để phân tích chi tiết.",
+      "commands": [
+        "# Dùng Volatility để dump memory:",
+        "volatility -f memory.dmp --profile=Win10x64 pslist",
+        "volatility -f memory.dmp --profile=Win10x64 malfind",
+        "# Dùng Procdump để dump process:",
+        "procdump.exe -ma <PID> dump.dmp"
+      ],
+      "notes": [
+        "Ưu tiên dump memory TRƯỚC khi kill process."
+      ]
+    },
+    {
+      "priority": 2,
+      "phase": "Ngăn chặn (Containment)",
+      "category": "Persistence",
+      "title": "Vô hiệu hóa cơ chế duy trì (Persistence)",
+      "description": "Phát hiện 3 registry key liên quan đến persistence. Xóa các key này để ngăn mã độc tự khởi động lại.",
+      "commands": [
+        "reg delete \"HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SystemService32\" /f",
+        "reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\TempClean\" /f",
+        "reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\WindowsUpdater\" /f"
+      ],
+      "notes": [
+        "Export registry backup trước khi xóa: reg export HKLM\\SOFTWARE backup.reg"
+      ]
+    },
+    {
+      "priority": 2,
+      "phase": "Loại bỏ (Eradication)",
+      "category": "Dọn dẹp hệ thống",
+      "title": "Loại bỏ toàn bộ thành phần mã độc",
+      "description": "Xóa 3 file đã drop, dọn dẹp registry và scheduled tasks. Chạy antivirus quét toàn bộ sau khi xử lý thủ công.",
+      "commands": [
+        "# Quét toàn bộ hệ thống với Windows Defender (đã cập nhật):",
+        "Start-MpScan -ScanType FullScan",
+        "",
+        "# Kiểm tra Scheduled Tasks độc hại:",
+        "Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} | Format-List",
+        "",
+        "# Kiểm tra dịch vụ độc hại:",
+        "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Name, DisplayName",
+        "",
+        "# Xóa các file mã độc đã drop:",
+        "Remove-Item -Force \"C:\\Users\\Admin\\AppData\\Local\\Temp\\payload.dll\" -ErrorAction SilentlyContinue",
+        "Remove-Item -Force \"C:\\ProgramData\\WindowsUpdate\\svchost32.exe\" -ErrorAction SilentlyContinue",
+        "Remove-Item -Force \"C:\\Users\\Admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\updater.lnk\" -ErrorAction SilentlyContinue"
+      ],
+      "notes": [
+        "Nếu có file được bảo vệ, restart vào Safe Mode để xóa.",
+        "Kiểm tra Recycle Bin và %TEMP% folder."
+      ]
+    },
+    {
+      "priority": 2,
+      "phase": "Xác định (Identification)",
+      "category": "MITRE ATT&CK - T1566",
+      "title": "[Phishing] Kiểm tra email và quarantine",
+      "description": "Mã độc có dấu hiệu lây nhiễm qua Phishing email.",
+      "commands": [
+        "# Tìm kiếm email tương tự trong Exchange/M365:",
+        "Search-Mailbox -SearchQuery 'subject:<tên_file>' -TargetMailbox admin",
+        "# Hoặc dùng Microsoft Purview Content Search"
+      ],
+      "notes": [
+        "Kiểm tra header email để xác định sender thật.",
+        "Report phishing email cho nhà cung cấp."
+      ]
+    },
+    {
+      "priority": 2,
+      "phase": "Loại bỏ (Eradication)",
+      "category": "MITRE ATT&CK - T1547",
+      "title": "[Persistence] Kiểm tra autostart locations",
+      "description": "Phát hiện persistence thông qua autostart. Kiểm tra toàn bộ autorun locations.",
+      "commands": [
+        "# Dùng Autoruns (Sysinternals):",
+        "autorunsc.exe -a * -o autoruns_output.csv",
+        "",
+        "# PowerShell - Kiểm tra Run keys:",
+        "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "",
+        "# Scheduled Tasks:",
+        "Get-ScheduledTask | Where {$_.Actions.Execute -like '*.tmp*' -or $_.Actions.Execute -like '%appdata%'}"
+      ],
+      "notes": []
+    },
+    {
+      "priority": 3,
+      "phase": "Xác định (Identification)",
+      "category": "MITRE ATT&CK - Discovery",
+      "title": "[Recon] Đánh giá phạm vi xâm phạm",
+      "description": "Mã độc thực hiện system/process discovery. Cần xác định thông tin nào đã bị thu thập.",
+      "commands": [],
+      "notes": [
+        "Kiểm tra network traffic để xem dữ liệu nào đã được gửi ra ngoài.",
+        "Xem xét DLP (Data Loss Prevention) logs nếu có.",
+        "Kiểm tra xem credential nào đã bị tiếp cận."
+      ]
+    },
+    {
+      "priority": 3,
+      "phase": "Phục hồi (Recovery)",
+      "category": "Phục hồi hệ thống",
+      "title": "Khôi phục hệ thống về trạng thái an toàn",
+      "description": "Sau khi đã loại bỏ mã độc, tiến hành khôi phục và hardening hệ thống.",
+      "commands": [
+        "# Cập nhật Windows:",
+        "Install-WindowsUpdate -AcceptAll -AutoReboot",
+        "",
+        "# Reset mật khẩu tất cả tài khoản (phòng credential theft):",
+        "# Thực hiện qua Active Directory hoặc Local Users and Groups",
+        "",
+        "# Bật lại các dịch vụ bảo mật:",
+        "Set-MpPreference -DisableRealtimeMonitoring $false",
+        "netsh advfirewall set allprofiles state on"
+      ],
+      "notes": [
+        "Không kết nối lại mạng cho đến khi xác nhận hệ thống sạch.",
+        "Thực hiện vulnerability scan sau khi phục hồi.",
+        "Cân nhắc reinstall OS nếu phát hiện rootkit."
+      ]
+    },
+    {
+      "priority": 4,
+      "phase": "Rút kinh nghiệm (Lessons Learned)",
+      "category": "Rút kinh nghiệm",
+      "title": "Viết báo cáo sự cố và cải thiện phòng thủ",
+      "description": "Tài liệu hóa sự cố, timeline, và các biện pháp cải thiện.",
+      "commands": [],
+      "notes": [
+        "Xác định điểm xâm nhập ban đầu (phishing? drive-by? USB?).",
+        "Cập nhật SIEM rules dựa trên IOC mới phát hiện.",
+        "Thêm 4 IP và 4 domain vào threat intel feed.",
+        "Đào tạo lại nhân viên về nhận biết phishing nếu đây là vector lây nhiễm.",
+        "Xem xét triển khai EDR/XDR nếu chưa có."
+      ]
+    }
+  ]
+}

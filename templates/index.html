@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AnyRun IR Tool – Malware Incident Response</title>
+<link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>🛡️ IR Tool</h1>
+      <span>AnyRun Malware Analyzer</span>
+    </div>
+    <nav>
+      <div class="nav-item active" data-page="home" onclick="showPage('home',this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
+        <span>Tổng quan</span>
+      </div>
+      <div class="nav-item" data-page="analyze" onclick="showPage('analyze',this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <span>Phân tích</span>
+      </div>
+      <div class="nav-item" data-page="playbook" onclick="showPage('playbook',this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+        <span>IR Playbook</span>
+      </div>
+      <div class="nav-item" data-page="iocs" onclick="showPage('iocs',this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>IOC Blocklist</span>
+      </div>
+      <div class="nav-item" data-page="history" onclick="showPage('history',this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Lịch sử</span>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- HOME PAGE -->
+    <div id="page-home">
+      <div class="topbar">
+        <div>
+          <h2>Malware Incident Response</h2>
+          <span>Phân tích mã độc & tự động tạo quy trình phản ứng sự cố</span>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline" onclick="runDemo()">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Demo
+          </button>
+          <button class="btn btn-primary" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">
+            + Phân tích mới
+          </button>
+        </div>
+      </div>
+
+      <!-- Welcome -->
+      <div id="welcome-screen" class="welcome">
+        <h2>🔍 Bắt đầu phân tích mã độc</h2>
+        <p>Kết nối với Any.Run Sandbox để phân tích mẫu và tự động tạo quy trình phản ứng sự cố theo chuẩn NIST 800-61 & MITRE ATT&CK.</p>
+        <div class="welcome-grid">
+          <div class="welcome-item" onclick="runDemo('emotet')">
+            <div class="icon">🎭</div>
+            <h4>Demo Emotet</h4>
+            <p>Banking Trojan</p>
+          </div>
+          <div class="welcome-item" onclick="runDemo('wannacry')">
+            <div class="icon">🔒</div>
+            <h4>Demo WannaCry</h4>
+            <p>Ransomware</p>
+          </div>
+          <div class="welcome-item" onclick="runDemo('redline')">
+            <div class="icon">🕵️</div>
+            <h4>Demo RedLine</h4>
+            <p>Info Stealer</p>
+          </div>
+          <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">
+            <div class="icon">🔑</div>
+            <h4>Task UUID</h4>
+            <p>Phân tích task Any.Run bằng UUID có sẵn</p>
+          </div>
+          <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-file')">
+            <div class="icon">📁</div>
+            <h4>Submit File</h4>
+            <p>Upload file mẫu lên Any.Run sandbox</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result dashboard (hidden until analysis done) -->
+      <div id="dashboard" style="display:none">
+        <!-- Stat row -->
+        <div class="grid-3" style="margin-bottom:20px" id="stat-row"></div>
+        <!-- Threat + File info -->
+        <div class="grid-2">
+          <div class="card" id="card-threat"></div>
+          <div class="card" id="card-file"></div>
+        </div>
+        <!-- MITRE -->
+        <div class="card" id="card-mitre"></div>
+        <!-- Network -->
+        <div class="card" id="card-network"></div>
+        <!-- Process -->
+        <div class="card" id="card-process"></div>
+      </div>
+    </div>
+
+    <!-- ANALYZE PAGE -->
+    <div id="page-analyze" style="display:none">
+      <div class="topbar"><h2>Phân tích mẫu mã độc</h2></div>
+
+      <!-- API Key -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">🔑 Cấu hình API Key</div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Any.Run API Key</label>
+            <input type="password" id="api-key-input" placeholder="Nhập API key từ app.any.run ..."/>
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:16px;gap:10px">
+            <button class="btn btn-outline" onclick="saveKey()">Lưu Key</button>
+            <a href="https://app.any.run/profile/" target="_blank" class="btn btn-outline" style="text-decoration:none;font-size:13px">Lấy API Key ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" id="tab-uuid" onclick="switchTab('tab-uuid')">🔗 Task UUID</div>
+          <div class="tab" id="tab-url" onclick="switchTab('tab-url')">🌐 Submit URL</div>
+          <div class="tab" id="tab-file" onclick="switchTab('tab-file')">📁 Submit File</div>
+          <div class="tab" id="tab-demo" onclick="switchTab('tab-demo')">🎭 Demo</div>
+        </div>
+
+        <!-- UUID pane -->
+        <div class="tab-pane active" id="pane-uuid">
+          <div class="form-group">
+            <label>Task UUID</label>
+            <input type="text" id="task-uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+          </div>
+          <button class="btn btn-primary" onclick="analyzeTask()">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Phân tích
+          </button>
+        </div>
+
+        <!-- URL pane -->
+        <div class="tab-pane" id="pane-url">
+          <div class="form-group">
+            <label>URL cần phân tích</label>
+            <input type="text" id="submit-url" placeholder="http://suspicious-site.com/malware"/>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="submitAnalyzeURL()">▶ Submit &amp; Phân tích ngay</button>
+            <button class="btn btn-outline" onclick="submitURLOnly()">Submit (lấy UUID)</button>
+          </div>
+          <p style="font-size:12px;color:var(--text2);margin-top:8px">
+            <b>Submit &amp; Phân tích ngay</b>: tự động chờ sandbox xong rồi hiện kết quả (như <code>main.py --url</code>)<br>
+            <b>Submit (lấy UUID)</b>: chỉ lấy Task ID để dùng sau
+          </p>
+          <div id="url-result" style="margin-top:14px"></div>
+        </div>
+
+        <!-- File pane -->
+        <div class="tab-pane" id="pane-file">
+          <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+            <input type="file" id="file-input" onchange="handleFileSelect(this)"/>
+            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8-4-4m0 0L8 8m4-4v12"/></svg>
+            <p id="file-name">Kéo thả file hoặc nhấn để chọn</p>
+            <span style="font-size:12px;color:var(--text2)">.exe .dll .doc .pdf .zip ...</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+            <button class="btn btn-primary" onclick="submitAnalyzeFile()">▶ Submit &amp; Phân tích ngay</button>
+            <button class="btn btn-outline" onclick="submitFileOnly()">Submit (lấy UUID)</button>
+          </div>
+          <p style="font-size:12px;color:var(--text2);margin-top:8px">
+            <b>Submit &amp; Phân tích ngay</b>: upload file → sandbox phân tích → tự hiện kết quả (như <code>main.py --file</code>)
+          </p>
+          <div id="file-result" style="margin-top:14px"></div>
+        </div>
+
+        <!-- Demo pane -->
+        <div class="tab-pane" id="pane-demo">
+          <p style="color:var(--text2);margin-bottom:16px;font-size:14px">Chạy demo với dữ liệu mẫu mô phỏng mã độc. Không cần API key.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="runDemo('emotet')">▶ Demo Emotet (Trojan)</button>
+            <button class="btn btn-primary" style="background:var(--red);border-color:var(--red)" onclick="runDemo('wannacry')">▶ Demo WannaCry (Ransomware)</button>
+            <button class="btn btn-primary" style="background:var(--orange);border-color:var(--orange)" onclick="runDemo('redline')">▶ Demo RedLine (Stealer)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="analyze-loading" style="display:none" class="card">
+        <div class="loading-wrap"><div class="spinner"></div><p id="loading-msg">Đang phân tích...</p></div>
+      </div>
+
+      <!-- Progress panel (submit & wait like main.py) -->
+      <div id="progress-panel" style="display:none" class="card">
+        <div class="card-title">⏳ Đang chờ sandbox phân tích...</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px" id="progress-msg">Đã submit lên Any.Run...</div>
+        <div style="background:var(--bg3);border-radius:6px;height:10px;overflow:hidden;margin-bottom:10px">
+          <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px;transition:width 0.5s ease;width:5%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
+          <span id="progress-pct">5%</span>
+          <span id="progress-task" style="font-family:monospace;color:var(--accent)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYBOOK PAGE -->
+    <div id="page-playbook" style="display:none">
+      <div class="topbar">
+        <div><h2>IR Playbook</h2><span>Quy trình phản ứng sự cố – NIST 800-61</span></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
+          <button class="btn btn-green" onclick="exportReport('json')">⬇ JSON</button>
+          <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">📁 Mở Folder</button>
+        </div>
+      </div>
+      <div id="playbook-content">
+        <div class="welcome" style="padding:60px 20px">
+          <p style="color:var(--text2)">Chưa có dữ liệu. Hãy chạy phân tích trước.</p>
+          <button class="btn btn-primary" style="margin-top:16px" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">→ Phân tích ngay</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IOC PAGE -->
+    <div id="page-iocs" style="display:none">
+      <div class="topbar">
+        <div><h2>IOC Blocklist</h2><span>Indicators of Compromise để chặn &amp; săn mối đe dọa</span></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline" onclick="copyAllIOCs()">📋 Copy tất cả</button>
+          <button class="btn btn-outline" onclick="exportReport('json')">⬇ Export JSON</button>
+        </div>
+      </div>
+      <div id="ioc-content">
+        <div class="welcome" style="padding:60px 20px">
+          <p style="color:var(--text2)">Chưa có IOC. Hãy chạy phân tích trước.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div id="page-history" style="display:none">
+      <div class="topbar">
+        <div><h2>Lịch sử phân tích</h2><span>Any.Run task history</span></div>
+        <button class="btn btn-primary" onclick="loadHistory()">🔄 Tải lại</button>
+      </div>
+      <div class="card">
+        <div class="form-group" style="max-width:400px;margin-bottom:16px">
+          <label>API Key (để xem lịch sử)</label>
+          <input type="password" id="hist-key" placeholder="API key..."/>
+        </div>
+        <button class="btn btn-primary" onclick="loadHistory()">Xem lịch sử</button>
+      </div>
+      <div id="history-content"></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
