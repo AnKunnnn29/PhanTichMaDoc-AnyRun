@@ -207,16 +207,23 @@ def _extract_windows_paths(text: str) -> list[str]:
 
 
 def _extract_threat_name(text: str) -> str:
+    guessed_from_full_text = _guess_threat_name(text)
+    if guessed_from_full_text != "Manual ANY.RUN Import":
+        return guessed_from_full_text
+
     patterns = [
         r"(?:known\s+threat|malware\s+family|family|classification)\s*[:=|]\s*`?([^`\n\r|]+)",
         r"(?:main\s+analyzed\s+object|file\s*name|filename|sample|object|name)\s*[:=|]\s*`?([^`\n\r|]+)",
         r"\b(WannaCry|Emotet|RedLine|AgentTesla|Lumma|FormBook|AsyncRAT|Remcos|QakBot)\b",
     ]
+    generic_names = {"windows.desktop", "windows", "desktop", "unknown", "malware"}
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
             value = match.group(1).strip()
             value = _clean_markdown_value(value)
+            if value.lower() in generic_names:
+                continue
             guessed = _guess_threat_name(value)
             return guessed if guessed != "Manual ANY.RUN Import" else value
     return ""

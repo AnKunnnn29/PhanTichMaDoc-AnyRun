@@ -8,6 +8,8 @@ các thông tin quan trọng phục vụ quy trình phản ứng sự cố.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
+import json
+import re
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -94,6 +96,41 @@ class MalwareAnalyzer:
         4: "Malicious",
     }
 
+    _GENERIC_THREAT_NAMES = {
+        "",
+        "unknown",
+        "unknown malware",
+        "manual any.run import",
+        "windows.desktop",
+        "windows",
+        "desktop",
+        "malware",
+        "trojan",
+        "ransomware",
+    }
+
+    _FAMILY_ALIASES = {
+        "WannaCry": [
+            "wannacry",
+            "wanna cry",
+            "wanacry",
+            "wanacrypt",
+            "wcry",
+            "wncry",
+            "mssecsvc",
+            "tasksche.exe",
+            "@wanadecryptor",
+        ],
+        "RedLine Stealer": ["redline", "redline stealer"],
+        "Emotet": ["emotet", "heodo", "geodo"],
+        "AgentTesla": ["agenttesla", "agent tesla"],
+        "Lumma": ["lumma", "lumma stealer"],
+        "FormBook": ["formbook", "xloader"],
+        "AsyncRAT": ["asyncrat", "async rat"],
+        "Remcos": ["remcos"],
+        "QakBot": ["qakbot", "qbot"],
+    }
+
     def parse_report(self, report_json: dict, ioc_json: dict) -> MalwareAnalysisResult:
         """
         Nhận report JSON + IOC JSON từ API, trả về MalwareAnalysisResult.
@@ -162,6 +199,20 @@ class MalwareAnalyzer:
                 "tactic": technique.get("tactic", ""),
             })
 
+        detected_family = self._detect_malware_family(analysis, content, threat_name, tags)
+        if detected_family and self._is_generic_threat_name(threat_name):
+            threat_name = detected_family
+        elif detected_family and detected_family.lower() not in str(threat_name).lower():
+            threat_name = detected_family
+
+        tag_names = [str(t).lower() for t in tags]
+        if threat_name and threat_name.lower() not in tag_names:
+            tags.append(threat_name.lower())
+
+        if threat_name == "WannaCry" and threat_level < 3:
+            threat_level = 3
+            verdict_str = "Malicious"
+
         return ThreatInfo(
             verdict           = verdict_str,
             threat_level      = threat_level,
@@ -169,6 +220,51 @@ class MalwareAnalyzer:
             tags              = tags,
             mitre_techniques  = mitre,
         )
+
+    def _detect_malware_family(
+        self,
+        analysis: dict,
+        content: dict,
+        threat_name: str,
+        tags: List[str],
+    ) -> str:
+        text_parts = [
+            threat_name or "",
+            " ".join(str(t) for t in tags or []),
+            content.get("mainObject", {}).get("filename", ""),
+            content.get("mainObject", {}).get("type", ""),
+        ]
+        try:
+            text_parts.append(json.dumps(content, ensure_ascii=False, sort_keys=True))
+        except Exception:
+            text_parts.append(str(content))
+
+        haystack = "\n".join(text_parts).lower()
+        for family, aliases in self._FAMILY_ALIASES.items():
+            if any(alias in haystack for alias in aliases):
+                return family
+
+        mitre_ids = {
+            str(t.get("id", "")).upper().split(".")[0]
+            for t in content.get("mitre", []) or []
+            if isinstance(t, dict)
+        }
+        ransomware_terms = [
+            "ransom note",
+            "decryptor",
+            "encrypted files",
+            "encrypt files",
+            "vssadmin delete shadows",
+            "shadow copy",
+        ]
+        if "T1486" in mitre_ids and any(term in haystack for term in ransomware_terms):
+            if re.search(r"w(?:anna|ana|n)?cry|wcry|wncry|wanadecrypt", haystack):
+                return "WannaCry"
+        return ""
+
+    def _is_generic_threat_name(self, name: str) -> bool:
+        normalized = re.sub(r"[^a-z0-9.]+", " ", str(name or "").lower()).strip()
+        return normalized in self._GENERIC_THREAT_NAMES
 
     def _parse_network(self, content: dict) -> NetworkActivity:
         network_data = content.get("network", {}) or {}

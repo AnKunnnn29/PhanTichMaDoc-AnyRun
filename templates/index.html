@@ -258,6 +258,19 @@
           <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">📁 Mở Folder</button>
         </div>
       </div>
+      <div class="card ai-card">
+        <div class="card-title">AI khắc phục sự cố</div>
+        <div class="ai-quick">
+          <button class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button>
+          <button class="btn btn-outline" onclick="askAI('Cần cô lập và chặn IOC như thế nào?')">Cô lập &amp; chặn IOC</button>
+          <button class="btn btn-outline" onclick="askAI('Làm sao xác minh máy đã sạch sau khi khắc phục?')">Xác minh sạch</button>
+        </div>
+        <div class="ai-input-row">
+          <input id="ai-question" type="text" placeholder="Hỏi AI về bước khắc phục, IOC, cô lập, phục hồi..."/>
+          <button class="btn btn-primary" onclick="askAI()">Hỏi AI</button>
+        </div>
+        <div id="ai-answer" class="ai-answer">Chạy phân tích rồi đặt câu hỏi để nhận hướng dẫn khắc phục theo playbook hiện tại.</div>
+      </div>
       <div id="playbook-content">
         <div class="welcome" style="padding:60px 20px">
           <p style="color:var(--text2)">Chưa có dữ liệu. Hãy chạy phân tích trước.</p>
@@ -285,7 +298,7 @@
     <!-- HISTORY PAGE -->
     <div id="page-history" style="display:none">
       <div class="topbar">
-        <div><h2>Lịch sử phân tích</h2><span>Any.Run task history</span></div>
+        <div><h2>Lịch sử phân tích</h2><span>Lịch sử cục bộ của app và Any.Run task history nếu có API key</span></div>
         <button class="btn btn-primary" onclick="loadHistory()">🔄 Tải lại</button>
       </div>
       <div class="card">

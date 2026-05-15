@@ -23,6 +23,15 @@ from demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
 from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
 from ml_engine import MLThreatPredictor
 from markdown_importer import markdown_to_anyrun_report
+from ai_assistant import answer_remediation
+from history_store import (
+    extract_hashes_from_report,
+    find_exact_cached_payload,
+    find_family_cached_payload,
+    load_history as load_local_history,
+    record_analysis,
+    task_uuid_from_report,
+)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
@@ -32,8 +41,25 @@ ml_predictor = MLThreatPredictor()
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
-def _build_payload(report_json, ioc_json):
+def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
+    report_hashes = extract_hashes_from_report(report_json, ioc_json)
+    task_uuid = task_uuid_from_report(report_json)
+    if use_cache:
+        cached = find_exact_cached_payload(task_uuid, report_hashes)
+        if cached:
+            return cached
+
     result   = analyzer.parse_report(report_json, ioc_json)
+
+    if use_cache:
+        cached = find_family_cached_payload(
+            result.threat_info.threat_name,
+            current_task_uuid=result.task_uuid,
+            hashes=report_hashes,
+        )
+        if cached:
+            return cached
+
     playbook = ir_gen.generate(result)
     f = result.file_info
 
@@ -51,7 +77,7 @@ def _build_payload(report_json, ioc_json):
 
     ml_result = ml_predictor.predict(result)
 
-    return {
+    payload = {
         "task_uuid":    result.task_uuid,
         "analysis_url": result.analysis_url,
         "os_env":       result.os_env,
@@ -96,6 +122,8 @@ def _build_payload(report_json, ioc_json):
             "ioc_blocklist": playbook.ioc_blocklist,
         },
     }
+    record_analysis(payload, source=source)
+    return payload
 
 def _load_json_upload(field_name, required=True):
     upload = request.files.get(field_name)
@@ -139,11 +167,11 @@ def index():
 def demo(malware):
     try:
         if malware == "wannacry":
-            return jsonify({"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC)})
+            return jsonify({"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC, source="demo:wannacry")})
         elif malware == "redline":
-            return jsonify({"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC)})
+            return jsonify({"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC, source="demo:redline")})
         else:
-            return jsonify({"ok": True, "data": _build_payload(DEMO_REPORT, DEMO_IOC)})
+            return jsonify({"ok": True, "data": _build_payload(DEMO_REPORT, DEMO_IOC, source="demo:emotet")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -152,6 +180,7 @@ def analyze():
     body    = request.get_json(force=True) or {}
     api_key = body.get("api_key", "").strip()
     task_id = body.get("task_id", "").strip()
+    force_analyze = bool(body.get("force_analyze", False))
     if not api_key:
         return jsonify({"ok": False, "error": "Thiếu API key"}), 400
     if not task_id:
@@ -161,7 +190,7 @@ def analyze():
         client      = AnyRunClient(api_key)
         report_json = client.get_task_report(task_id)
         ioc_json    = client.get_task_iocs(task_id)
-        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json)})
+        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -170,9 +199,10 @@ def analyze_json_upload():
     """Free-account workflow: import JSON/Markdown exported manually from Any.Run."""
     try:
         supplemental_text = request.form.get("supplemental_text", "")
+        force_analyze = request.form.get("force_analyze", "").lower() in ("1", "true", "yes")
         report_json = _load_report_upload("report_file", supplemental_text)
         ioc_json = _load_json_upload("ioc_file", required=False)
-        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json)})
+        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="import")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -275,7 +305,7 @@ def _poll_and_analyze(api_key, task_id, max_wait=300):
             status = report.get("data",{}).get("analysis",{}).get("status","")
             if status in ("done", "failed"):
                 ioc_json = client.get_task_iocs(task_id)
-                payload  = _build_payload(report, ioc_json)
+                payload  = _build_payload(report, ioc_json, source="anyrun:submit")
                 with _task_lock:
                     _task_jobs[task_id] = {"status": "done", "progress": 100,
                                            "message": "Hoàn tất!", "data": payload, "error": None}
@@ -373,6 +403,36 @@ def history():
         return jsonify({"ok": True, "tasks": tasks})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/api/history/local", methods=["GET"])
+def local_history():
+    """Local app history: analyses already parsed by this tool."""
+    items = []
+    for item in load_local_history():
+        clean = {k: v for k, v in item.items() if k != "payload"}
+        items.append(clean)
+    return jsonify({"ok": True, "items": items})
+
+@app.route("/api/history/local/<path:item_id>", methods=["GET"])
+def local_history_item(item_id):
+    for item in load_local_history():
+        if item.get("id") == item_id:
+            payload = item.get("payload")
+            if payload:
+                return jsonify({"ok": True, "data": payload})
+    return jsonify({"ok": False, "error": "Khong tim thay muc lich su"}), 404
+
+@app.route("/api/ai/remediation", methods=["POST"])
+def ai_remediation():
+    body = request.get_json(force=True) or {}
+    question = body.get("question", "")
+    data = body.get("data") or {}
+    if not data:
+        return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
+    try:
+        return jsonify({"ok": True, **answer_remediation(question, data)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/export", methods=["POST"])
 def export_report():

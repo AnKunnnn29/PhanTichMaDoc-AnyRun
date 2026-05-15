@@ -4,6 +4,7 @@ let G = { data: null, apiKey: localStorage.getItem('ir_apikey') || '' };
 window.onload = () => {
   if (G.apiKey) document.getElementById('api-key-input').value = G.apiKey;
   document.getElementById('hist-key').value = G.apiKey;
+  loadHistory();
 };
 
 // ── Navigation ───────────────────────────────────────────────────────────────
@@ -246,17 +247,29 @@ function handleDrop(e) {
 
 async function loadHistory() {
   const key = document.getElementById('hist-key').value.trim() || getKey();
-  if (!key) return toast('Nhập API key', 'err');
   document.getElementById('history-content').innerHTML = '<div class="loading-wrap"><div class="spinner"></div><p>Đang tải lịch sử...</p></div>';
   try {
-    const r = await fetch('/api/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key })
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
-    renderHistory(j.tasks);
+    const localRes = await fetch('/api/history/local');
+    const localJson = await localRes.json();
+    if (!localJson.ok) throw new Error(localJson.error);
+
+    let anyrunTasks = [];
+    let anyrunError = '';
+    if (key) {
+      try {
+        const r = await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: key })
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error);
+        anyrunTasks = j.tasks || [];
+      } catch (e) {
+        anyrunError = e.message;
+      }
+    }
+    renderCombinedHistory(localJson.items || [], anyrunTasks, anyrunError);
   } catch (e) {
     document.getElementById('history-content').innerHTML = `<div class="card"><span style="color:var(--red)">${e.message}</span></div>`;
     toast(e.message, 'err');
@@ -269,6 +282,7 @@ function renderAll(data) {
   renderDashboard(data);
   renderPlaybook(data);
   renderIOCs(data);
+  if (data.cache?.hit) toast('Dùng lại lịch sử: ' + data.cache.reason);
 }
 
 function severityClass(lvl) {
@@ -308,6 +322,9 @@ function renderDashboard(d) {
         </div>
       </div>`;
   }
+  const cache_html = d.cache?.hit ? `<div style="margin-top:12px;padding:10px;border-radius:6px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);font-size:12px;color:var(--green)">
+    Dùng lại kết quả đã phân tích: ${esc(d.cache.reason || '')}
+  </div>` : '';
 
   document.getElementById('card-threat').innerHTML = `
     <div class="card-title">⚠️ Threat Assessment</div>
@@ -322,6 +339,7 @@ function renderDashboard(d) {
       <div class="threat-bar"><div class="threat-bar-fill" style="width:${bar_w}%;background:${severityColor(lvl)}"></div></div>
     </div>
     ${ml_html}
+    ${cache_html}
     <div style="margin-top:14px;font-size:13px;color:var(--text2)">
       🖥️ ${d.os_env} &nbsp;|&nbsp; ⏱️ ${d.duration}s &nbsp;|&nbsp;
       <a href="${d.analysis_url}" target="_blank" style="color:var(--accent)">Xem trên Any.Run ↗</a>
@@ -505,6 +523,62 @@ function renderHistory(tasks) {
     <tbody>${rows}</tbody></table></div></div>`;
 }
 
+function renderCombinedHistory(localItems, anyrunTasks, anyrunError = '') {
+  let html = renderLocalHistory(localItems);
+  if (anyrunTasks.length || anyrunError) {
+    html += `<div class="card"><div class="card-title">Any.Run task history</div>`;
+    if (anyrunError) html += `<p style="color:var(--yellow);font-size:13px;margin-bottom:10px">Không tải được Any.Run history: ${esc(anyrunError)}</p>`;
+    if (anyrunTasks.length) {
+      const rows = anyrunTasks.map(t => {
+        const verdict = (t.verdict?.threatLevelText || 'unknown').toLowerCase();
+        const cls = verdict.includes('malicious') ? 'verdict-malicious' : verdict.includes('suspicious') ? 'verdict-suspicious' : 'verdict-clean';
+        return `<tr>
+          <td class="mono" style="font-size:11px">${t.uuid||''}</td>
+          <td>${esc(t.name||'N/A')}</td>
+          <td class="${cls}">${esc(t.verdict?.threatLevelText||'unknown')}</td>
+          <td style="color:var(--text2)">${(t.date||'').slice(0,10)}</td>
+          <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeFromHistory('${t.uuid}')">Phân tích</button></td>
+        </tr>`;
+      }).join('');
+      html += `<div class="table-wrap"><table><thead><tr><th>UUID</th><th>Tên</th><th>Verdict</th><th>Ngày</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    html += `</div>`;
+  }
+  document.getElementById('history-content').innerHTML = html;
+}
+
+function renderLocalHistory(items) {
+  if (!items.length) {
+    return '<div class="card"><div class="card-title">Lịch sử cục bộ</div><p style="color:var(--text2)">Chưa có lần phân tích nào được lưu trong app.</p></div>';
+  }
+  const rows = items.map(t => {
+    const cls = (t.threat_level || 0) >= 2 ? 'verdict-malicious' : (t.threat_level || 0) === 1 ? 'verdict-suspicious' : 'verdict-clean';
+    return `<tr>
+      <td>${esc(t.malware_name || 'Unknown')}</td>
+      <td>${esc(t.file_name || 'N/A')}</td>
+      <td class="${cls}">${esc(t.verdict || 'unknown')}</td>
+      <td style="color:var(--text2)">${esc((t.created_at || '').replace('T', ' '))}</td>
+      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeLocalHistory('${encodeURIComponent(t.id)}')">Mở lại</button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-title">Lịch sử cục bộ (${items.length})</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Các malware family đã có ở đây sẽ được ưu tiên dùng lại thay vì tạo playbook mới.</div>
+    <div class="table-wrap"><table><thead><tr><th>Malware</th><th>File</th><th>Verdict</th><th>Thời gian</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+async function analyzeLocalHistory(encodedId) {
+  try {
+    const r = await fetch('/api/history/local/' + encodedId);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    renderAll(j.data);
+    showPage('home', document.querySelector('[data-page=home]'));
+    toast('Đã mở lại kết quả trong lịch sử');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
 async function analyzeFromHistory(uuid) {
   document.getElementById('task-uuid').value = uuid;
   showPage('analyze', document.querySelector('[data-page=analyze]'));
@@ -544,4 +618,26 @@ function copyText(txt) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function askAI(question = '') {
+  if (!G.data) return toast('Chưa có dữ liệu phân tích để hỏi AI', 'err');
+  const input = document.getElementById('ai-question');
+  const q = (question || input.value || '').trim();
+  if (!q) return toast('Nhập câu hỏi cho AI', 'err');
+  const answerEl = document.getElementById('ai-answer');
+  answerEl.innerHTML = '<div class="loading-wrap" style="padding:18px"><div class="spinner"></div><p>AI đang đọc playbook...</p></div>';
+  try {
+    const r = await fetch('/api/ai/remediation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, data: G.data })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    answerEl.innerHTML = `<div class="ai-mode">${j.mode === 'openai' ? 'OpenAI' : 'Local assistant'}</div><pre>${esc(j.answer)}</pre>`;
+  } catch(e) {
+    answerEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
+    toast(e.message, 'err');
+  }
 }
