@@ -47,24 +47,29 @@
       <div class="topbar">
         <div>
           <h2>Malware Incident Response</h2>
-          <span>Phân tích mã độc & tự động tạo quy trình phản ứng sự cố</span>
+          <span>Chuyển kết quả Any.Run thành quy trình phản ứng sự cố theo NIST & MITRE</span>
         </div>
         <div style="display:flex;gap:10px">
           <button class="btn btn-outline" onclick="runDemo()">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Demo
           </button>
-          <button class="btn btn-primary" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">
-            + Phân tích mới
+          <button class="btn btn-primary" onclick="openImportJson()">
+            + Import Any.Run Report
           </button>
         </div>
       </div>
 
       <!-- Welcome -->
       <div id="welcome-screen" class="welcome">
-        <h2>🔍 Bắt đầu phân tích mã độc</h2>
-        <p>Kết nối với Any.Run Sandbox để phân tích mẫu và tự động tạo quy trình phản ứng sự cố theo chuẩn NIST 800-61 & MITRE ATT&CK.</p>
+        <h2>🔍 Xây dựng quy trình phản ứng sự cố từ Any.Run</h2>
+        <p>Phân tích mẫu trên Any.Run, nhập report hoặc IOC vào hệ thống, rồi tự động sinh dashboard, blocklist và IR playbook theo NIST 800-61 & MITRE ATT&CK.</p>
         <div class="welcome-grid">
+          <div class="welcome-item featured" onclick="openImportJson()">
+            <div class="icon">📥</div>
+            <h4>Import Any.Run Report</h4>
+            <p>Luồng chính cho tài khoản free: nhập file Results .md hoặc JSON</p>
+          </div>
           <div class="welcome-item" onclick="runDemo('emotet')">
             <div class="icon">🎭</div>
             <h4>Demo Emotet</h4>
@@ -83,12 +88,12 @@
           <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">
             <div class="icon">🔑</div>
             <h4>Task UUID</h4>
-            <p>Phân tích task Any.Run bằng UUID có sẵn</p>
+            <p>Tùy chọn nâng cao khi tài khoản có API access</p>
           </div>
           <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-file')">
             <div class="icon">📁</div>
             <h4>Submit File</h4>
-            <p>Upload file mẫu lên Any.Run sandbox</p>
+            <p>Tùy chọn API, không khuyến nghị cho dữ liệu nhạy cảm</p>
           </div>
         </div>
       </div>
@@ -118,6 +123,9 @@
       <!-- API Key -->
       <div class="card" style="margin-bottom:20px">
         <div class="card-title">🔑 Cấu hình API Key</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
+          Tài khoản free nên dùng tab <b>Import Report</b> hoặc <b>Demo</b>. API key chỉ cần cho luồng submit/tải task tự động.
+        </p>
         <div class="grid-2">
           <div class="form-group">
             <label>Any.Run API Key</label>
@@ -134,6 +142,7 @@
       <div class="card">
         <div class="tabs">
           <div class="tab active" id="tab-uuid" onclick="switchTab('tab-uuid')">🔗 Task UUID</div>
+          <div class="tab" id="tab-import" onclick="switchTab('tab-import')">📥 Import Report</div>
           <div class="tab" id="tab-url" onclick="switchTab('tab-url')">🌐 Submit URL</div>
           <div class="tab" id="tab-file" onclick="switchTab('tab-file')">📁 Submit File</div>
           <div class="tab" id="tab-demo" onclick="switchTab('tab-demo')">🎭 Demo</div>
@@ -149,6 +158,29 @@
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             Phân tích
           </button>
+        </div>
+
+        <!-- Import JSON pane -->
+        <div class="tab-pane" id="pane-import">
+          <p style="color:var(--text2);margin-bottom:16px;font-size:14px">
+            Dành cho tài khoản Any.Run free: tải file Results .md từ Any.Run rồi import vào đây. Nếu có JSON report/IOC thì hệ thống vẫn hỗ trợ.
+          </p>
+          <div class="grid-2">
+            <div class="form-group">
+              <label>Any.Run Results .md / JSON Report</label>
+              <input type="file" id="report-json-input" accept=".md,.txt,.json,text/markdown,text/plain,application/json" onchange="handleJsonSelect(this,'report')"/>
+            </div>
+            <div class="form-group">
+              <label>IOC JSON (tùy chọn)</label>
+              <input type="file" id="ioc-json-input" accept=".json,application/json" onchange="handleJsonSelect(this,'ioc')"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Thông tin copy thêm từ Any.Run (tùy chọn)</label>
+            <textarea id="supplemental-text" rows="8" placeholder="Dán IOC/hash/process copy từ Any.Run, ví dụ:&#10;Main object - WannaCry.zip&#10;sha256 WannaCry.zip 0ea87b...&#10;Dropped file&#10;sha256 C:\note.txt 8e9f..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="analyzeJsonImport()">Import &amp; tạo IR Playbook</button>
+          <div id="json-import-result" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
         </div>
 
         <!-- URL pane -->

@@ -266,11 +266,18 @@ class MalwareAnalyzer:
 
     def _parse_iocs(self, ioc_json: dict, content: dict) -> IOCData:
         """Parse IOC endpoint response."""
-        ioc_data = ioc_json.get("data", []) or []
+        if isinstance(ioc_json, list):
+            ioc_data = ioc_json
+        elif isinstance(ioc_json, dict):
+            ioc_data = ioc_json.get("data", []) or ioc_json.get("iocs", []) or []
+        else:
+            ioc_data = []
 
         ips, domains, urls, hashes, filenames = [], [], [], [], []
 
         for item in ioc_data:
+            if not isinstance(item, dict):
+                continue
             ioc_type = item.get("type", "").lower()
             value    = item.get("value", "")
 
@@ -301,6 +308,42 @@ class MalwareAnalyzer:
                     entry = {algo: val}
                     if entry not in hashes:
                         hashes.append(entry)
+            filename = main_obj.get("filename", "")
+            if filename and filename not in filenames:
+                filenames.append(filename)
+
+        # Free-account/manual exports often provide only the JSON summary.
+        # Derive IOC candidates from the report content when the IOC endpoint
+        # export is missing or unavailable.
+        network_data = content.get("network", {}) or {}
+        for conn in network_data.get("connections", []) or []:
+            ip = conn.get("ip", "")
+            if ip and ip not in ips:
+                ips.append(ip)
+
+        for req in network_data.get("httpRequests", []) or []:
+            url = req.get("url", "")
+            domain = req.get("domain", "")
+            if url and url not in urls:
+                urls.append(url)
+            if domain and domain not in domains:
+                domains.append(domain)
+
+        for dns in network_data.get("dnsRequests", []) or []:
+            domain = dns.get("domain", "")
+            if domain and domain not in domains:
+                domains.append(domain)
+
+        for dropped in content.get("dropped", []) or []:
+            filename = dropped.get("filename", "")
+            if filename and filename not in filenames:
+                filenames.append(filename)
+            dropped_hashes = dropped.get("hashes", {}) or {}
+            for algo in ("md5", "sha1", "sha256"):
+                val = dropped_hashes.get(algo, "")
+                entry = {algo: val}
+                if val and entry not in hashes:
+                    hashes.append(entry)
 
         return IOCData(
             ips         = ips,

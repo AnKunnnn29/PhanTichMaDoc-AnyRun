@@ -421,3 +421,28 @@ Phát hiện file nghi ngờ
 ```
 
 > **Lưu ý thực tế:** Any.Run gói Free giới hạn ~14 task/tháng. Để demo không giới hạn → dùng nút **Demo Emotet** (không tốn quota).
+
+---
+
+## Luu y quan trong cho tai khoan Any.Run Free/Community
+
+Luong API trong chuong trinh duoc giu nhu mot che do nang cao. Voi tai khoan Any.Run Free/Community, cach bam de va kha thi hon la:
+
+1. Phan tich file/URL truc tiep tren giao dien web Any.Run.
+2. Ghi lai public task URL, verdict, IOC, MITRE ATT&CK, process/network behavior.
+3. Tai file Results `.md`. Neu tai khoan cho phep export JSON summary/IOC thi co the dung JSON.
+4. Import vao tool bang:
+
+```bash
+python -X utf8 main.py --report-json Results.md
+```
+
+Hoac dung Web GUI -> tab **Import Report**.
+
+Neu Any.Run chi cho copy IOC/hash tren giao dien, dan phan do vao o **Thong tin copy them tu Any.Run** khi import. CLI co the luu phan copy vao file `.txt` va chay:
+
+```bash
+python -X utf8 main.py --report-json Results.md --notes copied_iocs.txt
+```
+
+Neu khong co IOC JSON rieng, chuong trinh se tu suy ra IOC tu Results markdown/JSON summary: network connections, HTTP/DNS, hash, filename va MITRE ID neu co. File Get Sample `.bin` la mau ma doc/doi tuong phan tich, khong dung de import vao tool nay va khong nen mo/chay tren may that. Xem them tai lieu dinh huong do an tai `DO_AN_FREE_ANYRUN_IR.md`.

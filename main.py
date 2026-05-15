@@ -15,6 +15,7 @@ Cách sử dụng:
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -43,6 +44,7 @@ from anyrun_client import AnyRunClient, AnyRunAPIError, AnyRunAuthError
 from analyzer import MalwareAnalyzer
 from incident_response import IncidentResponseGenerator
 from reporter import TerminalReporter, ReportExporter
+from markdown_importer import markdown_to_anyrun_report
 
 console = Console(highlight=False)
 
@@ -108,6 +110,46 @@ def run_demo(output_dir: str, export: bool) -> None:
         border_style="yellow",
     ))
     run_analysis_pipeline(DEMO_REPORT, DEMO_IOC, output_dir, export)
+
+
+def run_report_import(report_path: str, ioc_path: str, notes_path: str, output_dir: str, export: bool) -> None:
+    """
+    Free-account workflow: import JSON/Markdown report files exported manually from Any.Run.
+    The IOC file is optional because analyzer.py can derive IOC candidates from
+    the summary report when the separate IOC export is unavailable.
+    """
+    try:
+        report_text = Path(report_path).read_text(encoding="utf-8-sig", errors="replace")
+        if not report_text.strip():
+            raise ValueError(
+                f"File report '{report_path}' đang rỗng (0 byte). "
+                "Hãy tải lại Results/Text Report từ Any.Run; không dùng file Get Sample .bin."
+            )
+        if notes_path:
+            notes_text = Path(notes_path).read_text(encoding="utf-8-sig", errors="replace")
+            report_text = f"{report_text}\n\n## Manually copied ANY.RUN indicators\n{notes_text}"
+        if report_path.lower().endswith((".md", ".txt")):
+            report_json = markdown_to_anyrun_report(report_text, Path(report_path).name)
+        else:
+            try:
+                report_json = json.loads(report_text)
+            except json.JSONDecodeError:
+                report_json = markdown_to_anyrun_report(report_text, Path(report_path).name)
+        if ioc_path:
+            with open(ioc_path, "r", encoding="utf-8") as fh:
+                ioc_json = json.load(fh)
+        else:
+            ioc_json = {}
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        console.print(f"[bold red]❌ Không đọc được JSON import:[/bold red] {e}")
+        sys.exit(1)
+
+    console.print(Panel(
+        "[bold cyan]FREE ACCOUNT IMPORT MODE[/bold cyan]\n"
+        "Đang dùng report đã export thủ công từ Any.Run, không cần API key.",
+        border_style="cyan",
+    ))
+    run_analysis_pipeline(report_json, ioc_json, output_dir, export)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -256,6 +298,8 @@ def build_parser() -> argparse.ArgumentParser:
     group = p.add_mutually_exclusive_group()
     group.add_argument("--demo",    action="store_true",
                        help="Chạy demo với dữ liệu mẫu Emotet (không cần API key)")
+    group.add_argument("--report-json", metavar="PATH",
+                       help="Import JSON/Markdown report đã export thủ công từ Any.Run (không cần API key)")
     group.add_argument("--task",    metavar="UUID",
                        help="Phân tích task Any.Run theo UUID")
     group.add_argument("--file",    metavar="PATH",
@@ -267,6 +311,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--api-key",   metavar="KEY",
                    help="API key Any.Run (hoặc đặt biến môi trường ANYRUN_API_KEY)")
+    p.add_argument("--ioc-json",  metavar="PATH", default="",
+                   help="IOC JSON export thủ công từ Any.Run, dùng kèm --report-json nếu có")
+    p.add_argument("--notes",     metavar="PATH", default="",
+                   help="File text chứa IOC/hash copy thủ công từ Any.Run, dùng kèm --report-json")
     p.add_argument("--output",    metavar="DIR", default="reports",
                    help="Thư mục lưu báo cáo (mặc định: ./reports)")
     p.add_argument("--no-export", action="store_true",
@@ -283,12 +331,16 @@ def main() -> None:
     export  = not args.no_export
 
     # Không có tham số → interactive menu
-    if not any([args.demo, args.task, args.file, args.url, args.history]):
+    if not any([args.demo, args.report_json, args.task, args.file, args.url, args.history]):
         interactive_menu(api_key, args.output)
         return
 
     if args.demo:
         run_demo(args.output, export)
+        return
+
+    if args.report_json:
+        run_report_import(args.report_json, args.ioc_json, args.notes, args.output, export)
         return
 
     # Các lệnh cần client

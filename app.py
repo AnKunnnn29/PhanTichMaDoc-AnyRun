@@ -21,11 +21,14 @@ from incident_response import IncidentResponseGenerator
 from demo_data import DEMO_REPORT, DEMO_IOC
 from demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
 from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
+from ml_engine import MLThreatPredictor
+from markdown_importer import markdown_to_anyrun_report
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 analyzer = MalwareAnalyzer()
 ir_gen   = IncidentResponseGenerator()
+ml_predictor = MLThreatPredictor()
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,8 @@ def _build_payload(report_json, ioc_json):
             "notes": a.notes,
         })
 
+    ml_result = ml_predictor.predict(result)
+
     return {
         "task_uuid":    result.task_uuid,
         "analysis_url": result.analysis_url,
@@ -65,6 +70,7 @@ def _build_payload(report_json, ioc_json):
             "threat_name":  result.threat_info.threat_name,
             "tags":         result.threat_info.tags,
             "mitre":        result.threat_info.mitre_techniques,
+            "ml":           ml_result,
         },
         "network": {
             "ips":     result.network.ip_addresses,
@@ -90,6 +96,38 @@ def _build_payload(report_json, ioc_json):
             "ioc_blocklist": playbook.ioc_blocklist,
         },
     }
+
+def _load_json_upload(field_name, required=True):
+    upload = request.files.get(field_name)
+    if not upload:
+        if required:
+            raise ValueError(f"Thiếu file JSON: {field_name}")
+        return {}
+    try:
+        return json.load(upload.stream)
+    except Exception as exc:
+        raise ValueError(f"File {field_name} không phải JSON hợp lệ: {exc}") from exc
+
+def _load_report_upload(field_name, supplemental_text=""):
+    upload = request.files.get(field_name)
+    if not upload:
+        raise ValueError(f"Thiếu file report: {field_name}")
+    raw = upload.read()
+    filename = upload.filename or "report"
+    text = raw.decode("utf-8-sig", errors="replace")
+    if supplemental_text:
+        text = f"{text}\n\n## Manually copied ANY.RUN indicators\n{supplemental_text}"
+    if not text.strip():
+        raise ValueError(
+            f"File report '{filename}' đang rỗng (0 byte). "
+            "Hãy tải lại Results/Text Report từ Any.Run; không dùng file Get Sample .bin."
+        )
+    if filename.lower().endswith((".md", ".txt")):
+        return markdown_to_anyrun_report(text, filename)
+    try:
+        return json.loads(text)
+    except Exception:
+        return markdown_to_anyrun_report(text, filename)
 
 # ── routes ─────────────────────────────────────────────────────────────────
 
@@ -123,6 +161,17 @@ def analyze():
         client      = AnyRunClient(api_key)
         report_json = client.get_task_report(task_id)
         ioc_json    = client.get_task_iocs(task_id)
+        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/api/analyze/json", methods=["POST"])
+def analyze_json_upload():
+    """Free-account workflow: import JSON/Markdown exported manually from Any.Run."""
+    try:
+        supplemental_text = request.form.get("supplemental_text", "")
+        report_json = _load_report_upload("report_file", supplemental_text)
+        ioc_json = _load_json_upload("ioc_file", required=False)
         return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400

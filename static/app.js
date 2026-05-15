@@ -21,6 +21,11 @@ function switchTab(id) {
   document.getElementById('pane-' + id.replace('tab-', '')).classList.add('active');
 }
 
+function openImportJson() {
+  showPage('analyze', document.querySelector('[data-page=analyze]'));
+  switchTab('tab-import');
+}
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'ok') {
   const el = document.getElementById('toast');
@@ -196,6 +201,37 @@ async function openReports() {
 }
 
 let selectedFile = null;
+let selectedReportJson = null;
+let selectedIocJson = null;
+
+function handleJsonSelect(inp, kind) {
+  const file = inp.files[0] || null;
+  if (kind === 'report') selectedReportJson = file;
+  if (kind === 'ioc') selectedIocJson = file;
+  const reportName = selectedReportJson ? selectedReportJson.name : 'chưa chọn Results .md / JSON report';
+  const iocName = selectedIocJson ? selectedIocJson.name : 'không có IOC JSON riêng';
+  document.getElementById('json-import-result').textContent = `Report: ${reportName} | IOC: ${iocName}`;
+}
+
+async function analyzeJsonImport() {
+  if (!selectedReportJson) return toast('Chọn file Any.Run Results .md hoặc JSON report trước', 'err');
+  const fd = new FormData();
+  fd.append('report_file', selectedReportJson);
+  if (selectedIocJson) fd.append('ioc_file', selectedIocJson);
+  const supplemental = document.getElementById('supplemental-text')?.value.trim();
+  if (supplemental) fd.append('supplemental_text', supplemental);
+  showLoading('Đang import report và tạo IR playbook...');
+  try {
+    const r = await fetch('/api/analyze/json', { method:'POST', body:fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    renderAll(j.data);
+    showPage('home', document.querySelector('[data-page=home]'));
+    toast('Import report hoàn tất!');
+  } catch(e) { toast(e.message, 'err'); }
+  finally { hideLoading(); }
+}
+
 function handleFileSelect(inp) {
   selectedFile = inp.files[0];
   if (selectedFile) document.getElementById('file-name').textContent = '📄 ' + selectedFile.name;
@@ -261,6 +297,18 @@ function renderDashboard(d) {
 
   // Threat card
   const bar_w = Math.round((lvl / 4) * 100);
+  let ml_html = '';
+  if (t.ml && t.ml.status === 'success') {
+      const mlColor = t.ml.prediction === 'Malicious' ? 'var(--red)' : t.ml.prediction === 'Suspicious' ? 'var(--orange)' : 'var(--green)';
+      ml_html = `<div style="margin-top:14px;padding:10px;border-radius:6px;background:var(--bg3);border:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">🤖 MACHINE LEARNING ASSESSMENT</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+           <span style="font-size:14px;font-weight:600;color:${mlColor}">${t.ml.prediction}</span>
+           <span style="font-size:13px;color:var(--text2)">Độ tin cậy: <b style="color:var(--text)">${t.ml.confidence}%</b></span>
+        </div>
+      </div>`;
+  }
+
   document.getElementById('card-threat').innerHTML = `
     <div class="card-title">⚠️ Threat Assessment</div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
@@ -273,6 +321,7 @@ function renderDashboard(d) {
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px"><span>Mức độ nguy hiểm</span><span>${lvl}/4</span></div>
       <div class="threat-bar"><div class="threat-bar-fill" style="width:${bar_w}%;background:${severityColor(lvl)}"></div></div>
     </div>
+    ${ml_html}
     <div style="margin-top:14px;font-size:13px;color:var(--text2)">
       🖥️ ${d.os_env} &nbsp;|&nbsp; ⏱️ ${d.duration}s &nbsp;|&nbsp;
       <a href="${d.analysis_url}" target="_blank" style="color:var(--accent)">Xem trên Any.Run ↗</a>
