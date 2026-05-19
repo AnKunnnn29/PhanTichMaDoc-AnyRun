@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import unicodedata
+from pathlib import Path
 from typing import Any
 
 import requests
+
+
+_BASE_DIR = Path(__file__).resolve().parent
+_FAMILY_INTEL_PATH = _BASE_DIR / "data" / "family_intel.json"
+_FAMILY_INTEL_CACHE: dict[str, Any] | None = None
 
 
 _IR_SCOPE_KEYWORDS = {
@@ -89,9 +96,9 @@ def answer_remediation(question: str, analysis_payload: dict[str, Any]) -> dict[
             }
         except Exception as exc:
             return {
-                "mode": "local_fallback",
-                "answer": _answer_locally(question, analysis_payload)
-                + f"\n\n(Lưu ý: gọi Ollama lỗi: {exc})",
+                "mode": "ollama_fallback",
+                "answer": _answer_locally(question, analysis_payload),
+                "warning": f"Ollama không phản hồi kịp, đã dùng Local assistant. Chi tiết: {exc}",
             }
 
     if provider in ("openai", "auto") and api_key:
@@ -103,8 +110,8 @@ def answer_remediation(question: str, analysis_payload: dict[str, Any]) -> dict[
         except Exception as exc:
             return {
                 "mode": "local_fallback",
-                "answer": _answer_locally(question, analysis_payload)
-                + f"\n\n(Lưu ý: gọi AI bên ngoài lỗi: {exc})",
+                "answer": _answer_locally(question, analysis_payload),
+                "warning": f"OpenAI không phản hồi được, đã dùng Local assistant. Chi tiết: {exc}",
             }
 
     return {
@@ -119,6 +126,8 @@ def _system_prompt() -> str:
         "Chỉ trả lời các câu hỏi nằm trong phạm vi phân tích mã độc, IOC, "
         "containment, eradication, recovery, threat hunting và báo cáo sự cố. "
         "Nếu câu hỏi ngoài phạm vi, từ chối ngắn gọn và hướng người dùng quay lại chủ đề IR. "
+        "Khi trả lời, phải phân biệt rõ: (1) Quan sát từ sandbox/report, "
+        "(2) Suy luận theo malware family/threat intelligence, (3) Cách xác minh bằng log/EDR. "
         "Trả lời bằng tiếng Việt như một trưởng ca SOC chủ động: nêu nhận định, mức khẩn cấp, "
         "giả thuyết lây nhiễm, hành động P0/P1, câu hỏi cần xác minh và điều kiện được phép đưa máy trở lại mạng. "
         "Ưu tiên thao tác an toàn, không bịa IOC ngoài dữ liệu được cung cấp."
@@ -173,10 +182,10 @@ def _answer_with_ollama(question: str, context: str) -> str:
             ],
             "options": {
                 "temperature": 0.2,
-                "num_predict": 900,
+                "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", "500")),
             },
         },
-        timeout=int(os.getenv("OLLAMA_TIMEOUT", "60")),
+        timeout=int(os.getenv("OLLAMA_TIMEOUT", "120")),
     )
     response.raise_for_status()
     data = response.json()
@@ -229,6 +238,38 @@ def _out_of_scope_answer(question: str) -> str:
     )
 
 
+def _load_family_intel() -> dict[str, Any]:
+    global _FAMILY_INTEL_CACHE
+    if _FAMILY_INTEL_CACHE is not None:
+        return _FAMILY_INTEL_CACHE
+    try:
+        _FAMILY_INTEL_CACHE = json.loads(_FAMILY_INTEL_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        _FAMILY_INTEL_CACHE = {"default": {}}
+    return _FAMILY_INTEL_CACHE
+
+
+def _payload_malware_name(payload: dict[str, Any]) -> str:
+    playbook = payload.get("playbook", {}) or {}
+    threat = payload.get("threat", {}) or {}
+    return playbook.get("malware_name") or threat.get("threat_name") or "Unknown malware"
+
+
+def _family_intel_for(payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    intel = _load_family_intel()
+    malware_name = _payload_malware_name(payload)
+    normalized = _normalize_text(malware_name)
+    for family, info in intel.items():
+        aliases = [family, *(info.get("aliases", []) or [])]
+        if any(_normalize_text(alias) and _normalize_text(alias) in normalized for alias in aliases):
+            return family, info
+    return "default", intel.get("default", {})
+
+
+def _format_bullets(items: list[str], fallback: str) -> list[str]:
+    return [f"- {item}" for item in items] if items else [f"- {fallback}"]
+
+
 def _answer_locally(question: str, payload: dict[str, Any]) -> str:
     playbook = payload.get("playbook", {}) or {}
     threat = payload.get("threat", {}) or {}
@@ -264,7 +305,7 @@ def _answer_locally(question: str, payload: dict[str, Any]) -> str:
             "3. Đẩy blocklist lên firewall/DNS, sau đó truy vấn log proxy/DNS để tìm máy nội bộ từng kết nối tới các IOC này.\n"
             "4. Nếu là ransomware/critical, cô lập endpoint trước khi chạy dọn dẹp để tránh lây lan hoặc mã hóa tiếp."
         )
-    elif any(word in q for word in ["nguồn", "nguon", "lây", "lay", "lan", "vector", "origin"]):
+    elif any(word in q for word in ["nguồn", "nguon", "lây", "lay", "lan", "vector", "origin", "smb", "ms17", "eternalblue"]):
         return _origin_spread_response(payload)
     else:
         return _proactive_brief(payload)
@@ -458,17 +499,64 @@ def _priority_response(payload: dict[str, Any]) -> str:
 
 def _origin_spread_response(payload: dict[str, Any]) -> str:
     malware_analysis = payload.get("malware_analysis", {}) or {}
-    lines = ["Phân tích vector lây lan và nguồn gốc quan sát được:"]
-    lines.append("")
-    lines.append("Cách lây lan / xâm nhập:")
-    for item in malware_analysis.get("spread", []) or ["Chưa đủ dữ liệu để kết luận vector lây nhiễm."]:
-        lines.append(f"- {item}")
-    lines.append("")
-    lines.append("Nguồn gốc / hạ tầng:")
-    for item in malware_analysis.get("origin", []) or ["Chưa đủ dữ liệu threat intelligence để quy kết nguồn gốc."]:
-        lines.append(f"- {item}")
-    lines.append("")
-    lines.append("Việc cần làm tiếp: tra log email/web proxy/DNS theo thời điểm mẫu chạy, sau đó pivot theo SHA256, filename, domain và URL để tìm host liên quan.")
+    network = payload.get("network", {}) or {}
+    processes = payload.get("processes", {}) or {}
+    family, intel = _family_intel_for(payload)
+    malware_name = _payload_malware_name(payload)
+
+    lines = [
+        f"Phân tích lây lan cho {malware_name}",
+        "",
+        "1. Quan sát từ sandbox/report",
+    ]
+    lines.extend(_format_bullets(
+        malware_analysis.get("spread", []) or [],
+        "Report hiện chưa ghi nhận trực tiếp vector ban đầu; cần xác minh bằng log nội bộ."
+    ))
+    if network.get("ips") or network.get("domains") or network.get("urls"):
+        lines.append(
+            f"- Report ghi nhận hoạt động mạng: {len(network.get('ips', []) or [])} IP, "
+            f"{len(network.get('domains', []) or [])} domain, {len(network.get('urls', []) or [])} URL."
+        )
+    if processes.get("dropped") or processes.get("registry"):
+        lines.append(
+            f"- Artifact hệ thống: {len(processes.get('dropped', []) or [])} dropped file, "
+            f"{len(processes.get('registry', []) or [])} registry/autostart artifact."
+        )
+
+    lines += [
+        "",
+        f"2. Suy luận theo threat intelligence/family ({family})",
+    ]
+    if intel.get("summary"):
+        lines.append(f"- {intel['summary']}")
+    lines.extend(_format_bullets(
+        intel.get("common_spread", []) or [],
+        "Chưa có threat intel riêng cho family này; không kết luận thêm ngoài dữ liệu quan sát."
+    ))
+
+    lines += ["", "3. Cách xác minh"]
+    lines.extend(_format_bullets(
+        intel.get("verify", []) or [],
+        "Đối chiếu log endpoint, DNS/proxy/firewall/EDR quanh thời điểm mẫu chạy."
+    ))
+
+    lines += ["", "4. Hunt phạm vi ảnh hưởng"]
+    lines.extend(_format_bullets(
+        intel.get("hunt", []) or [],
+        "Pivot theo hash, filename, domain, URL, process tree và registry artifact."
+    ))
+
+    lines += ["", "5. Biện pháp chặn/khắc phục"]
+    lines.extend(_format_bullets(
+        intel.get("remediation", []) or [],
+        "Cô lập endpoint, chặn IOC, gỡ persistence/dropped file, scan full và chỉ nối mạng lại khi sạch."
+    ))
+
+    lines += [
+        "",
+        "Kết luận: phần 'quan sát' là dữ liệu từ report hiện tại; phần 'suy luận' là kiến thức theo malware family và phải được xác minh bằng log trước khi kết luận phạm vi thật.",
+    ]
     return "\n".join(lines)
 
 
@@ -480,6 +568,7 @@ def _build_context(payload: dict[str, Any]) -> str:
     malware_analysis = payload.get("malware_analysis", {}) or {}
     network = payload.get("network", {}) or {}
     processes = payload.get("processes", {}) or {}
+    family, intel = _family_intel_for(payload)
     actions = playbook.get("actions", []) or []
     action_lines = []
     for action in actions[:10]:
@@ -502,6 +591,16 @@ def _build_context(payload: dict[str, Any]) -> str:
             "Spread/origin analysis:",
             *[f"- {item}" for item in (malware_analysis.get("spread") or [])[:4]],
             *[f"- {item}" for item in (malware_analysis.get("origin") or [])[:4]],
+            f"Known family intelligence: {family}",
+            f"- Summary: {intel.get('summary', '')}",
+            "- Common spread:",
+            *[f"  - {item}" for item in (intel.get("common_spread", []) or [])[:5]],
+            "- Verification:",
+            *[f"  - {item}" for item in (intel.get("verify", []) or [])[:5]],
+            "- Hunting:",
+            *[f"  - {item}" for item in (intel.get("hunt", []) or [])[:5]],
+            "- Remediation:",
+            *[f"  - {item}" for item in (intel.get("remediation", []) or [])[:5]],
             "Playbook actions:",
             *action_lines,
         ]

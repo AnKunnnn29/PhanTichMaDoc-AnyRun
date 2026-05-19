@@ -11,7 +11,8 @@ Khi một tổ chức bị nhiễm mã độc, đội ngũ bảo mật cần nha
 2. **Có ngay kế hoạch hành động** để ngăn chặn, loại bỏ và phục hồi
 
 Chương trình này giải quyết cả hai bài toán trên tự động: lấy dữ liệu phân tích từ Any.Run → phân tích → sinh ra quy trình IR cụ thể với từng lệnh thực thi.
-
+Chạy app: run main.py
+Chạy LLM Ollama: "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" run llama3.1:8b
 ---
 
 ## 🗂️ Cấu trúc dự án
@@ -183,15 +184,121 @@ Truy cập tại `http://localhost:5000` sau khi chạy `python app.py`.
 
 ## 🚀 Cài đặt & Chạy
 
-```bash
-# Cài dependencies
+### 1. Cài Python packages
+
+Yêu cầu:
+
+- Python 3.10+.
+- Git.
+- Ollama nếu muốn dùng AI Agent local.
+
+Windows PowerShell:
+
+```powershell
+git clone <repo-url>
+cd "Phan Tich Ma Doc"
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
 
-# Chạy Web GUI (khuyến nghị)
+CMD:
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 2. Tạo file cấu hình
+
+```bash
+cp .env.example .env
+```
+
+Trên Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Sửa `.env`:
+
+```env
+ANYRUN_API_KEY=your_anyrun_api_key_here
+AI_PROVIDER=ollama
+OLLAMA_ENABLED=1
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+OLLAMA_TIMEOUT=120
+OLLAMA_NUM_PREDICT=500
+```
+
+Không commit file `.env` lên GitHub.
+
+### 3. Cài Ollama model cho AI Agent
+
+Cài Ollama từ: https://ollama.com/download
+
+Sau đó pull model:
+
+```powershell
+ollama pull llama3.1:8b
+```
+
+Nếu Windows chưa nhận lệnh `ollama`, dùng đường dẫn đầy đủ:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" pull llama3.1:8b
+```
+
+Máy yếu có thể dùng model nhẹ hơn:
+
+```powershell
+ollama pull llama3.2:3b
+```
+
+và đổi `.env`:
+
+```env
+OLLAMA_MODEL=llama3.2:3b
+```
+
+### 4. Train hoặc dùng sẵn model ML
+
+Repo có thể chứa sẵn `models/rf_threat_model.pkl`. Nếu chưa có, train lại:
+
+```bash
+python -X utf8 train_ml.py --synthetic 60
+```
+
+### 5. Chạy app
+
+```bash
 python app.py
-# → Mở http://localhost:5000
+```
 
-# Hoặc chạy CLI
+Mở:
+
+```text
+http://localhost:5000
+```
+
+Chạy CLI demo:
+
+```bash
 python -X utf8 main.py --demo
 ```
 
@@ -492,7 +599,8 @@ AI_PROVIDER=ollama
 OLLAMA_ENABLED=1
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.1:8b
-OLLAMA_TIMEOUT=60
+OLLAMA_TIMEOUT=120
+OLLAMA_NUM_PREDICT=500
 ```
 
 Sau khi doi `.env`, restart Flask server de app nhan cau hinh moi.

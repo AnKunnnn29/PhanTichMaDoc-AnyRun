@@ -470,6 +470,15 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   letter-spacing: 0.6px;
   margin-bottom: 8px;
 }
+.ai-warning {
+  color: var(--yellow);
+  background: rgba(250,204,21,0.08);
+  border: 1px solid rgba(250,204,21,0.22);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
 
 /* ── Process tree ── */
 .proc-item {

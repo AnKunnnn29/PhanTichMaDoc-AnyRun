@@ -734,10 +734,12 @@ async function askAI(question = '') {
     const modeLabel = {
       openai: 'OpenAI',
       ollama: 'Ollama local LLM',
+      ollama_fallback: 'Local assistant (Ollama timeout)',
       guardrail: 'Scope guardrail',
       local_fallback: 'Local assistant'
     }[j.mode] || 'Local assistant';
-    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}</div><pre>${esc(j.answer)}</pre>`;
+    const warningHtml = j.warning ? `<div class="ai-warning">${esc(j.warning)}</div>` : '';
+    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}</div>${warningHtml}<pre>${esc(j.answer)}</pre>`;
   } catch(e) {
     answerEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
     toast(e.message, 'err');

@@ -1,0 +1,116 @@
+{
+  "WannaCry": {
+    "aliases": [
+      "wannacry",
+      "wanna cry",
+      "wanacry",
+      "wanacrypt",
+      "wcry",
+      "wncry"
+    ],
+    "summary": "Ransomware có khả năng lan truyền trong mạng nội bộ, nổi bật với SMB/EternalBlue/MS17-010 trên Windows chưa vá.",
+    "common_spread": [
+      "Lan truyền qua SMB/445, đặc biệt khi host Windows chưa vá MS17-010.",
+      "Có thể quét mạng nội bộ để tìm máy có SMB có thể khai thác.",
+      "Kill-switch/C2 domain có thể xuất hiện trong traffic, nhưng việc lan truyền SMB có thể không luôn được sandbox ghi nhận."
+    ],
+    "verify": [
+      "Kiểm tra log firewall/EDR/NetFlow cho kết nối TCP/445 bất thường từ máy nhiễm đến host khác.",
+      "Kiểm tra bản vá MS17-010 trên tất cả Windows endpoint/server.",
+      "Tìm dropped file/artifact liên quan như tasksche.exe, ransom note, hành vi xóa shadow copy hoặc mã hóa file."
+    ],
+    "hunt": [
+      "Hunt host có SMB/445 inbound/outbound bất thường trong 24-72 giờ quanh thời điểm phát hiện.",
+      "Tìm endpoint có process lạ, file ransom note, file bị đổi extension/mã hóa, hoặc kết nối đến kill-switch domain.",
+      "Pivot theo SHA256, filename, domain/URL và các host dùng chung subnet với máy nhiễm."
+    ],
+    "remediation": [
+      "Cô lập máy nhiễm khỏi LAN/VPN ngay lập tức.",
+      "Chặn IOC domain/IP nếu có, nhưng ưu tiên ngăn SMB lateral movement.",
+      "Vá MS17-010 và tắt SMBv1 nếu còn bật.",
+      "Chỉ nối mạng lại sau khi quét sạch, không còn SMB scanning, persistence và IOC mới."
+    ]
+  },
+  "Emotet": {
+    "aliases": [
+      "emotet",
+      "heodo",
+      "geodo"
+    ],
+    "summary": "Trojan/loader thuong bat dau tu phishing Office document, dung script/PowerShell de tai payload va lien lac C2.",
+    "common_spread": [
+      "Thuong xam nhap qua email phishing co attachment/link doc hai.",
+      "Co the dung macro/script de tai stage tiep theo va credential/email thread theft de phat tan tiep.",
+      "Lien lac C2 qua HTTP/HTTPS va co the drop loader/payload khac."
+    ],
+    "verify": [
+      "Kiem tra email gateway/M365 cho attachment/link co cung filename, hash, sender, subject.",
+      "Kiem tra PowerShell, winword/excel child process, rundll32/regsvr32/mshta bat thuong.",
+      "Kiem tra proxy/DNS cho domain/IP C2 trong bao cao."
+    ],
+    "hunt": [
+      "Hunt mailbox nhan cung email hoac cung attachment hash.",
+      "Hunt endpoint co Office spawning PowerShell/cmd/rundll32.",
+      "Pivot theo C2, dropped DLL/EXE va registry persistence."
+    ],
+    "remediation": [
+      "Quarantine email va thu hoi attachment/link.",
+      "Co lap endpoint nhiem, dump evidence neu can.",
+      "Chan IOC, xoa dropped payload va persistence.",
+      "Reset credential neu co dau hieu credential theft."
+    ]
+  },
+  "RedLine Stealer": {
+    "aliases": [
+      "redline",
+      "redline stealer"
+    ],
+    "summary": "Infostealer thuong phat tan qua crack/fake installer, danh cap browser credential, cookie, wallet va gui ve C2.",
+    "common_spread": [
+      "Thuong den tu crack/keygen/fake installer hoac link download khong tin cay.",
+      "Khong phai worm tu lan truyen manh; rui ro chinh la credential/cookie/token da bi danh cap.",
+      "Co the lien lac C2 de upload du lieu danh cap."
+    ],
+    "verify": [
+      "Kiem tra nguon file download, browser download history va user da chay file.",
+      "Kiem tra proxy/DNS cho C2 va file exfiltration.",
+      "Kiem tra tai khoan, browser profile, password manager, crypto wallet co bi truy cap."
+    ],
+    "hunt": [
+      "Hunt endpoint co cung hash/filename hoac cung duong dan Downloads/AppData/Temp.",
+      "Hunt tai khoan co dang nhap bat thuong sau thoi diem nhiem.",
+      "Pivot theo C2, mutex, dropped file va process tree."
+    ],
+    "remediation": [
+      "Co lap endpoint va xoa stealer/persistence.",
+      "Reset mat khau, revoke sessions/token, rotate API key neu co.",
+      "Kiem tra MFA va log dang nhap bat thuong.",
+      "Chan IOC va scan cac host co cung file."
+    ]
+  },
+  "default": {
+    "aliases": [],
+    "summary": "Chua co threat intel rieng cho family nay; su dung sandbox observation va IOC hien co.",
+    "common_spread": [
+      "Can xac dinh vector ban dau qua email, web download, USB, share noi bo hoac remote service.",
+      "Neu co C2/HTTP/DNS thi hunt host khac cham cung IOC.",
+      "Neu co persistence hoac impact thi uu tien co lap va quet mo rong."
+    ],
+    "verify": [
+      "Kiem tra log endpoint, DNS/proxy/firewall va EDR quanh thoi diem mau chay.",
+      "Pivot theo hash, filename, domain, URL, registry key va process tree.",
+      "Doi chieu MITRE techniques de xac dinh pha attack."
+    ],
+    "hunt": [
+      "Tim host co cung hash/filename.",
+      "Tim host ket noi den cung IP/domain/URL.",
+      "Tim process/registry artifact giong mau phan tich."
+    ],
+    "remediation": [
+      "Co lap endpoint nghi nhiem.",
+      "Chan IOC tai firewall/DNS/proxy/EDR.",
+      "Go dropped file, persistence va scan full.",
+      "Chi phuc hoi khi log moi khong con IOC."
+    ]
+  }
+}

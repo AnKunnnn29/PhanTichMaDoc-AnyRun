@@ -1,3 +1,5 @@
+# Python package dependencies for AnyRun Malware IR Tool.
+# Recommended Python: 3.10+
 requests>=2.31.0
 rich>=13.7.0
 python-dotenv>=1.0.0

@@ -1,0 +1,26 @@
+# Local secrets and machine-specific config
+.env
+.env.local
+
+# Python cache / virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Test/cache/tooling output
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime-generated local history and exports
+reports/analysis_history.json
+reports/IR_Report_*.md
+reports/IR_Report_*.json
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

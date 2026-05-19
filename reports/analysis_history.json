@@ -1,7 +1,7 @@
 [
   {
     "id": "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
-    "created_at": "2026-05-19T08:52:28",
+    "created_at": "2026-05-19T09:30:38",
     "source": "browser:restore",
     "task_uuid": "BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
     "malware_name": "WannaCry",
@@ -530,6 +530,379 @@
         "threat_level": 3,
         "threat_name": "WannaCry",
         "verdict": "Malicious"
+      }
+    }
+  },
+  {
+    "id": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+    "created_at": "2026-05-19T09:28:30",
+    "source": "test",
+    "task_uuid": "11111111-2222-3333-4444-555555555555",
+    "malware_name": "WannaCry",
+    "family_key": "wannacry",
+    "file_name": "WannaCry_Payload.exe",
+    "hashes": [
+      "84c82835a5d21bbcf75a61706d8ab549",
+      "5ff465afaabcbf0150d1a3ab2c2e74f3a4426467",
+      "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+      "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1"
+    ],
+    "verdict": "Malicious",
+    "threat_level": 4,
+    "analysis_url": "https://app.any.run/tasks/11111111-2222-3333-4444-555555555555",
+    "payload": {
+      "task_uuid": "11111111-2222-3333-4444-555555555555",
+      "analysis_url": "https://app.any.run/tasks/11111111-2222-3333-4444-555555555555",
+      "os_env": "Windows 10 x64 (Build 19041)",
+      "duration": 150,
+      "file": {
+        "name": "WannaCry_Payload.exe",
+        "size": 3512320,
+        "type": "PE32 executable",
+        "md5": "84c82835a5d21bbcf75a61706d8ab549",
+        "sha1": "5ff465afaabcbf0150d1a3ab2c2e74f3a4426467",
+        "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+      },
+      "threat": {
+        "verdict": "Malicious",
+        "threat_level": 4,
+        "threat_name": "WannaCry",
+        "tags": [
+          "ransomware",
+          "wannacry",
+          "crypto",
+          "smb"
+        ],
+        "mitre": [
+          {
+            "id": "T1486",
+            "name": "Data Encrypted for Impact",
+            "tactic": "Impact"
+          },
+          {
+            "id": "T1490",
+            "name": "Inhibit System Recovery",
+            "tactic": "Impact"
+          },
+          {
+            "id": "T1059.003",
+            "name": "Windows Command Shell",
+            "tactic": "Execution"
+          },
+          {
+            "id": "T1543.003",
+            "name": "Windows Service",
+            "tactic": "Persistence"
+          },
+          {
+            "id": "T1012",
+            "name": "Query Registry",
+            "tactic": "Discovery"
+          }
+        ],
+        "ml": {
+          "status": "success",
+          "prediction": "Malicious",
+          "confidence": 59.0,
+          "probabilities": {
+            "Clean": 38.5,
+            "Suspicious": 2.5,
+            "Malicious": 59.0
+          }
+        }
+      },
+      "network": {
+        "ips": [
+          "104.17.220.11",
+          "192.168.1.45"
+        ],
+        "domains": [
+          "www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+        ],
+        "urls": [
+          "http://www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+        ],
+        "http": [
+          {
+            "method": "GET",
+            "url": "http://www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com",
+            "status": 200,
+            "user_agent": "Mozilla/5.0"
+          }
+        ],
+        "dns": [
+          "www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+        ]
+      },
+      "processes": {
+        "list": [
+          {
+            "pid": 3012,
+            "ppid": 800,
+            "name": "WannaCry_Payload.exe",
+            "cmd": "C:\\Users\\Admin\\Desktop\\WannaCry_Payload.exe",
+            "is_injected": false,
+            "score": 4
+          },
+          {
+            "pid": 3100,
+            "ppid": 3012,
+            "name": "cmd.exe",
+            "cmd": "cmd.exe /c vssadmin.exe Delete Shadows /All /Quiet",
+            "is_injected": false,
+            "score": 4
+          },
+          {
+            "pid": 3104,
+            "ppid": 3012,
+            "name": "cmd.exe",
+            "cmd": "cmd.exe /c bcdedit /set {default} recoveryenabled No",
+            "is_injected": false,
+            "score": 4
+          },
+          {
+            "pid": 3200,
+            "ppid": 3012,
+            "name": "tasksche.exe",
+            "cmd": "C:\\ProgramData\\tasksche.exe",
+            "is_injected": false,
+            "score": 4
+          }
+        ],
+        "injected": [],
+        "dropped": [
+          {
+            "name": "C:\\ProgramData\\tasksche.exe",
+            "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+            "type": "PE32 executable"
+          },
+          {
+            "name": "C:\\Users\\Admin\\Desktop\\@Please_Read_Me@.txt",
+            "sha256": "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1",
+            "type": "Text document"
+          }
+        ],
+        "registry": [
+          "HKLM\\SOFTWARE\\WanaCrypt0r"
+        ],
+        "mutexes": [
+          "Global\\MsWinZonesCacheCounterMutexA"
+        ]
+      },
+      "malware_analysis": {
+        "behavior": [
+          "Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: WannaCry_Payload.exe, cmd.exe, cmd.exe, tasksche.exe.",
+          "Cơ chế duy trì hiện diện được thể hiện qua 1 registry key/autostart artifact; cần kiểm tra Run/RunOnce/Startup/Scheduled Task.",
+          "Mẫu thực hiện trinh sát hệ thống (T1012 - Query Registry) để thu thập thông tin máy, process, thư mục hoặc cấu hình mạng.",
+          "Mẫu có hoạt động C2/tải payload qua mạng: 2 IP, 1 domain và 1 URL được ghi nhận.",
+          "Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi."
+        ],
+        "spread": [
+          "Với ransomware, nguy cơ lan truyền trong mạng nội bộ cao hơn nếu máy có SMB/share/credential dùng chung."
+        ],
+        "affected_files": [
+          {
+            "role": "Mẫu đầu vào",
+            "name": "WannaCry_Payload.exe",
+            "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+            "type": "PE32 executable"
+          },
+          {
+            "role": "File được drop/tạo mới",
+            "name": "C:\\ProgramData\\tasksche.exe",
+            "sha256": "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+            "type": "PE32 executable"
+          },
+          {
+            "role": "File được drop/tạo mới",
+            "name": "C:\\Users\\Admin\\Desktop\\@Please_Read_Me@.txt",
+            "sha256": "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1",
+            "type": "Text document"
+          },
+          {
+            "role": "Tên file IOC",
+            "name": "tasksche.exe",
+            "sha256": "",
+            "type": ""
+          },
+          {
+            "role": "Tên file IOC",
+            "name": "@Please_Read_Me@.txt",
+            "sha256": "",
+            "type": ""
+          }
+        ],
+        "origin": [
+          "Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `WannaCry_Payload.exe` (PE32 executable), SHA256 `ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa`.",
+          "Hạ tầng liên quan gồm các URL đầu tiên: `http://www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com`. Đây là nơi mẫu liên lạc hoặc tải nội dung trong phiên phân tích.",
+          "Domain liên quan: `www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com`. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.",
+          "Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập."
+        ]
+      },
+      "playbook": {
+        "malware_name": "WannaCry",
+        "severity": "CRITICAL",
+        "threat_level": 4,
+        "summary": "Phát hiện mã độc 'WannaCry' với mức độ 'Nghiêm trọng'. Mã độc thực hiện 5 kỹ thuật MITRE ATT&CK, kết nối 2 IP/1 domain C2, và tạo 2 file độc hại trên hệ thống.",
+        "mitigation": "Ưu tiên: (1) Cô lập máy bị nhiễm ngay lập tức. (2) Chặn 2 IP và 1 domain tại firewall/DNS. (3) Xóa 2 file độc hại. (4) Reset credential toàn bộ user bị ảnh hưởng. (5) Patch lỗ hổng bị khai thác nếu xác định được.",
+        "actions": [
+          {
+            "priority": 1,
+            "phase": "Xác định (Identification)",
+            "category": "Thu thập bằng chứng",
+            "title": "Xác nhận và ghi lại thông tin mẫu mã độc",
+            "description": "Xác nhận đây là mã độc loại 'WannaCry' với mức độ nguy hiểm 'Nghiêm trọng' (threat level 4/4). Lưu trữ report đầy đủ từ Any.Run để phục vụ điều tra.",
+            "commands": [],
+            "notes": [
+              "Any.Run report URL: https://app.any.run/tasks/11111111-2222-3333-4444-555555555555",
+              "Thời gian phân tích: 150s trên Windows 10 x64 (Build 19041)",
+              "MITRE techniques: 5 kỹ thuật được phát hiện"
+            ]
+          },
+          {
+            "priority": 1,
+            "phase": "Xác định (Identification)",
+            "category": "Phân tích mẫu",
+            "title": "Lưu trữ hash và thông tin file mã độc",
+            "description": "File 'WannaCry_Payload.exe' (PE32 executable, 3.3 MB) đã được xác nhận là mã độc.",
+            "commands": [
+              "certutil -hashfile \"<đường_dẫn_file>\" MD5",
+              "certutil -hashfile \"<đường_dẫn_file>\" SHA256",
+              "# Kiểm tra trên VirusTotal: https://www.virustotal.com/gui/file/ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+            ],
+            "notes": [
+              "MD5=84c82835a5d21bbcf75a61706d8ab549 | SHA256=ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa"
+            ]
+          },
+          {
+            "priority": 1,
+            "phase": "Ngăn chặn (Containment)",
+            "category": "Cô lập mạng",
+            "title": "Chặn kết nối C2 tại tường lửa",
+            "description": "Phát hiện 2 địa chỉ IP và 1 domain nghi ngờ C2. Chặn ngay các kết nối này tại firewall và DNS.",
+            "commands": [
+              "netsh advfirewall firewall add rule name=\"Block_IR_104.17.220.11\" dir=out action=block remoteip=104.17.220.11",
+              "netsh advfirewall firewall add rule name=\"Block_IR_192.168.1.45\" dir=out action=block remoteip=192.168.1.45",
+              "# Chặn DNS - thêm vào file hosts:",
+              "0.0.0.0 www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+            ],
+            "notes": [
+              "Kiểm tra tất cả thiết bị trong mạng nội bộ xem có kết nối đến các IP/domain trên không.",
+              "Xem xét cô lập hoàn toàn máy bị nhiễm khỏi mạng LAN."
+            ]
+          },
+          {
+            "priority": 1,
+            "phase": "Ngăn chặn (Containment)",
+            "category": "MITRE ATT&CK - T1486 (RANSOMWARE)",
+            "title": "[RANSOMWARE] Cô lập khẩn cấp và dừng mã hóa",
+            "description": "⚠️ PHÁT HIỆN MÃ ĐỘC RANSOMWARE! Cần cô lập ngay lập tức để ngăn lây lan và mã hóa thêm dữ liệu.",
+            "commands": [
+              "# Dừng Volume Shadow Copy deletion (nếu chưa bị xóa):",
+              "vssadmin list shadows",
+              "",
+              "# Ngắt kết nối mạng NGAY LẬP TỨC:",
+              "netsh interface set interface 'Ethernet' disable",
+              "",
+              "# KHÔNG TẮT MÁY - backup memory trước:",
+              "# Chụp memory dump với Belkasoft RAM Capturer hoặc WinPmem"
+            ],
+            "notes": [
+              "KHÔNG trả tiền chuộc - liên hệ nhà chức trách.",
+              "Kiểm tra nomoreransom.org để tìm decryptor miễn phí.",
+              "Phục hồi từ backup OFFLINE (kiểm tra backup không bị nhiễm).",
+              "Báo cáo ngay cho CERT/VNCERT."
+            ]
+          },
+          {
+            "priority": 2,
+            "phase": "Loại bỏ (Eradication)",
+            "category": "Dọn dẹp hệ thống",
+            "title": "Loại bỏ toàn bộ thành phần mã độc",
+            "description": "Xóa 2 file đã drop, dọn dẹp registry và scheduled tasks. Chạy antivirus quét toàn bộ sau khi xử lý thủ công.",
+            "commands": [
+              "# Quét toàn bộ hệ thống với Windows Defender (đã cập nhật):",
+              "Start-MpScan -ScanType FullScan",
+              "",
+              "# Kiểm tra Scheduled Tasks độc hại:",
+              "Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} | Format-List",
+              "",
+              "# Kiểm tra dịch vụ độc hại:",
+              "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Name, DisplayName",
+              "",
+              "# Xóa các file mã độc đã drop:",
+              "Remove-Item -Force \"C:\\ProgramData\\tasksche.exe\" -ErrorAction SilentlyContinue",
+              "Remove-Item -Force \"C:\\Users\\Admin\\Desktop\\@Please_Read_Me@.txt\" -ErrorAction SilentlyContinue"
+            ],
+            "notes": [
+              "Nếu có file được bảo vệ, restart vào Safe Mode để xóa.",
+              "Kiểm tra Recycle Bin và %TEMP% folder."
+            ]
+          },
+          {
+            "priority": 3,
+            "phase": "Phục hồi (Recovery)",
+            "category": "Phục hồi hệ thống",
+            "title": "Khôi phục hệ thống về trạng thái an toàn",
+            "description": "Sau khi đã loại bỏ mã độc, tiến hành khôi phục và hardening hệ thống.",
+            "commands": [
+              "# Cập nhật Windows:",
+              "Install-WindowsUpdate -AcceptAll -AutoReboot",
+              "",
+              "# Reset mật khẩu tất cả tài khoản (phòng credential theft):",
+              "# Thực hiện qua Active Directory hoặc Local Users and Groups",
+              "",
+              "# Bật lại các dịch vụ bảo mật:",
+              "Set-MpPreference -DisableRealtimeMonitoring $false",
+              "netsh advfirewall set allprofiles state on"
+            ],
+            "notes": [
+              "Không kết nối lại mạng cho đến khi xác nhận hệ thống sạch.",
+              "Thực hiện vulnerability scan sau khi phục hồi.",
+              "Cân nhắc reinstall OS nếu phát hiện rootkit."
+            ]
+          },
+          {
+            "priority": 4,
+            "phase": "Rút kinh nghiệm (Lessons Learned)",
+            "category": "Rút kinh nghiệm",
+            "title": "Viết báo cáo sự cố và cải thiện phòng thủ",
+            "description": "Tài liệu hóa sự cố, timeline, và các biện pháp cải thiện.",
+            "commands": [],
+            "notes": [
+              "Xác định điểm xâm nhập ban đầu (phishing? drive-by? USB?).",
+              "Cập nhật SIEM rules dựa trên IOC mới phát hiện.",
+              "Thêm 2 IP và 1 domain vào threat intel feed.",
+              "Đào tạo lại nhân viên về nhận biết phishing nếu đây là vector lây nhiễm.",
+              "Xem xét triển khai EDR/XDR nếu chưa có."
+            ]
+          }
+        ],
+        "ioc_blocklist": {
+          "ip_addresses": [
+            "104.17.220.11",
+            "192.168.1.45"
+          ],
+          "domains": [
+            "www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+          ],
+          "urls": [
+            "http://www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"
+          ],
+          "file_hashes": [
+            "84c82835a5d21bbcf75a61706d8ab549",
+            "ed01ebfbc9eb5bbea545af4d01bf5f1071661840480439c6e5babe8e080e41aa",
+            "5ff465afaabcbf0150d1a3ab2c2e74f3a4426467",
+            "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1"
+          ],
+          "filenames": [
+            "WannaCry_Payload.exe",
+            "tasksche.exe",
+            "@Please_Read_Me@.txt",
+            "C:\\ProgramData\\tasksche.exe",
+            "C:\\Users\\Admin\\Desktop\\@Please_Read_Me@.txt"
+          ]
+        }
       }
     }
   }

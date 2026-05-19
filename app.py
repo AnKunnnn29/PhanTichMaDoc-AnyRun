@@ -2,6 +2,7 @@
 """
 app.py  –  Flask web server cho AnyRun IR Tool GUI
 Chạy: python app.py  →  truy cập http://localhost:5000
+Chạy model LLM: & "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama.exe" pull llama3.1:8b
 """
 import io, sys, os, json, threading, time
 from werkzeug.utils import secure_filename
