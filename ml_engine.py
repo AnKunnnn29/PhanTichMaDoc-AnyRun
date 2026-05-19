@@ -77,7 +77,7 @@ class MLThreatPredictor:
             pred = self.model.predict(X)[0]        # Nhãn dự đoán
             probs = self.model.predict_proba(X)[0] # Xác suất cho từng class
             
-            confidence = round(max(probs) * 100, 2)
+            confidence = float(round(float(max(probs)) * 100, 2))
             
             labels = {0: "Clean", 1: "Suspicious", 2: "Malicious"}
             pred_label = labels.get(pred, "Unknown")
@@ -87,9 +87,9 @@ class MLThreatPredictor:
                 "prediction": pred_label,
                 "confidence": confidence,
                 "probabilities": {
-                    "Clean": round(probs[0] * 100, 2) if len(probs) > 0 else 0,
-                    "Suspicious": round(probs[1] * 100, 2) if len(probs) > 1 else 0,
-                    "Malicious": round(probs[2] * 100, 2) if len(probs) > 2 else 0,
+                    "Clean": float(round(float(probs[0]) * 100, 2)) if len(probs) > 0 else 0,
+                    "Suspicious": float(round(float(probs[1]) * 100, 2)) if len(probs) > 1 else 0,
+                    "Malicious": float(round(float(probs[2]) * 100, 2)) if len(probs) > 2 else 0,
                 }
             }
         except Exception as e:

@@ -259,17 +259,19 @@
         </div>
       </div>
       <div class="card ai-card">
-        <div class="card-title">AI khắc phục sự cố</div>
+        <div class="card-title">AI điều phối khắc phục sự cố</div>
         <div class="ai-quick">
+          <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Briefing chủ động</button>
           <button class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button>
           <button class="btn btn-outline" onclick="askAI('Cần cô lập và chặn IOC như thế nào?')">Cô lập &amp; chặn IOC</button>
+          <button class="btn btn-outline" onclick="askAI('Phân tích nguồn lây, cách lan truyền và phạm vi cần hunt')">Hunt phạm vi</button>
           <button class="btn btn-outline" onclick="askAI('Làm sao xác minh máy đã sạch sau khi khắc phục?')">Xác minh sạch</button>
         </div>
         <div class="ai-input-row">
-          <input id="ai-question" type="text" placeholder="Hỏi AI về bước khắc phục, IOC, cô lập, phục hồi..."/>
-          <button class="btn btn-primary" onclick="askAI()">Hỏi AI</button>
+          <input id="ai-question" type="text" placeholder="Yêu cầu AI lập kế hoạch, hunt phạm vi, viết lệnh xử lý, nêu giả thuyết nguồn lây..."/>
+          <button class="btn btn-primary" onclick="askAI()">Phân tích</button>
         </div>
-        <div id="ai-answer" class="ai-answer">Chạy phân tích rồi đặt câu hỏi để nhận hướng dẫn khắc phục theo playbook hiện tại.</div>
+        <div id="ai-answer" class="ai-answer">Chạy phân tích xong, AI sẽ tự tạo briefing ban đầu và đề xuất bước tiếp theo.</div>
       </div>
       <div id="playbook-content">
         <div class="welcome" style="padding:60px 20px">

@@ -10,7 +10,8 @@ from typing import Any
 
 
 _LOCK = threading.Lock()
-_HISTORY_PATH = os.path.join(os.getcwd(), "reports", "analysis_history.json")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_HISTORY_PATH = os.path.join(_BASE_DIR, "reports", "analysis_history.json")
 _GENERIC_FAMILIES = {
     "",
     "unknown",

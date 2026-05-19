@@ -1,10 +1,16 @@
 // ── State ────────────────────────────────────────────────────────────────────
 let G = { data: null, apiKey: localStorage.getItem('ir_apikey') || '' };
+const LAST_ANALYSIS_KEY = 'ir_last_analysis_payload';
 
-window.onload = () => {
+window.onload = async () => {
   if (G.apiKey) document.getElementById('api-key-input').value = G.apiKey;
   document.getElementById('hist-key').value = G.apiKey;
-  loadHistory();
+  if (restoreLastAnalysis()) {
+    await persistCurrentAnalysis('browser:restore');
+  } else {
+    await restoreLatestFromServer();
+  }
+  await loadHistory();
 };
 
 // ── Navigation ───────────────────────────────────────────────────────────────
@@ -279,10 +285,67 @@ async function loadHistory() {
 // ── Render functions ──────────────────────────────────────────────────────────
 function renderAll(data) {
   G.data = data;
+  saveLastAnalysis(data);
   renderDashboard(data);
   renderPlaybook(data);
   renderIOCs(data);
+  renderAIProactive(data);
   if (data.cache?.hit) toast('Dùng lại lịch sử: ' + data.cache.reason);
+}
+
+function saveLastAnalysis(data) {
+  try {
+    localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Không thể lưu phiên phân tích gần nhất:', e);
+  }
+}
+
+async function persistCurrentAnalysis(source = 'browser') {
+  if (!G.data) return false;
+  try {
+    const r = await fetch('/api/history/local/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: G.data, source })
+    });
+    const j = await r.json();
+    return !!j.ok;
+  } catch (e) {
+    console.warn('Không thể đồng bộ lịch sử local:', e);
+    return false;
+  }
+}
+
+function restoreLastAnalysis() {
+  try {
+    const raw = localStorage.getItem(LAST_ANALYSIS_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !data.playbook || !data.threat) return false;
+    G.data = data;
+    renderDashboard(data);
+    renderPlaybook(data);
+    renderIOCs(data);
+    renderAIProactive(data);
+    toast('Đã khôi phục phiên phân tích gần nhất');
+    return true;
+  } catch (e) {
+    localStorage.removeItem(LAST_ANALYSIS_KEY);
+    return false;
+  }
+}
+
+async function restoreLatestFromServer() {
+  try {
+    const r = await fetch('/api/history/local/latest');
+    const j = await r.json();
+    if (!j.ok || !j.data) return;
+    renderAll(j.data);
+    toast('Đã nạp lại phân tích gần nhất từ lịch sử');
+  } catch (e) {
+    // Không có lịch sử thì giữ màn hình chờ bình thường.
+  }
 }
 
 function severityClass(lvl) {
@@ -620,13 +683,46 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function renderAIProactive(d) {
+  const answerEl = document.getElementById('ai-answer');
+  if (!answerEl) return;
+  const p = d.playbook || {};
+  const t = d.threat || {};
+  const net = d.network || { ips: [], domains: [] };
+  const pr = d.processes || { dropped: [], registry: [], injected: [] };
+  const ma = d.malware_analysis || {};
+  const p0 = (p.actions || []).filter(a => a.priority === 1).slice(0, 3);
+  const nextQuestions = [
+    'Host nào khác từng kết nối tới IOC này?',
+    'File đầu vào đến từ email, web hay share nội bộ?',
+    'Tài khoản nào đăng nhập trước thời điểm malware chạy?'
+  ];
+  answerEl.innerHTML = `
+    <div class="ai-mode">AI briefing chủ động</div>
+    <div class="ai-brief-grid">
+      <div class="ai-brief-item"><span>Mức khẩn cấp</span><b>${esc(p.severity || 'UNKNOWN')}</b></div>
+      <div class="ai-brief-item"><span>Malware</span><b>${esc(p.malware_name || t.threat_name || 'Unknown')}</b></div>
+      <div class="ai-brief-item"><span>C2</span><b>${(net.ips || []).length + (net.domains || []).length} IOC</b></div>
+      <div class="ai-brief-item"><span>Artifact</span><b>${(pr.dropped || []).length} file / ${(pr.registry || []).length} registry</b></div>
+    </div>
+    <div class="ai-section-title">Nhận định ban đầu</div>
+    <ul class="ai-list">${(ma.behavior || []).slice(0, 3).map(v => `<li>${esc(v)}</li>`).join('') || '<li>Chưa đủ dữ liệu để dựng chuỗi hành vi, cần bổ sung log endpoint/DNS/proxy.</li>'}</ul>
+    <div class="ai-section-title">Việc nên làm ngay</div>
+    <ol class="ai-list">${p0.map(a => `<li><b>${esc(a.title || 'Hành động')}</b>: ${esc(a.description || '')}</li>`).join('') || '<li>Cô lập endpoint, thu thập bằng chứng và chặn IOC trước khi phục hồi.</li>'}</ol>
+    <div class="ai-section-title">AI muốn xác minh tiếp</div>
+    <ul class="ai-list">${nextQuestions.map(q => `<li>${q}</li>`).join('')}</ul>
+    <div class="ai-suggestion-row">
+      <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Tạo briefing đầy đủ</button>
+      <button class="btn btn-outline" onclick="askAI('Phân tích nguồn lây, cách lan truyền và phạm vi cần hunt')">Hunt phạm vi</button>
+    </div>`;
+}
+
 async function askAI(question = '') {
   if (!G.data) return toast('Chưa có dữ liệu phân tích để hỏi AI', 'err');
   const input = document.getElementById('ai-question');
   const q = (question || input.value || '').trim();
-  if (!q) return toast('Nhập câu hỏi cho AI', 'err');
   const answerEl = document.getElementById('ai-answer');
-  answerEl.innerHTML = '<div class="loading-wrap" style="padding:18px"><div class="spinner"></div><p>AI đang đọc playbook...</p></div>';
+  answerEl.innerHTML = '<div class="loading-wrap" style="padding:18px"><div class="spinner"></div><p>AI đang phân tích dữ liệu sự cố...</p></div>';
   try {
     const r = await fetch('/api/ai/remediation', {
       method: 'POST',
@@ -635,7 +731,13 @@ async function askAI(question = '') {
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    answerEl.innerHTML = `<div class="ai-mode">${j.mode === 'openai' ? 'OpenAI' : 'Local assistant'}</div><pre>${esc(j.answer)}</pre>`;
+    const modeLabel = {
+      openai: 'OpenAI',
+      ollama: 'Ollama local LLM',
+      guardrail: 'Scope guardrail',
+      local_fallback: 'Local assistant'
+    }[j.mode] || 'Local assistant';
+    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}</div><pre>${esc(j.answer)}</pre>`;
   } catch(e) {
     answerEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
     toast(e.message, 'err');

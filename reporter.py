@@ -9,7 +9,7 @@ import os
 import json
 import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from rich.console import Console
 from rich.table import Table
@@ -197,6 +197,142 @@ class TerminalReporter:
 # File exporters
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _uniq(values: list[Any]) -> list[Any]:
+    seen = set()
+    out = []
+    for value in values:
+        key = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, dict) else str(value)
+        if key and key not in seen:
+            seen.add(key)
+            out.append(value)
+    return out
+
+
+def _technique_ids(result: MalwareAnalysisResult) -> set[str]:
+    return {
+        str(t.get("id", "")).upper()
+        for t in result.threat_info.mitre_techniques
+        if t.get("id")
+    }
+
+
+def _technique_names(result: MalwareAnalysisResult, tactic: str = "") -> list[str]:
+    names = []
+    for item in result.threat_info.mitre_techniques:
+        if tactic and str(item.get("tactic", "")).lower() != tactic.lower():
+            continue
+        text = f"{item.get('id', '')} - {item.get('name', '')}".strip(" -")
+        if text:
+            names.append(text)
+    return names
+
+
+def _build_behavior_narrative(result: MalwareAnalysisResult) -> list[str]:
+    ids = _technique_ids(result)
+    procs = result.processes
+    net = result.network
+    parts = []
+
+    if any(t.startswith("T1566") for t in ids):
+        parts.append("Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu.")
+    if any(t.startswith(("T1059", "T1204")) for t in ids):
+        names = ", ".join(p.get("name", "") for p in procs.processes[:5] if p.get("name"))
+        parts.append(f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {names or 'chưa đủ dữ liệu process'}.")
+    if procs.injected_processes or any(t.startswith("T1055") for t in ids):
+        targets = ", ".join(procs.injected_processes[:5]) or "process hợp lệ của Windows"
+        parts.append(f"Mã độc có dấu hiệu né tránh/phòng thủ bằng process injection vào {targets}, giúp che giấu hành vi dưới tiến trình tin cậy.")
+    if any(t.startswith("T1547") for t in ids) or procs.registry_keys:
+        parts.append(f"Cơ chế duy trì hiện diện được thể hiện qua {len(procs.registry_keys)} registry key/autostart artifact; cần kiểm tra Run/RunOnce/Startup/Scheduled Task.")
+    discovery = _technique_names(result, "Discovery")
+    if discovery:
+        parts.append(f"Mẫu thực hiện trinh sát hệ thống ({'; '.join(discovery[:4])}) để thu thập thông tin máy, process, thư mục hoặc cấu hình mạng.")
+    if net.ip_addresses or net.domains or net.urls:
+        parts.append(f"Mẫu có hoạt động C2/tải payload qua mạng: {len(net.ip_addresses)} IP, {len(net.domains)} domain và {len(net.urls)} URL được ghi nhận.")
+    if any(t.startswith(("T1041", "T1056", "T1555")) for t in ids):
+        parts.append("Có chỉ dấu đánh cắp hoặc gửi dữ liệu ra ngoài; cần kiểm tra proxy/DNS/EDR để xác nhận dữ liệu nào đã rời khỏi máy.")
+    if any(t.startswith("T1486") for t in ids):
+        parts.append("Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi.")
+
+    if not parts:
+        parts.append("Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được.")
+    return parts
+
+
+def _build_spread_analysis(result: MalwareAnalysisResult) -> list[str]:
+    ids = _technique_ids(result)
+    file = result.file_info
+    net = result.network
+    out = []
+
+    if any(t.startswith("T1566") for t in ids):
+        out.append("Vector lây nhiễm ban đầu nhiều khả năng là email phishing có đính kèm hoặc liên kết độc hại.")
+    if file and any(ext in file.name.lower() for ext in (".doc", ".docm", ".xls", ".xlsm", ".rtf")):
+        out.append(f"File đầu vào `{file.name}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp.")
+    if any(t.startswith(("T1210", "T1021", "T1133")) for t in ids):
+        out.append("Có dấu hiệu kỹ thuật lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ.")
+    if any(ind in " ".join(net.urls + net.domains).lower() for ind in ("payload", "download", "update", "cdn")):
+        out.append("Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài.")
+    if any(t.startswith("T1486") for t in ids):
+        out.append("Với ransomware, nguy cơ lan truyền trong mạng nội bộ cao hơn nếu máy có SMB/share/credential dùng chung.")
+    if not out:
+        out.append("Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật.")
+    return out
+
+
+def _build_origin_analysis(result: MalwareAnalysisResult) -> list[str]:
+    file = result.file_info
+    net = result.network
+    out = []
+
+    if file:
+        out.append(f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file.name}` ({file.file_type or 'chưa rõ loại file'}), SHA256 `{file.sha256 or 'N/A'}`.")
+    if net.urls:
+        out.append(f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in net.urls[:3])}. Đây là nơi mẫu liên lạc hoặc tải nội dung trong phiên phân tích.")
+    if net.domains:
+        out.append(f"Domain liên quan: {', '.join(f'`{d}`' for d in net.domains[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.")
+    if not out:
+        out.append("Báo cáo hiện chưa có thông tin nguồn gốc ngoài mẫu phân tích; chưa thể kết luận quốc gia, nhóm tấn công hoặc chiến dịch nếu không có threat intelligence bổ sung.")
+    else:
+        out.append("Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập.")
+    return out
+
+
+def _build_affected_files(result: MalwareAnalysisResult) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    if result.file_info:
+        rows.append({
+            "role": "Mẫu đầu vào",
+            "name": result.file_info.name,
+            "sha256": result.file_info.sha256,
+            "type": result.file_info.file_type,
+        })
+    for item in result.processes.dropped_files:
+        rows.append({
+            "role": "File được drop/tạo mới",
+            "name": item.get("name", ""),
+            "sha256": item.get("sha256", ""),
+            "type": item.get("type", ""),
+        })
+    for filename in result.iocs.filenames:
+        if filename and not any(r["name"] == filename for r in rows):
+            rows.append({
+                "role": "Tên file IOC",
+                "name": filename,
+                "sha256": "",
+                "type": "",
+            })
+    return _uniq(rows)
+
+
+def build_malware_analysis(result: MalwareAnalysisResult) -> dict[str, Any]:
+    return {
+        "behavior": _build_behavior_narrative(result),
+        "spread": _build_spread_analysis(result),
+        "affected_files": _build_affected_files(result),
+        "origin": _build_origin_analysis(result),
+    }
+
+
 class ReportExporter:
     """Xuất báo cáo ra file Markdown và JSON."""
 
@@ -253,9 +389,33 @@ class ReportExporter:
                 f"",
             ]
 
+        malware_analysis = build_malware_analysis(result)
+        lines += [
+            f"## 2. Phân Tích Chi Tiết Mã Độc",
+            f"",
+            f"### Cách mã độc hoạt động",
+            *[f"- {item}" for item in malware_analysis["behavior"]],
+            f"",
+            f"### Cách lây lan / vector xâm nhập",
+            *[f"- {item}" for item in malware_analysis["spread"]],
+            f"",
+            f"### File bị nhiễm hoặc bị tạo/drop",
+            f"",
+            f"| Vai trò | File | SHA256 | Loại |",
+            f"|---|---|---|---|",
+            *[
+                f"| {row['role']} | `{row['name']}` | `{row['sha256'] or 'N/A'}` | {row['type'] or 'N/A'} |"
+                for row in malware_analysis["affected_files"]
+            ],
+            f"",
+            f"### Nguồn gốc và hạ tầng liên quan",
+            *[f"- {item}" for item in malware_analysis["origin"]],
+            f"",
+        ]
+
         if threat.mitre_techniques:
             lines += [
-                f"## 2. MITRE ATT&CK Techniques",
+                f"## 3. MITRE ATT&CK Techniques",
                 f"",
                 f"| ID | Tên kỹ thuật | Tactic |",
                 f"|---|---|---|",
@@ -265,7 +425,7 @@ class ReportExporter:
             ]
 
         lines += [
-            f"## 3. Hoạt Động Mạng",
+            f"## 4. Hoạt Động Mạng",
             f"",
             f"### IP Addresses ({len(net.ip_addresses)})",
             *[f"- `{ip}`" for ip in net.ip_addresses],
@@ -283,7 +443,7 @@ class ReportExporter:
             ]
 
         lines += [
-            f"## 4. Hoạt Động Hệ Thống",
+            f"## 5. Hoạt Động Hệ Thống",
             f"",
             f"- **Tiến trình bị inject:** {', '.join(procs.injected_processes) or 'Không có'}",
             f"- **Files đã drop:** {len(procs.dropped_files)}",
@@ -304,7 +464,7 @@ class ReportExporter:
             ]
 
         lines += [
-            f"## 5. Quy Trình Phản Ứng Sự Cố",
+            f"## 6. Quy Trình Phản Ứng Sự Cố",
             f"",
             f"> {playbook.summary}",
             f"",
@@ -338,7 +498,7 @@ class ReportExporter:
                     lines.append("")
 
         lines += [
-            f"## 6. IOC Blocklist",
+            f"## 7. IOC Blocklist",
             f"",
             f"### IP Addresses",
             *[f"- `{ip}`" for ip in playbook.ioc_blocklist.get("ip_addresses", [])],
@@ -371,6 +531,7 @@ class ReportExporter:
             "severity":     playbook.severity,
             "malware_name": playbook.malware_name,
             "summary":      playbook.summary,
+            "malware_analysis": build_malware_analysis(result),
             "ioc_blocklist": playbook.ioc_blocklist,
             "mitre_techniques": result.threat_info.mitre_techniques,
             "actions": [

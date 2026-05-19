@@ -24,6 +24,7 @@ from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
 from ml_engine import MLThreatPredictor
 from markdown_importer import markdown_to_anyrun_report
 from ai_assistant import answer_remediation
+from reporter import build_malware_analysis
 from history_store import (
     extract_hashes_from_report,
     find_exact_cached_payload,
@@ -112,6 +113,7 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
             "registry": result.processes.registry_keys[:20],
             "mutexes":  result.processes.mutexes,
         },
+        "malware_analysis": build_malware_analysis(result),
         "playbook": {
             "malware_name":  playbook.malware_name,
             "severity":      playbook.severity,
@@ -413,6 +415,30 @@ def local_history():
         items.append(clean)
     return jsonify({"ok": True, "items": items})
 
+@app.route("/api/history/local/latest", methods=["GET"])
+def local_history_latest():
+    """Return the newest local analysis payload so the UI can survive reloads."""
+    for item in load_local_history():
+        payload = item.get("payload")
+        if payload:
+            return jsonify({"ok": True, "data": payload})
+    return jsonify({"ok": False, "error": "Chua co lich su phan tich"}), 404
+
+@app.route("/api/history/local/save", methods=["POST"])
+def local_history_save():
+    """Persist a browser-restored analysis payload into local backend history."""
+    body = request.get_json(force=True) or {}
+    data = body.get("data") or {}
+    source = body.get("source") or "browser"
+    if not data:
+        return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
+    try:
+        entry = record_analysis(data, source=source)
+        clean = {k: v for k, v in entry.items() if k != "payload"}
+        return jsonify({"ok": True, "item": clean})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route("/api/history/local/<path:item_id>", methods=["GET"])
 def local_history_item(item_id):
     for item in load_local_history():
@@ -453,11 +479,92 @@ def export_report():
             json.dump(data, fh, ensure_ascii=False, indent=2)
     return jsonify({"ok": True, "path": path})
 
+def _ensure_malware_analysis(data: dict) -> dict:
+    existing = data.get("malware_analysis")
+    if existing:
+        return existing
+
+    threat = data.get("threat", {}) or {}
+    file_info = data.get("file") or {}
+    network = data.get("network", {}) or {}
+    processes = data.get("processes", {}) or {}
+    mitre = threat.get("mitre", []) or []
+    technique_ids = {str(item.get("id", "")).upper() for item in mitre if item.get("id")}
+
+    proc_names = ", ".join(
+        item.get("name", "")
+        for item in (processes.get("list", []) or [])[:5]
+        if item.get("name")
+    )
+    behavior = []
+    if any(t.startswith("T1566") for t in technique_ids):
+        behavior.append("Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu.")
+    if any(t.startswith(("T1059", "T1204")) for t in technique_ids):
+        behavior.append(f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {proc_names or 'chưa đủ dữ liệu process'}.")
+    injected = processes.get("injected", []) or []
+    if injected or any(t.startswith("T1055") for t in technique_ids):
+        behavior.append(f"Mã độc có dấu hiệu process injection vào {', '.join(injected[:5]) or 'process hợp lệ của Windows'}, giúp che giấu hành vi dưới tiến trình tin cậy.")
+    if any(t.startswith("T1547") for t in technique_ids) or processes.get("registry"):
+        behavior.append(f"Cơ chế duy trì hiện diện được thể hiện qua {len(processes.get('registry', []) or [])} registry key/autostart artifact.")
+    if network.get("ips") or network.get("domains") or network.get("urls"):
+        behavior.append(f"Mẫu có hoạt động C2/tải payload qua mạng: {len(network.get('ips', []) or [])} IP, {len(network.get('domains', []) or [])} domain và {len(network.get('urls', []) or [])} URL được ghi nhận.")
+    if any(t.startswith("T1486") for t in technique_ids):
+        behavior.append("Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi.")
+    if not behavior:
+        behavior.append("Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được.")
+
+    spread = []
+    filename = file_info.get("name", "")
+    if any(t.startswith("T1566") for t in technique_ids):
+        spread.append("Vector lây nhiễm ban đầu nhiều khả năng là email phishing có đính kèm hoặc liên kết độc hại.")
+    if filename and any(ext in filename.lower() for ext in (".doc", ".docm", ".xls", ".xlsm", ".rtf")):
+        spread.append(f"File đầu vào `{filename}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp.")
+    if any(t.startswith(("T1210", "T1021", "T1133")) for t in technique_ids):
+        spread.append("Có dấu hiệu lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ.")
+    joined_net = " ".join((network.get("urls", []) or []) + (network.get("domains", []) or [])).lower()
+    if any(ind in joined_net for ind in ("payload", "download", "update", "cdn")):
+        spread.append("Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài.")
+    if not spread:
+        spread.append("Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật.")
+
+    rows = []
+    if file_info:
+        rows.append({
+            "role": "Mẫu đầu vào",
+            "name": file_info.get("name", ""),
+            "sha256": file_info.get("sha256", ""),
+            "type": file_info.get("type", ""),
+        })
+    for item in processes.get("dropped", []) or []:
+        rows.append({
+            "role": "File được drop/tạo mới",
+            "name": item.get("name", ""),
+            "sha256": item.get("sha256", ""),
+            "type": item.get("type", ""),
+        })
+
+    origin = []
+    if file_info:
+        origin.append(f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file_info.get('name', '')}` ({file_info.get('type', '') or 'chưa rõ loại file'}), SHA256 `{file_info.get('sha256', '') or 'N/A'}`.")
+    if network.get("urls"):
+        origin.append(f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in network.get('urls', [])[:3])}.")
+    if network.get("domains"):
+        origin.append(f"Domain liên quan: {', '.join(f'`{d}`' for d in network.get('domains', [])[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.")
+    origin.append("Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập.")
+
+    return {
+        "behavior": behavior,
+        "spread": spread,
+        "affected_files": rows,
+        "origin": origin,
+    }
+
 def _write_markdown(data: dict, path: str):
     import datetime
     t = data.get("threat", {})
     f = data.get("file") or {}
     p = data.get("playbook", {})
+    ma = _ensure_malware_analysis(data)
     lines = [
         f"# Báo Cáo Phản Ứng Sự Cố – {p.get('malware_name','')}",
         f"",
@@ -477,6 +584,29 @@ def _write_markdown(data: dict, path: str):
         lines += ["","## File","",
             f"| MD5 | `{f.get('md5','')}` |",
             f"| SHA256 | `{f.get('sha256','')}` |"]
+    lines += [
+        "",
+        "## Phân tích chi tiết mã độc",
+        "",
+        "### Cách mã độc hoạt động",
+        *[f"- {item}" for item in ma.get("behavior", [])],
+        "",
+        "### Cách lây lan / vector xâm nhập",
+        *[f"- {item}" for item in ma.get("spread", [])],
+        "",
+        "### File bị nhiễm hoặc bị tạo/drop",
+        "",
+        "| Vai trò | File | SHA256 | Loại |",
+        "|---|---|---|---|",
+        *[
+            f"| {row.get('role','')} | `{row.get('name','')}` | `{row.get('sha256','') or 'N/A'}` | {row.get('type','') or 'N/A'} |"
+            for row in ma.get("affected_files", [])
+        ],
+        "",
+        "### Nguồn gốc và hạ tầng liên quan",
+        *[f"- {item}" for item in ma.get("origin", [])],
+        "",
+    ]
     lines += ["","## MITRE ATT&CK","",
         "| ID | Technique | Tactic |","|---|---|---|",
         *[f"| {m['id']} | {m['name']} | {m['tactic']} |"

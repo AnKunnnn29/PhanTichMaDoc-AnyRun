@@ -1,0 +1,536 @@
+[
+  {
+    "id": "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
+    "created_at": "2026-05-19T08:52:28",
+    "source": "browser:restore",
+    "task_uuid": "BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
+    "malware_name": "WannaCry",
+    "family_key": "wannacry",
+    "file_name": "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+    "hashes": [
+      "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
+      "49a319f17f24fa3d80f4e7b348c53f66d5dd4193c7dee62be70bc8a7a1e7106d",
+      "dcc8716bae48b71104fda46547bba955e44935e96f4ecf31ae56176d2689573e",
+      "8e9f20f6864c66576536c0b866c6ffdcf11397db67fe120e972e244c3c022270"
+    ],
+    "verdict": "Malicious",
+    "threat_level": 3,
+    "analysis_url": "https://app.any.run/tasks/BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
+    "payload": {
+      "analysis_url": "https://app.any.run/tasks/BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
+      "duration": 0,
+      "file": {
+        "md5": "",
+        "name": "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+        "sha1": "",
+        "sha256": "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
+        "size": 0,
+        "type": "ANY.RUN Results markdown"
+      },
+      "malware_analysis": {
+        "affected_files": [
+          {
+            "name": "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+            "role": "Mẫu đầu vào",
+            "sha256": "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
+            "type": "ANY.RUN Results markdown"
+          },
+          {
+            "name": "C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\@WanaDecryptor@.exe.lnk",
+            "role": "File được drop/tạo mới",
+            "sha256": "49a319f17f24fa3d80f4e7b348c53f66d5dd4193c7dee62be70bc8a7a1e7106d",
+            "type": "Copied from ANY.RUN indicators"
+          },
+          {
+            "name": "C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp\\WERB1D7.tmp.dmp",
+            "role": "File được drop/tạo mới",
+            "sha256": "dcc8716bae48b71104fda46547bba955e44935e96f4ecf31ae56176d2689573e",
+            "type": "Copied from ANY.RUN indicators"
+          },
+          {
+            "name": "C:\\note.txt",
+            "role": "File được drop/tạo mới",
+            "sha256": "8e9f20f6864c66576536c0b866c6ffdcf11397db67fe120e972e244c3c022270",
+            "type": "Copied from ANY.RUN indicators"
+          }
+        ],
+        "behavior": [
+          "Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: WerFault.exe.",
+          "Cơ chế duy trì hiện diện được thể hiện qua 0 registry key/autostart artifact; cần kiểm tra Run/RunOnce/Startup/Scheduled Task.",
+          "Mẫu thực hiện trinh sát hệ thống (T1082 - System Information Discovery) để thu thập thông tin máy, process, thư mục hoặc cấu hình mạng.",
+          "Mẫu có hoạt động C2/tải payload qua mạng: 0 IP, 18 domain và 14 URL được ghi nhận.",
+          "Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi."
+        ],
+        "origin": [
+          "Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip` (ANY.RUN Results markdown), SHA256 `86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b`.",
+          "Hạ tầng liên quan gồm các URL đầu tiên: `https://login.live.com/ppsecure/deviceaddcredential.srf`, `https://login.live.com/RST2.srf`, `https://settings-win.data.microsoft.com/settings/v3.0/OneSettings/Client?OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&LocalDeviceID=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&AttrDataVer=186&OSUILocale=en-US&OSSkuId=48&App=WOSC&AppVer=&IsFlightingEnabled=0&TelemetryLevel=1&DeviceFamily=Windows.Desktop`. Đây là nơi mẫu liên lạc hoặc tải nội dung trong phiên phân tích.",
+          "Domain liên quan: `login.live.com`, `settings-win.data.microsoft.com`, `crl.microsoft.com`, `watson.events.data.microsoft.com`, `www.bing.com`. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.",
+          "Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập."
+        ],
+        "spread": [
+          "Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài.",
+          "Với ransomware, nguy cơ lan truyền trong mạng nội bộ cao hơn nếu máy có SMB/share/credential dùng chung."
+        ]
+      },
+      "network": {
+        "dns": [
+          "login.live.com",
+          "settings-win.data.microsoft.com",
+          "crl.microsoft.com",
+          "watson.events.data.microsoft.com",
+          "www.bing.com",
+          "ocsp.digicert.com",
+          "www.microsoft.com",
+          "oneocsp.microsoft.com",
+          "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+          "werb1d7.tmp.dmp",
+          "deviceaddcredential.srf",
+          "rst2.srf",
+          "windows.desktop",
+          "telemetry.request",
+          "xls.aspx",
+          "-10-18.crl",
+          "202018.crl",
+          "202.1.crl"
+        ],
+        "domains": [
+          "login.live.com",
+          "settings-win.data.microsoft.com",
+          "crl.microsoft.com",
+          "watson.events.data.microsoft.com",
+          "www.bing.com",
+          "ocsp.digicert.com",
+          "www.microsoft.com",
+          "oneocsp.microsoft.com",
+          "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+          "werb1d7.tmp.dmp",
+          "deviceaddcredential.srf",
+          "rst2.srf",
+          "windows.desktop",
+          "telemetry.request",
+          "xls.aspx",
+          "-10-18.crl",
+          "202018.crl",
+          "202.1.crl"
+        ],
+        "http": [
+          {
+            "method": "",
+            "status": "",
+            "url": "https://login.live.com/ppsecure/deviceaddcredential.srf",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://login.live.com/RST2.srf",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://settings-win.data.microsoft.com/settings/v3.0/OneSettings/Client?OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&LocalDeviceID=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&AttrDataVer=186&OSUILocale=en-US&OSSkuId=48&App=WOSC&AppVer=&IsFlightingEnabled=0&TelemetryLevel=1&DeviceFamily=Windows.Desktop",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://crl.microsoft.com/pki/crl/products/MicRooCerAut2011_2011_03_22.crl",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://watson.events.data.microsoft.com/Telemetry.Request",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://www.bing.com/threshold/xls.aspx?t=5&dl=1&f=9&wsbc=1",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBQ50otx%2Fh0Ztl%2Bz8SiPI7wEWVxDlQQUTiJUIBiV5uNu5g%2F6%2BrkS7QYXjzkCEAz1vQYrVgL0erhQLCPM8GY%3D",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://www.microsoft.com/pkiops/crl/MicSecSerCA2011_2011-10-18.crl",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://settings-win.data.microsoft.com/settings/v3.0/WSD/WaaSAssessment?os=Windows&osVer=10.0.19041.1.amd64fre.vb_release.191206-&ring=Retail&sku=48&deviceClass=Windows.Desktop&locale=en-US&deviceId=BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&TelemetryLevel=1&HidOverGattReg=C%3A%5CWINDOWS%5CSystem32%5CDriverStore%5CFileRepository%5Chidbthle.inf_amd64_9610b4821fdf82a5%5CMicrosoft.Bluetooth.Profiles.HidOverGatt.dll&AppVer=10.0&ProcessorIdentifier=AMD64%20Family%2023%20Model%201%20Stepping%202&OEMModel=DELL&UpdateOfferedDays=4294967295&ProcessorManufacturer=AuthenticAMD&InstallDate=1661339444&OEMModelBaseBoard=&BranchReadinessLevel=CB&OEMSubModel=J5CR&IsCloudDomainJoined=0&DeferFeatureUpdatePeriodInDays=30&IsDeviceRetailDemo=0&FlightingBranchName=&OSUILocale=en-US&DeviceFamily=Windows.Desktop&WuClientVer=10.0.19041.3996&UninstallActive=1&IsFlightingEnabled=0&OSSkuId=48&ProcessorClockSpeed=3094&TotalPhysicalRAM=6144&SecureBootCapable=0&App=WaaSAssessment&ProcessorCores=6&CurrentBranch=vb_release&InstallLanguage=en-US&DeferQualityUpdatePeriodInDays=0&ServicingBranch=CB&OEMName_Uncleaned=DELL&TPMVersion=0&PrimaryDiskTotalCapacity=262144&InstallationType=Client&AttrDataVer=186&ProcessorModel=AMD%20Ryzen%205%203500%206-Core%20Processor&IsEdgeWithChromiumInstalled=1&OSVersion=10.0.19045.4046&IsMDMEnrolled=0&ActivationChannel=Retail&HonorWUfBDeferrals=0&FirmwareVersion=A.40&TrendInstalledKey=1&OSArchitecture=AMD64&DefaultUserRegion=244&UpdateManagementGroup=2",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "https://settings-win.data.microsoft.com/settings/v3.0/FlightSettings/FSService?ProcessorClockSpeed=3094&IsRetailOS=1&OEMManufacturerName=DELL&FlightingPolicyValue=3&EnablePreviewBuilds=4294967295&OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&ManagePreviewBuilds=3&BranchReadinessLevelSource=0&AttrDataVer=186&ProcessorCores=6&BranchReadinessLevelRaw=16&TotalPhysicalRAM=6144&TPMVersion=0&OEMModelNumber=DELL&SystemVolumeTotalCapacity=260281&DeviceId=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&App=FSS&AppVer=10.0&SmartActiveHoursState=1&ActiveHoursStart=20&SecureBootCapable=0&ActiveHoursEnd=13&DeviceFamily=Windows.Desktop",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Product%20Root%20Certificate%20Authority%202018.crl",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Update%20Secure%20Server%20CA%202.1.crl",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBTrjrydRyt%2BApF3GSPypfHBxR5XtQQUs9tIpPmhxdiuNkHMEWNpYim8S8YCEAjTxtAB8my1oj8MfWpz%2F7Y%3D",
+            "user_agent": ""
+          },
+          {
+            "method": "",
+            "status": "",
+            "url": "http://oneocsp.microsoft.com/ocsp/MFQwUjBQME4wTDAJBgUrDgMCGgUABBQ3L3%2F%2Fa6ADK8NraY2GXzVaYrHG4AQUb6t%2B2v%2BXQ3LsO2d33oJhNYhHQoUCEzMAAAAGb6JMMcOVb6sAAAAAAAY%3D",
+            "user_agent": ""
+          }
+        ],
+        "ips": [],
+        "urls": [
+          "https://login.live.com/ppsecure/deviceaddcredential.srf",
+          "https://login.live.com/RST2.srf",
+          "https://settings-win.data.microsoft.com/settings/v3.0/OneSettings/Client?OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&LocalDeviceID=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&AttrDataVer=186&OSUILocale=en-US&OSSkuId=48&App=WOSC&AppVer=&IsFlightingEnabled=0&TelemetryLevel=1&DeviceFamily=Windows.Desktop",
+          "http://crl.microsoft.com/pki/crl/products/MicRooCerAut2011_2011_03_22.crl",
+          "https://watson.events.data.microsoft.com/Telemetry.Request",
+          "https://www.bing.com/threshold/xls.aspx?t=5&dl=1&f=9&wsbc=1",
+          "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBQ50otx%2Fh0Ztl%2Bz8SiPI7wEWVxDlQQUTiJUIBiV5uNu5g%2F6%2BrkS7QYXjzkCEAz1vQYrVgL0erhQLCPM8GY%3D",
+          "http://www.microsoft.com/pkiops/crl/MicSecSerCA2011_2011-10-18.crl",
+          "https://settings-win.data.microsoft.com/settings/v3.0/WSD/WaaSAssessment?os=Windows&osVer=10.0.19041.1.amd64fre.vb_release.191206-&ring=Retail&sku=48&deviceClass=Windows.Desktop&locale=en-US&deviceId=BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&TelemetryLevel=1&HidOverGattReg=C%3A%5CWINDOWS%5CSystem32%5CDriverStore%5CFileRepository%5Chidbthle.inf_amd64_9610b4821fdf82a5%5CMicrosoft.Bluetooth.Profiles.HidOverGatt.dll&AppVer=10.0&ProcessorIdentifier=AMD64%20Family%2023%20Model%201%20Stepping%202&OEMModel=DELL&UpdateOfferedDays=4294967295&ProcessorManufacturer=AuthenticAMD&InstallDate=1661339444&OEMModelBaseBoard=&BranchReadinessLevel=CB&OEMSubModel=J5CR&IsCloudDomainJoined=0&DeferFeatureUpdatePeriodInDays=30&IsDeviceRetailDemo=0&FlightingBranchName=&OSUILocale=en-US&DeviceFamily=Windows.Desktop&WuClientVer=10.0.19041.3996&UninstallActive=1&IsFlightingEnabled=0&OSSkuId=48&ProcessorClockSpeed=3094&TotalPhysicalRAM=6144&SecureBootCapable=0&App=WaaSAssessment&ProcessorCores=6&CurrentBranch=vb_release&InstallLanguage=en-US&DeferQualityUpdatePeriodInDays=0&ServicingBranch=CB&OEMName_Uncleaned=DELL&TPMVersion=0&PrimaryDiskTotalCapacity=262144&InstallationType=Client&AttrDataVer=186&ProcessorModel=AMD%20Ryzen%205%203500%206-Core%20Processor&IsEdgeWithChromiumInstalled=1&OSVersion=10.0.19045.4046&IsMDMEnrolled=0&ActivationChannel=Retail&HonorWUfBDeferrals=0&FirmwareVersion=A.40&TrendInstalledKey=1&OSArchitecture=AMD64&DefaultUserRegion=244&UpdateManagementGroup=2",
+          "https://settings-win.data.microsoft.com/settings/v3.0/FlightSettings/FSService?ProcessorClockSpeed=3094&IsRetailOS=1&OEMManufacturerName=DELL&FlightingPolicyValue=3&EnablePreviewBuilds=4294967295&OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&ManagePreviewBuilds=3&BranchReadinessLevelSource=0&AttrDataVer=186&ProcessorCores=6&BranchReadinessLevelRaw=16&TotalPhysicalRAM=6144&TPMVersion=0&OEMModelNumber=DELL&SystemVolumeTotalCapacity=260281&DeviceId=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&App=FSS&AppVer=10.0&SmartActiveHoursState=1&ActiveHoursStart=20&SecureBootCapable=0&ActiveHoursEnd=13&DeviceFamily=Windows.Desktop",
+          "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Product%20Root%20Certificate%20Authority%202018.crl",
+          "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Update%20Secure%20Server%20CA%202.1.crl",
+          "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBTrjrydRyt%2BApF3GSPypfHBxR5XtQQUs9tIpPmhxdiuNkHMEWNpYim8S8YCEAjTxtAB8my1oj8MfWpz%2F7Y%3D",
+          "http://oneocsp.microsoft.com/ocsp/MFQwUjBQME4wTDAJBgUrDgMCGgUABBQ3L3%2F%2Fa6ADK8NraY2GXzVaYrHG4AQUb6t%2B2v%2BXQ3LsO2d33oJhNYhHQoUCEzMAAAAGb6JMMcOVb6sAAAAAAAY%3D"
+        ]
+      },
+      "os_env": "Unknown OS",
+      "playbook": {
+        "actions": [
+          {
+            "category": "Thu thập bằng chứng",
+            "commands": [],
+            "description": "Xác nhận đây là mã độc loại 'WannaCry' với mức độ nguy hiểm 'Nghiêm trọng' (threat level 3/4). Lưu trữ report đầy đủ từ Any.Run để phục vụ điều tra.",
+            "notes": [
+              "Any.Run report URL: https://app.any.run/tasks/BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
+              "Thời gian phân tích: 0s trên Unknown OS",
+              "MITRE techniques: 7 kỹ thuật được phát hiện"
+            ],
+            "phase": "Xác định (Identification)",
+            "priority": 1,
+            "title": "Xác nhận và ghi lại thông tin mẫu mã độc"
+          },
+          {
+            "category": "Phân tích mẫu",
+            "commands": [
+              "certutil -hashfile \"<đường_dẫn_file>\" MD5",
+              "certutil -hashfile \"<đường_dẫn_file>\" SHA256",
+              "# Kiểm tra trên VirusTotal: https://www.virustotal.com/gui/file/86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b"
+            ],
+            "description": "File 'c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip' (ANY.RUN Results markdown, 0 B) đã được xác nhận là mã độc.",
+            "notes": [
+              "MD5= | SHA256=86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b"
+            ],
+            "phase": "Xác định (Identification)",
+            "priority": 1,
+            "title": "Lưu trữ hash và thông tin file mã độc"
+          },
+          {
+            "category": "Cô lập mạng",
+            "commands": [
+              "# Chặn DNS - thêm vào file hosts:",
+              "0.0.0.0 login.live.com",
+              "0.0.0.0 settings-win.data.microsoft.com",
+              "0.0.0.0 crl.microsoft.com",
+              "0.0.0.0 watson.events.data.microsoft.com",
+              "0.0.0.0 www.bing.com",
+              "0.0.0.0 ocsp.digicert.com",
+              "0.0.0.0 www.microsoft.com",
+              "0.0.0.0 oneocsp.microsoft.com",
+              "0.0.0.0 c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+              "0.0.0.0 werb1d7.tmp.dmp"
+            ],
+            "description": "Phát hiện 0 địa chỉ IP và 18 domain nghi ngờ C2. Chặn ngay các kết nối này tại firewall và DNS.",
+            "notes": [
+              "Kiểm tra tất cả thiết bị trong mạng nội bộ xem có kết nối đến các IP/domain trên không.",
+              "Xem xét cô lập hoàn toàn máy bị nhiễm khỏi mạng LAN."
+            ],
+            "phase": "Ngăn chặn (Containment)",
+            "priority": 1,
+            "title": "Chặn kết nối C2 tại tường lửa"
+          },
+          {
+            "category": "MITRE ATT&CK - T1486 (RANSOMWARE)",
+            "commands": [
+              "# Dừng Volume Shadow Copy deletion (nếu chưa bị xóa):",
+              "vssadmin list shadows",
+              "",
+              "# Ngắt kết nối mạng NGAY LẬP TỨC:",
+              "netsh interface set interface 'Ethernet' disable",
+              "",
+              "# KHÔNG TẮT MÁY - backup memory trước:",
+              "# Chụp memory dump với Belkasoft RAM Capturer hoặc WinPmem"
+            ],
+            "description": "⚠️ PHÁT HIỆN MÃ ĐỘC RANSOMWARE! Cần cô lập ngay lập tức để ngăn lây lan và mã hóa thêm dữ liệu.",
+            "notes": [
+              "KHÔNG trả tiền chuộc - liên hệ nhà chức trách.",
+              "Kiểm tra nomoreransom.org để tìm decryptor miễn phí.",
+              "Phục hồi từ backup OFFLINE (kiểm tra backup không bị nhiễm).",
+              "Báo cáo ngay cho CERT/VNCERT."
+            ],
+            "phase": "Ngăn chặn (Containment)",
+            "priority": 1,
+            "title": "[RANSOMWARE] Cô lập khẩn cấp và dừng mã hóa"
+          },
+          {
+            "category": "Dọn dẹp hệ thống",
+            "commands": [
+              "# Quét toàn bộ hệ thống với Windows Defender (đã cập nhật):",
+              "Start-MpScan -ScanType FullScan",
+              "",
+              "# Kiểm tra Scheduled Tasks độc hại:",
+              "Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled'} | Format-List",
+              "",
+              "# Kiểm tra dịch vụ độc hại:",
+              "Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object Name, DisplayName",
+              "",
+              "# Xóa các file mã độc đã drop:",
+              "Remove-Item -Force \"C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\@WanaDecryptor@.exe.lnk\" -ErrorAction SilentlyContinue",
+              "Remove-Item -Force \"C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp\\WERB1D7.tmp.dmp\" -ErrorAction SilentlyContinue",
+              "Remove-Item -Force \"C:\\note.txt\" -ErrorAction SilentlyContinue"
+            ],
+            "description": "Xóa 3 file đã drop, dọn dẹp registry và scheduled tasks. Chạy antivirus quét toàn bộ sau khi xử lý thủ công.",
+            "notes": [
+              "Nếu có file được bảo vệ, restart vào Safe Mode để xóa.",
+              "Kiểm tra Recycle Bin và %TEMP% folder."
+            ],
+            "phase": "Loại bỏ (Eradication)",
+            "priority": 2,
+            "title": "Loại bỏ toàn bộ thành phần mã độc"
+          },
+          {
+            "category": "MITRE ATT&CK - T1547",
+            "commands": [
+              "# Dùng Autoruns (Sysinternals):",
+              "autorunsc.exe -a * -o autoruns_output.csv",
+              "",
+              "# PowerShell - Kiểm tra Run keys:",
+              "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+              "Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+              "",
+              "# Scheduled Tasks:",
+              "Get-ScheduledTask | Where {$_.Actions.Execute -like '*.tmp*' -or $_.Actions.Execute -like '%appdata%'}"
+            ],
+            "description": "Phát hiện persistence thông qua autostart. Kiểm tra toàn bộ autorun locations.",
+            "notes": [],
+            "phase": "Loại bỏ (Eradication)",
+            "priority": 2,
+            "title": "[Persistence] Kiểm tra autostart locations"
+          },
+          {
+            "category": "MITRE ATT&CK - Discovery",
+            "commands": [],
+            "description": "Mã độc thực hiện system/process discovery. Cần xác định thông tin nào đã bị thu thập.",
+            "notes": [
+              "Kiểm tra network traffic để xem dữ liệu nào đã được gửi ra ngoài.",
+              "Xem xét DLP (Data Loss Prevention) logs nếu có.",
+              "Kiểm tra xem credential nào đã bị tiếp cận."
+            ],
+            "phase": "Xác định (Identification)",
+            "priority": 3,
+            "title": "[Recon] Đánh giá phạm vi xâm phạm"
+          },
+          {
+            "category": "Phục hồi hệ thống",
+            "commands": [
+              "# Cập nhật Windows:",
+              "Install-WindowsUpdate -AcceptAll -AutoReboot",
+              "",
+              "# Reset mật khẩu tất cả tài khoản (phòng credential theft):",
+              "# Thực hiện qua Active Directory hoặc Local Users and Groups",
+              "",
+              "# Bật lại các dịch vụ bảo mật:",
+              "Set-MpPreference -DisableRealtimeMonitoring $false",
+              "netsh advfirewall set allprofiles state on"
+            ],
+            "description": "Sau khi đã loại bỏ mã độc, tiến hành khôi phục và hardening hệ thống.",
+            "notes": [
+              "Không kết nối lại mạng cho đến khi xác nhận hệ thống sạch.",
+              "Thực hiện vulnerability scan sau khi phục hồi.",
+              "Cân nhắc reinstall OS nếu phát hiện rootkit."
+            ],
+            "phase": "Phục hồi (Recovery)",
+            "priority": 3,
+            "title": "Khôi phục hệ thống về trạng thái an toàn"
+          },
+          {
+            "category": "Rút kinh nghiệm",
+            "commands": [],
+            "description": "Tài liệu hóa sự cố, timeline, và các biện pháp cải thiện.",
+            "notes": [
+              "Xác định điểm xâm nhập ban đầu (phishing? drive-by? USB?).",
+              "Cập nhật SIEM rules dựa trên IOC mới phát hiện.",
+              "Thêm 0 IP và 18 domain vào threat intel feed.",
+              "Đào tạo lại nhân viên về nhận biết phishing nếu đây là vector lây nhiễm.",
+              "Xem xét triển khai EDR/XDR nếu chưa có."
+            ],
+            "phase": "Rút kinh nghiệm (Lessons Learned)",
+            "priority": 4,
+            "title": "Viết báo cáo sự cố và cải thiện phòng thủ"
+          }
+        ],
+        "ioc_blocklist": {
+          "domains": [
+            "login.live.com",
+            "settings-win.data.microsoft.com",
+            "crl.microsoft.com",
+            "watson.events.data.microsoft.com",
+            "www.bing.com",
+            "ocsp.digicert.com",
+            "www.microsoft.com",
+            "oneocsp.microsoft.com",
+            "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+            "werb1d7.tmp.dmp",
+            "deviceaddcredential.srf",
+            "rst2.srf",
+            "windows.desktop",
+            "telemetry.request",
+            "xls.aspx",
+            "-10-18.crl",
+            "202018.crl",
+            "202.1.crl"
+          ],
+          "file_hashes": [
+            "86f393d07fa3fe2d6027a59bbcea97747908f5aed1fa9fcfc6511b779c8dae3b",
+            "49a319f17f24fa3d80f4e7b348c53f66d5dd4193c7dee62be70bc8a7a1e7106d",
+            "dcc8716bae48b71104fda46547bba955e44935e96f4ecf31ae56176d2689573e",
+            "8e9f20f6864c66576536c0b866c6ffdcf11397db67fe120e972e244c3c022270"
+          ],
+          "filenames": [
+            "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07.zip",
+            "C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\@WanaDecryptor@.exe.lnk",
+            "C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp\\WERB1D7.tmp.dmp",
+            "C:\\note.txt"
+          ],
+          "ip_addresses": [],
+          "urls": [
+            "https://login.live.com/ppsecure/deviceaddcredential.srf",
+            "https://login.live.com/RST2.srf",
+            "https://settings-win.data.microsoft.com/settings/v3.0/OneSettings/Client?OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&LocalDeviceID=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&AttrDataVer=186&OSUILocale=en-US&OSSkuId=48&App=WOSC&AppVer=&IsFlightingEnabled=0&TelemetryLevel=1&DeviceFamily=Windows.Desktop",
+            "http://crl.microsoft.com/pki/crl/products/MicRooCerAut2011_2011_03_22.crl",
+            "https://watson.events.data.microsoft.com/Telemetry.Request",
+            "https://www.bing.com/threshold/xls.aspx?t=5&dl=1&f=9&wsbc=1",
+            "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBQ50otx%2Fh0Ztl%2Bz8SiPI7wEWVxDlQQUTiJUIBiV5uNu5g%2F6%2BrkS7QYXjzkCEAz1vQYrVgL0erhQLCPM8GY%3D",
+            "http://www.microsoft.com/pkiops/crl/MicSecSerCA2011_2011-10-18.crl",
+            "https://settings-win.data.microsoft.com/settings/v3.0/WSD/WaaSAssessment?os=Windows&osVer=10.0.19041.1.amd64fre.vb_release.191206-&ring=Retail&sku=48&deviceClass=Windows.Desktop&locale=en-US&deviceId=BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&FlightRing=Retail&TelemetryLevel=1&HidOverGattReg=C%3A%5CWINDOWS%5CSystem32%5CDriverStore%5CFileRepository%5Chidbthle.inf_amd64_9610b4821fdf82a5%5CMicrosoft.Bluetooth.Profiles.HidOverGatt.dll&AppVer=10.0&ProcessorIdentifier=AMD64%20Family%2023%20Model%201%20Stepping%202&OEMModel=DELL&UpdateOfferedDays=4294967295&ProcessorManufacturer=AuthenticAMD&InstallDate=1661339444&OEMModelBaseBoard=&BranchReadinessLevel=CB&OEMSubModel=J5CR&IsCloudDomainJoined=0&DeferFeatureUpdatePeriodInDays=30&IsDeviceRetailDemo=0&FlightingBranchName=&OSUILocale=en-US&DeviceFamily=Windows.Desktop&WuClientVer=10.0.19041.3996&UninstallActive=1&IsFlightingEnabled=0&OSSkuId=48&ProcessorClockSpeed=3094&TotalPhysicalRAM=6144&SecureBootCapable=0&App=WaaSAssessment&ProcessorCores=6&CurrentBranch=vb_release&InstallLanguage=en-US&DeferQualityUpdatePeriodInDays=0&ServicingBranch=CB&OEMName_Uncleaned=DELL&TPMVersion=0&PrimaryDiskTotalCapacity=262144&InstallationType=Client&AttrDataVer=186&ProcessorModel=AMD%20Ryzen%205%203500%206-Core%20Processor&IsEdgeWithChromiumInstalled=1&OSVersion=10.0.19045.4046&IsMDMEnrolled=0&ActivationChannel=Retail&HonorWUfBDeferrals=0&FirmwareVersion=A.40&TrendInstalledKey=1&OSArchitecture=AMD64&DefaultUserRegion=244&UpdateManagementGroup=2",
+            "https://settings-win.data.microsoft.com/settings/v3.0/FlightSettings/FSService?ProcessorClockSpeed=3094&IsRetailOS=1&OEMManufacturerName=DELL&FlightingPolicyValue=3&EnablePreviewBuilds=4294967295&OSVersionFull=10.0.19045.4046.amd64fre.vb_release.191206-1406&ManagePreviewBuilds=3&BranchReadinessLevelSource=0&AttrDataVer=186&ProcessorCores=6&BranchReadinessLevelRaw=16&TotalPhysicalRAM=6144&TPMVersion=0&OEMModelNumber=DELL&SystemVolumeTotalCapacity=260281&DeviceId=s%3ABAD99146-31D3-4EC6-A1A4-BE76F32BA5D4&App=FSS&AppVer=10.0&SmartActiveHoursState=1&ActiveHoursStart=20&SecureBootCapable=0&ActiveHoursEnd=13&DeviceFamily=Windows.Desktop",
+            "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Product%20Root%20Certificate%20Authority%202018.crl",
+            "http://www.microsoft.com/pkiops/crl/Microsoft%20ECC%20Update%20Secure%20Server%20CA%202.1.crl",
+            "http://ocsp.digicert.com/MFEwTzBNMEswSTAJBgUrDgMCGgUABBTrjrydRyt%2BApF3GSPypfHBxR5XtQQUs9tIpPmhxdiuNkHMEWNpYim8S8YCEAjTxtAB8my1oj8MfWpz%2F7Y%3D",
+            "http://oneocsp.microsoft.com/ocsp/MFQwUjBQME4wTDAJBgUrDgMCGgUABBQ3L3%2F%2Fa6ADK8NraY2GXzVaYrHG4AQUb6t%2B2v%2BXQ3LsO2d33oJhNYhHQoUCEzMAAAAGb6JMMcOVb6sAAAAAAAY%3D"
+          ]
+        },
+        "malware_name": "WannaCry",
+        "mitigation": "Ưu tiên: (1) Cô lập máy bị nhiễm ngay lập tức. (2) Chặn 0 IP và 18 domain tại firewall/DNS. (3) Xóa 3 file độc hại. (4) Reset credential toàn bộ user bị ảnh hưởng. (5) Patch lỗ hổng bị khai thác nếu xác định được.",
+        "severity": "CRITICAL",
+        "summary": "Phát hiện mã độc 'WannaCry' với mức độ 'Nghiêm trọng'. Mã độc thực hiện 7 kỹ thuật MITRE ATT&CK, kết nối 0 IP/18 domain C2, và tạo 3 file độc hại trên hệ thống.",
+        "threat_level": 3
+      },
+      "processes": {
+        "dropped": [
+          {
+            "name": "C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\@WanaDecryptor@.exe.lnk",
+            "sha256": "49a319f17f24fa3d80f4e7b348c53f66d5dd4193c7dee62be70bc8a7a1e7106d",
+            "type": "Copied from ANY.RUN indicators"
+          },
+          {
+            "name": "C:\\ProgramData\\Microsoft\\Windows\\WER\\Temp\\WERB1D7.tmp.dmp",
+            "sha256": "dcc8716bae48b71104fda46547bba955e44935e96f4ecf31ae56176d2689573e",
+            "type": "Copied from ANY.RUN indicators"
+          },
+          {
+            "name": "C:\\note.txt",
+            "sha256": "8e9f20f6864c66576536c0b866c6ffdcf11397db67fe120e972e244c3c022270",
+            "type": "Copied from ANY.RUN indicators"
+          }
+        ],
+        "injected": [],
+        "list": [
+          {
+            "cmd": "WerFault.exe",
+            "is_injected": false,
+            "name": "WerFault.exe",
+            "pid": 0,
+            "ppid": 0,
+            "score": 1
+          }
+        ],
+        "mutexes": [],
+        "registry": []
+      },
+      "task_uuid": "BAD99146-31D3-4EC6-A1A4-BE76F32BA5D4",
+      "threat": {
+        "mitre": [
+          {
+            "id": "T1204",
+            "name": "User Execution",
+            "tactic": "Execution"
+          },
+          {
+            "id": "T1059.001",
+            "name": "Command and Scripting Interpreter",
+            "tactic": "Execution"
+          },
+          {
+            "id": "T1053.005",
+            "name": "Scheduled Task/Job",
+            "tactic": "Persistence"
+          },
+          {
+            "id": "T1547.001",
+            "name": "Boot or Logon Autostart Execution",
+            "tactic": "Persistence"
+          },
+          {
+            "id": "T1562.001",
+            "name": "Impair Defenses",
+            "tactic": "Defense Evasion"
+          },
+          {
+            "id": "T1486",
+            "name": "Data Encrypted for Impact",
+            "tactic": "Impact"
+          },
+          {
+            "id": "T1082",
+            "name": "System Information Discovery",
+            "tactic": "Discovery"
+          }
+        ],
+        "ml": {
+          "message": "Chưa có model ML",
+          "status": "disabled"
+        },
+        "tags": [
+          "wannacry"
+        ],
+        "threat_level": 3,
+        "threat_name": "WannaCry",
+        "verdict": "Malicious"
+      }
+    }
+  }
+]

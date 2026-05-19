@@ -1,0 +1,168 @@
+{
+  "description": "Bootstrap feature dataset for the AnyRun IR Tool ML classifier. Features follow ml_engine.py order and are derived from public sandbox-report patterns, ANY.RUN-style demo reports, and OSINT malware behavior descriptions. Labels: 0=Clean, 1=Suspicious, 2=Malicious.",
+  "feature_names": [
+    "num_ips",
+    "num_domains",
+    "num_http",
+    "num_processes",
+    "num_injected",
+    "num_dropped",
+    "num_registry",
+    "has_persistence",
+    "has_evasion",
+    "has_c2",
+    "has_impact"
+  ],
+  "samples": [
+    {
+      "name": "benign_notepad_like_app",
+      "label": 0,
+      "source": "baseline:benign_windows_app",
+      "features": {"num_ips": 0, "num_domains": 0, "num_http": 0, "num_processes": 2, "num_injected": 0, "num_dropped": 0, "num_registry": 1, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "benign_installer_light_network",
+      "label": 0,
+      "source": "baseline:benign_installer",
+      "features": {"num_ips": 1, "num_domains": 1, "num_http": 1, "num_processes": 6, "num_injected": 0, "num_dropped": 2, "num_registry": 4, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "benign_browser_update",
+      "label": 0,
+      "source": "baseline:benign_updater",
+      "features": {"num_ips": 2, "num_domains": 2, "num_http": 2, "num_processes": 8, "num_injected": 0, "num_dropped": 1, "num_registry": 3, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "benign_document_open",
+      "label": 0,
+      "source": "baseline:benign_document",
+      "features": {"num_ips": 0, "num_domains": 0, "num_http": 0, "num_processes": 3, "num_injected": 0, "num_dropped": 0, "num_registry": 2, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "benign_archive_extract",
+      "label": 0,
+      "source": "baseline:benign_archive",
+      "features": {"num_ips": 0, "num_domains": 0, "num_http": 0, "num_processes": 4, "num_injected": 0, "num_dropped": 3, "num_registry": 1, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "benign_office_template_fetch",
+      "label": 0,
+      "source": "baseline:benign_office_network",
+      "features": {"num_ips": 1, "num_domains": 2, "num_http": 2, "num_processes": 5, "num_injected": 0, "num_dropped": 1, "num_registry": 2, "has_persistence": 0, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "pup_adware_installer",
+      "label": 1,
+      "source": "osint:pup_adware_behavior",
+      "features": {"num_ips": 3, "num_domains": 4, "num_http": 5, "num_processes": 10, "num_injected": 0, "num_dropped": 5, "num_registry": 12, "has_persistence": 1, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "suspicious_unsigned_downloader",
+      "label": 1,
+      "source": "osint:downloader_behavior",
+      "features": {"num_ips": 4, "num_domains": 3, "num_http": 4, "num_processes": 9, "num_injected": 0, "num_dropped": 4, "num_registry": 7, "has_persistence": 0, "has_evasion": 0, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "suspicious_macro_document",
+      "label": 1,
+      "source": "osint:macro_downloader_behavior",
+      "features": {"num_ips": 2, "num_domains": 2, "num_http": 3, "num_processes": 7, "num_injected": 0, "num_dropped": 2, "num_registry": 5, "has_persistence": 0, "has_evasion": 0, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "suspicious_script_encoded_powershell",
+      "label": 1,
+      "source": "osint:powershell_suspicious",
+      "features": {"num_ips": 2, "num_domains": 1, "num_http": 2, "num_processes": 6, "num_injected": 0, "num_dropped": 1, "num_registry": 6, "has_persistence": 0, "has_evasion": 1, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "suspicious_coinminer_loader",
+      "label": 1,
+      "source": "osint:miner_loader_behavior",
+      "features": {"num_ips": 5, "num_domains": 3, "num_http": 5, "num_processes": 12, "num_injected": 1, "num_dropped": 4, "num_registry": 10, "has_persistence": 1, "has_evasion": 0, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "suspicious_browser_extension_bundle",
+      "label": 1,
+      "source": "osint:pup_browser_extension",
+      "features": {"num_ips": 3, "num_domains": 5, "num_http": 6, "num_processes": 11, "num_injected": 0, "num_dropped": 6, "num_registry": 9, "has_persistence": 1, "has_evasion": 0, "has_c2": 0, "has_impact": 0}
+    },
+    {
+      "name": "emotet_style_banking_trojan",
+      "label": 2,
+      "source": "anyrun-demo:emotet",
+      "features": {"num_ips": 4, "num_domains": 4, "num_http": 3, "num_processes": 4, "num_injected": 2, "num_dropped": 3, "num_registry": 3, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "wannacry_style_ransomware",
+      "label": 2,
+      "source": "anyrun-demo:wannacry",
+      "features": {"num_ips": 2, "num_domains": 1, "num_http": 1, "num_processes": 4, "num_injected": 0, "num_dropped": 2, "num_registry": 1, "has_persistence": 1, "has_evasion": 0, "has_c2": 1, "has_impact": 1}
+    },
+    {
+      "name": "redline_style_stealer",
+      "label": 2,
+      "source": "anyrun-demo:redline",
+      "features": {"num_ips": 1, "num_domains": 0, "num_http": 0, "num_processes": 2, "num_injected": 1, "num_dropped": 1, "num_registry": 0, "has_persistence": 0, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "agenttesla_style_stealer",
+      "label": 2,
+      "source": "osint:agenttesla_behavior",
+      "features": {"num_ips": 3, "num_domains": 5, "num_http": 4, "num_processes": 10, "num_injected": 1, "num_dropped": 4, "num_registry": 8, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "remcos_style_rat",
+      "label": 2,
+      "source": "osint:rat_behavior",
+      "features": {"num_ips": 4, "num_domains": 3, "num_http": 2, "num_processes": 12, "num_injected": 2, "num_dropped": 5, "num_registry": 14, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "qakbot_style_loader",
+      "label": 2,
+      "source": "osint:loader_behavior",
+      "features": {"num_ips": 8, "num_domains": 6, "num_http": 7, "num_processes": 18, "num_injected": 3, "num_dropped": 6, "num_registry": 16, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "formbook_style_infostealer",
+      "label": 2,
+      "source": "osint:infostealer_behavior",
+      "features": {"num_ips": 5, "num_domains": 4, "num_http": 5, "num_processes": 9, "num_injected": 1, "num_dropped": 3, "num_registry": 9, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "ransomware_generic_shadow_delete",
+      "label": 2,
+      "source": "osint:ransomware_behavior",
+      "features": {"num_ips": 2, "num_domains": 2, "num_http": 1, "num_processes": 11, "num_injected": 0, "num_dropped": 5, "num_registry": 10, "has_persistence": 1, "has_evasion": 0, "has_c2": 1, "has_impact": 1}
+    },
+    {
+      "name": "low_noise_ransomware_killswitch_style",
+      "label": 2,
+      "source": "osint:ransomware_low_ioc_behavior",
+      "features": {"num_ips": 1, "num_domains": 1, "num_http": 1, "num_processes": 4, "num_injected": 0, "num_dropped": 2, "num_registry": 1, "has_persistence": 1, "has_evasion": 0, "has_c2": 1, "has_impact": 1}
+    },
+    {
+      "name": "low_noise_ransomware_no_injection",
+      "label": 2,
+      "source": "osint:ransomware_low_ioc_behavior",
+      "features": {"num_ips": 0, "num_domains": 2, "num_http": 2, "num_processes": 5, "num_injected": 0, "num_dropped": 3, "num_registry": 0, "has_persistence": 0, "has_evasion": 0, "has_c2": 1, "has_impact": 1}
+    },
+    {
+      "name": "low_noise_ransomware_local_only",
+      "label": 2,
+      "source": "osint:ransomware_low_ioc_behavior",
+      "features": {"num_ips": 0, "num_domains": 0, "num_http": 0, "num_processes": 6, "num_injected": 0, "num_dropped": 2, "num_registry": 2, "has_persistence": 1, "has_evasion": 0, "has_c2": 0, "has_impact": 1}
+    },
+    {
+      "name": "low_noise_stealer_single_c2",
+      "label": 2,
+      "source": "osint:stealer_low_ioc_behavior",
+      "features": {"num_ips": 1, "num_domains": 1, "num_http": 1, "num_processes": 4, "num_injected": 1, "num_dropped": 1, "num_registry": 1, "has_persistence": 0, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    },
+    {
+      "name": "trojan_generic_process_injection",
+      "label": 2,
+      "source": "osint:trojan_behavior",
+      "features": {"num_ips": 6, "num_domains": 3, "num_http": 4, "num_processes": 16, "num_injected": 4, "num_dropped": 5, "num_registry": 12, "has_persistence": 1, "has_evasion": 1, "has_c2": 1, "has_impact": 0}
+    }
+  ]
+}

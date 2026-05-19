@@ -1,0 +1,56 @@
+{
+  "feature_names": [
+    "num_ips",
+    "num_domains",
+    "num_http",
+    "num_processes",
+    "num_injected",
+    "num_dropped",
+    "num_registry",
+    "has_persistence",
+    "has_evasion",
+    "has_c2",
+    "has_impact"
+  ],
+  "labels": {
+    "0": "Clean",
+    "1": "Suspicious",
+    "2": "Malicious"
+  },
+  "sample_count": 88,
+  "label_counts": {
+    "Clean": 30,
+    "Suspicious": 23,
+    "Malicious": 35
+  },
+  "sources": [
+    "anyrun-demo:emotet",
+    "anyrun-demo:redline",
+    "anyrun-demo:wannacry",
+    "baseline:benign_archive",
+    "baseline:benign_document",
+    "baseline:benign_installer",
+    "baseline:benign_office_network",
+    "baseline:benign_updater",
+    "baseline:benign_windows_app",
+    "demo:emotet",
+    "demo:redline",
+    "demo:wannacry",
+    "osint:agenttesla_behavior",
+    "osint:downloader_behavior",
+    "osint:infostealer_behavior",
+    "osint:loader_behavior",
+    "osint:macro_downloader_behavior",
+    "osint:miner_loader_behavior",
+    "osint:powershell_suspicious",
+    "osint:pup_adware_behavior",
+    "osint:pup_browser_extension",
+    "osint:ransomware_behavior",
+    "osint:ransomware_low_ioc_behavior",
+    "osint:rat_behavior",
+    "osint:stealer_low_ioc_behavior",
+    "osint:trojan_behavior",
+    "synthetic"
+  ],
+  "note": "Bootstrap ML dataset: public/OSINT-derived seed + local Any.Run/demo history. Do not treat as a benchmark-grade detector."
+}

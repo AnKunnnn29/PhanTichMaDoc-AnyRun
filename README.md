@@ -446,3 +446,53 @@ python -X utf8 main.py --report-json Results.md --notes copied_iocs.txt
 ```
 
 Neu khong co IOC JSON rieng, chuong trinh se tu suy ra IOC tu Results markdown/JSON summary: network connections, HTTP/DNS, hash, filename va MITRE ID neu co. File Get Sample `.bin` la mau ma doc/doi tuong phan tich, khong dung de import vao tool nay va khong nen mo/chay tren may that. Xem them tai lieu dinh huong do an tai `DO_AN_FREE_ANYRUN_IR.md`.
+
+---
+
+## Train ML khi tai khoan Any.Run bi gioi han
+
+`train_ml.py` khong con chi tao du lieu gia lap. Script se gom du lieu theo thu tu:
+
+1. `data/ml_training_seed.json`: seed dataset da chuan hoa 11 feature hanh vi.
+2. Demo Any.Run noi bo: Emotet, WannaCry, RedLine.
+3. `reports/analysis_history.json`: cac lan import/phan tich that ma app da luu.
+4. `--synthetic N`: du lieu synthetic bo sung neu can can bang lop.
+
+Train model:
+
+```bash
+python -X utf8 train_ml.py --synthetic 60
+```
+
+Output:
+
+```text
+models/rf_threat_model.pkl
+models/rf_threat_model.meta.json
+```
+
+Luu y: dataset seed nay la bootstrap cho do an va demo IR, khong phai benchmark hoc thuat. Khi co them Any.Run Results `.md`/JSON public hoac report tu lich su local, hay import vao app de `analysis_history.json` lon dan roi train lai.
+
+---
+
+## Cau hinh AI Agent voi Ollama
+
+AI Agent chi tra loi trong pham vi Incident Response/malware. Cau hoi ngoai pham vi se bi chan boi scope guardrail.
+
+Neu muon dung Ollama local:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+Trong `.env`:
+
+```env
+AI_PROVIDER=ollama
+OLLAMA_ENABLED=1
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+OLLAMA_TIMEOUT=60
+```
+
+Sau khi doi `.env`, restart Flask server de app nhan cau hinh moi.
