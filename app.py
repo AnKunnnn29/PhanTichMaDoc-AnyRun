@@ -4,8 +4,10 @@ app.py  –  Flask web server cho AnyRun IR Tool GUI
 Chạy: python app.py  →  truy cập http://localhost:5000
 Chạy model LLM: & "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama.exe" pull llama3.1:8b
 """
-import io, sys, os, json, threading, time
-from werkzeug.utils import secure_filename
+import io, sys, os, json, threading, time, tempfile
+from collections import defaultdict, deque
+from functools import wraps
+from pathlib import Path
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -17,6 +19,7 @@ except ImportError:
     pass
 
 from flask import Flask, request, jsonify, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 from analyzer import MalwareAnalyzer
 from incident_response import IncidentResponseGenerator
 from demo_data import DEMO_REPORT, DEMO_IOC
@@ -34,12 +37,74 @@ from history_store import (
     record_analysis,
     task_uuid_from_report,
 )
+from validation import (
+    MAX_REPORT_UPLOAD_BYTES,
+    MAX_SANDBOX_UPLOAD_BYTES,
+    REPORT_EXTENSIONS,
+    SANDBOX_SAMPLE_EXTENSIONS,
+    ValidationError,
+    validate_api_key,
+    validate_task_uuid,
+    validate_upload_size,
+    validate_uploaded_filename,
+    validate_url,
+)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
 
 analyzer = MalwareAnalyzer()
 ir_gen   = IncidentResponseGenerator()
 ml_predictor = MLThreatPredictor()
+_rate_buckets = defaultdict(deque)
+
+
+def _error_response(message, status=400, code="bad_request"):
+    return jsonify({"ok": False, "error": message, "code": code}), status
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def _handle_request_too_large(_exc):
+    return _error_response("Payload vượt quá giới hạn kích thước cho phép", 413, "payload_too_large")
+
+
+def _json_body():
+    body = request.get_json(silent=True)
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise ValidationError("JSON body phải là object")
+    return body
+
+
+def _client_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.remote_addr or "local"
+
+
+def rate_limit(max_requests=60, window_seconds=60):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            key = (_client_ip(), request.endpoint or request.path)
+            bucket = _rate_buckets[key]
+            while bucket and now - bucket[0] >= window_seconds:
+                bucket.popleft()
+            if len(bucket) >= max_requests:
+                return _error_response(
+                    "Quá nhiều request. Vui lòng chờ và thử lại.",
+                    429,
+                    "rate_limited",
+                )
+            bucket.append(now)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -134,8 +199,14 @@ def _load_json_upload(field_name, required=True):
         if required:
             raise ValueError(f"Thiếu file JSON: {field_name}")
         return {}
+    filename = validate_uploaded_filename(upload.filename, {".json"}, field_name)
+    raw = upload.read()
+    validate_upload_size(len(raw), MAX_REPORT_UPLOAD_BYTES, filename)
     try:
-        return json.load(upload.stream)
+        loaded = json.loads(raw.decode("utf-8-sig"))
+        if not isinstance(loaded, (dict, list)):
+            raise ValueError("top-level JSON phải là object hoặc array")
+        return loaded
     except Exception as exc:
         raise ValueError(f"File {field_name} không phải JSON hợp lệ: {exc}") from exc
 
@@ -143,8 +214,9 @@ def _load_report_upload(field_name, supplemental_text=""):
     upload = request.files.get(field_name)
     if not upload:
         raise ValueError(f"Thiếu file report: {field_name}")
+    filename = validate_uploaded_filename(upload.filename, REPORT_EXTENSIONS, field_name)
     raw = upload.read()
-    filename = upload.filename or "report"
+    validate_upload_size(len(raw), MAX_REPORT_UPLOAD_BYTES, filename)
     text = raw.decode("utf-8-sig", errors="replace")
     if supplemental_text:
         text = f"{text}\n\n## Manually copied ANY.RUN indicators\n{supplemental_text}"
@@ -159,6 +231,21 @@ def _load_report_upload(field_name, supplemental_text=""):
         return json.loads(text)
     except Exception:
         return markdown_to_anyrun_report(text, filename)
+
+
+def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
+    filename = validate_uploaded_filename(upload.filename, SANDBOX_SAMPLE_EXTENSIONS, "file")
+    raw = upload.read()
+    validate_upload_size(len(raw), max_bytes, filename)
+    suffix = Path(filename).suffix.lower()
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=os.getcwd(),
+        prefix="tmp_upload_",
+        suffix=suffix,
+    ) as tmp:
+        tmp.write(raw)
+        return tmp.name
 
 # ── routes ─────────────────────────────────────────────────────────────────
 
@@ -179,25 +266,25 @@ def demo(malware):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/analyze", methods=["POST"])
+@rate_limit(max_requests=20)
 def analyze():
-    body    = request.get_json(force=True) or {}
-    api_key = body.get("api_key", "").strip()
-    task_id = body.get("task_id", "").strip()
-    force_analyze = bool(body.get("force_analyze", False))
-    if not api_key:
-        return jsonify({"ok": False, "error": "Thiếu API key"}), 400
-    if not task_id:
-        return jsonify({"ok": False, "error": "Thiếu Task UUID"}), 400
     try:
-        from anyrun_client import AnyRunClient, AnyRunAPIError
+        body = _json_body()
+        api_key = validate_api_key(body.get("api_key"))
+        task_id = validate_task_uuid(body.get("task_id"))
+        force_analyze = bool(body.get("force_analyze", False))
+        from anyrun_client import AnyRunClient
         client      = AnyRunClient(api_key)
         report_json = client.get_task_report(task_id)
         ioc_json    = client.get_task_iocs(task_id)
         return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")})
+    except ValidationError as e:
+        return _error_response(str(e))
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
 @app.route("/api/analyze/json", methods=["POST"])
+@rate_limit(max_requests=30)
 def analyze_json_upload():
     """Free-account workflow: import JSON/Markdown exported manually from Any.Run."""
     try:
@@ -206,48 +293,50 @@ def analyze_json_upload():
         report_json = _load_report_upload("report_file", supplemental_text)
         ioc_json = _load_json_upload("ioc_file", required=False)
         return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="import")})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 500, "internal_error")
 
 @app.route("/api/submit/url", methods=["POST"])
+@rate_limit(max_requests=10)
 def submit_url():
-    body    = request.get_json(force=True) or {}
-    api_key = body.get("api_key", "").strip()
-    url     = body.get("url", "").strip()
-    if not api_key or not url:
-        return jsonify({"ok": False, "error": "Thiếu api_key hoặc url"}), 400
     try:
+        body = _json_body()
+        api_key = validate_api_key(body.get("api_key"))
+        url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
         client  = AnyRunClient(api_key)
         res     = client.submit_url(url)
         task_id = res.get("data", {}).get("taskid", "")
         return jsonify({"ok": True, "task_id": task_id,
                         "message": f"Đã submit! Task ID: {task_id}"})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 400)
 
 @app.route("/api/submit/file", methods=["POST"])
+@rate_limit(max_requests=10)
 def submit_file():
-    api_key = request.form.get("api_key", "").strip()
-    if not api_key:
-        return jsonify({"ok": False, "error": "Thiếu API key"}), 400
-    if "file" not in request.files:
-        return jsonify({"ok": False, "error": "Không có file"}), 400
-    f         = request.files["file"]
-    safe_name = secure_filename(f.filename) or "upload_tmp"
-    tmp_path  = os.path.join(os.getcwd(), "tmp_upload_" + safe_name)
-    f.save(tmp_path)
+    tmp_path = ""
     try:
+        api_key = validate_api_key(request.form.get("api_key"))
+        if "file" not in request.files:
+            raise ValidationError("Không có file")
+        tmp_path = _save_temp_upload(request.files["file"])
         from anyrun_client import AnyRunClient
         client  = AnyRunClient(api_key)
         res     = client.submit_file(tmp_path)
         task_id = res.get("data", {}).get("taskid", "")
         return jsonify({"ok": True, "task_id": task_id,
                         "message": f"Đã submit! Task ID: {task_id}"})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 400)
     finally:
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
 # ── Submit + Wait + Analyze (như main.py) ─────────────────────────────────
@@ -278,7 +367,7 @@ _cleanup_thread.start()
 
 def _poll_and_analyze(api_key, task_id, max_wait=300):
     """Chạy trong thread riêng: polling → analyze → lưu kết quả."""
-    from anyrun_client import AnyRunClient, AnyRunAPIError, AnyRunNotFoundError
+    from anyrun_client import AnyRunClient, AnyRunNotFoundError
     client  = AnyRunClient(api_key)
     elapsed = 0
     interval = 10
@@ -326,14 +415,13 @@ def _poll_and_analyze(api_key, task_id, max_wait=300):
                                "data": None, "error": "timeout"}
 
 @app.route("/api/submit_analyze/url", methods=["POST"])
+@rate_limit(max_requests=10)
 def submit_analyze_url():
     """Submit URL → polling → analyze (1 bước, như main.py --url)."""
-    body    = request.get_json(force=True) or {}
-    api_key = body.get("api_key","").strip()
-    url     = body.get("url","").strip()
-    if not api_key or not url:
-        return jsonify({"ok": False, "error": "Thiếu api_key hoặc url"}), 400
     try:
+        body = _json_body()
+        api_key = validate_api_key(body.get("api_key"))
+        url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
         client  = AnyRunClient(api_key)
         res     = client.submit_url(url)
@@ -343,22 +431,21 @@ def submit_analyze_url():
         t = threading.Thread(target=_poll_and_analyze, args=(api_key, task_id), daemon=True)
         t.start()
         return jsonify({"ok": True, "task_id": task_id})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 400)
 
 @app.route("/api/submit_analyze/file", methods=["POST"])
+@rate_limit(max_requests=10)
 def submit_analyze_file():
     """Submit file → polling → analyze (1 bước, như main.py --file)."""
-    api_key = request.form.get("api_key","").strip()
-    if not api_key:
-        return jsonify({"ok": False, "error": "Thiếu API key"}), 400
-    if "file" not in request.files:
-        return jsonify({"ok": False, "error": "Không có file"}), 400
-    f         = request.files["file"]
-    safe_name = secure_filename(f.filename) or "upload_tmp"
-    tmp_path  = os.path.join(os.getcwd(), "tmp_upload_" + safe_name)
-    f.save(tmp_path)
+    tmp_path = ""
     try:
+        api_key = validate_api_key(request.form.get("api_key"))
+        if "file" not in request.files:
+            raise ValidationError("Không có file")
+        tmp_path = _save_temp_upload(request.files["file"])
         from anyrun_client import AnyRunClient
         client  = AnyRunClient(api_key)
         res     = client.submit_file(tmp_path)
@@ -368,10 +455,12 @@ def submit_analyze_file():
         t = threading.Thread(target=_poll_and_analyze, args=(api_key, task_id), daemon=True)
         t.start()
         return jsonify({"ok": True, "task_id": task_id})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 400)
     finally:
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
 @app.route("/api/task_status/<task_id>", methods=["GET"])
@@ -393,19 +482,20 @@ def open_reports():
     return jsonify({"ok": True, "path": reports_dir})
 
 @app.route("/api/history", methods=["POST"])
+@rate_limit(max_requests=20)
 def history():
-    body    = request.get_json(force=True) or {}
-    api_key = body.get("api_key", "").strip()
-    if not api_key:
-        return jsonify({"ok": False, "error": "Thiếu API key"}), 400
     try:
+        body = _json_body()
+        api_key = validate_api_key(body.get("api_key"))
         from anyrun_client import AnyRunClient
         client = AnyRunClient(api_key)
         res    = client.get_history(limit=15)
         tasks  = res.get("data", {}).get("tasks", []) or []
         return jsonify({"ok": True, "tasks": tasks})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return _error_response(str(e), 400)
 
 @app.route("/api/history/local", methods=["GET"])
 def local_history():
@@ -426,9 +516,10 @@ def local_history_latest():
     return jsonify({"ok": False, "error": "Chua co lich su phan tich"}), 404
 
 @app.route("/api/history/local/save", methods=["POST"])
+@rate_limit(max_requests=30)
 def local_history_save():
     """Persist a browser-restored analysis payload into local backend history."""
-    body = request.get_json(force=True) or {}
+    body = _json_body()
     data = body.get("data") or {}
     source = body.get("source") or "browser"
     if not data:
@@ -450,8 +541,9 @@ def local_history_item(item_id):
     return jsonify({"ok": False, "error": "Khong tim thay muc lich su"}), 404
 
 @app.route("/api/ai/remediation", methods=["POST"])
+@rate_limit(max_requests=20)
 def ai_remediation():
-    body = request.get_json(force=True) or {}
+    body = _json_body()
     question = body.get("question", "")
     data = body.get("data") or {}
     if not data:
@@ -462,12 +554,15 @@ def ai_remediation():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/export", methods=["POST"])
+@rate_limit(max_requests=30)
 def export_report():
-    body = request.get_json(force=True) or {}
+    body = _json_body()
     fmt  = body.get("format", "json")  # "json" | "markdown"
     data = body.get("data")
     if not data:
         return jsonify({"ok": False, "error": "Không có data"}), 400
+    if fmt not in {"json", "markdown"}:
+        return _error_response("Format export không được hỗ trợ")
     import datetime
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("reports", exist_ok=True)

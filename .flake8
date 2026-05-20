@@ -1,0 +1,13 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,W503
+exclude =
+    .git,
+    .kiro,
+    .venv,
+    venv,
+    env,
+    __pycache__,
+    htmlcov
+per-file-ignores =
+    app.py:E128,E221,E231,E272,E302,E305,E401,E501,F541

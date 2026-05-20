@@ -1,0 +1,33 @@
+[tool.black]
+line-length = 120
+target-version = ["py39", "py310", "py311"]
+include = '\.py$'
+extend-exclude = '''
+/(
+  \.git
+  | \.kiro
+  | \.venv
+  | venv
+  | env
+  | __pycache__
+  | htmlcov
+)/
+'''
+
+[tool.pylint.main]
+py-version = "3.9"
+ignore = [".git", ".kiro", ".venv", "venv", "env", "__pycache__", "htmlcov"]
+
+[tool.pylint.messages_control]
+disable = [
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "too-few-public-methods",
+  "line-too-long",
+  "invalid-name",
+  "import-error",
+]
+
+[tool.pylint.format]
+max-line-length = 120

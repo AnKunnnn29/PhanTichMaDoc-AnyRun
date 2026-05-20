@@ -13,6 +13,9 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Runtime-generated local history and exports
 reports/analysis_history.json

@@ -7,26 +7,30 @@ Tài liệu: https://api.any.run/
 
 import time
 import requests
-from typing import Optional
+from validation import validate_api_key, validate_task_uuid, validate_url
 
 
 class AnyRunAPIError(Exception):
     """Exception cơ sở cho Any.Run API errors."""
+
     pass
 
 
 class AnyRunAuthError(AnyRunAPIError):
     """Lỗi xác thực (401/403)."""
+
     pass
 
 
 class AnyRunNotFoundError(AnyRunAPIError):
     """Task/resource không tìm thấy (404)."""
+
     pass
 
 
 class AnyRunRateLimitError(AnyRunAPIError):
     """Vượt quá rate limit (429)."""
+
     pass
 
 
@@ -43,16 +47,20 @@ class AnyRunClient:
     BASE_URL = "https://api.any.run/v1"
 
     def __init__(self, api_key: str, timeout: int = 30):
-        if not api_key or api_key == "your_api_key_here":
-            raise AnyRunAuthError(
-                "API key không hợp lệ. Vui lòng cung cấp API key từ app.any.run"
-            )
+        if timeout <= 0:
+            raise ValueError("timeout phải lớn hơn 0")
+        try:
+            api_key = validate_api_key(api_key)
+        except ValueError as exc:
+            raise AnyRunAuthError("API key không hợp lệ. Vui lòng cung cấp API key từ app.any.run") from exc
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"API-Key {api_key}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"API-Key {api_key}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
+        )
         self.timeout = timeout
 
     # ------------------------------------------------------------------ #
@@ -77,13 +85,9 @@ class AnyRunClient:
         elif resp.status_code == 404:
             raise AnyRunNotFoundError(f"Không tìm thấy task/resource tại {url} (404).")
         elif resp.status_code == 429:
-            raise AnyRunRateLimitError(
-                "Vượt quá giới hạn tốc độ API. Vui lòng chờ và thử lại (429)."
-            )
+            raise AnyRunRateLimitError("Vượt quá giới hạn tốc độ API. Vui lòng chờ và thử lại (429).")
         else:
-            raise AnyRunAPIError(
-                f"Lỗi HTTP {resp.status_code}: {resp.text[:300]}"
-            )
+            raise AnyRunAPIError(f"Lỗi HTTP {resp.status_code}: {resp.text[:300]}")
 
     # ------------------------------------------------------------------ #
     # Public API methods                                                   #
@@ -94,6 +98,7 @@ class AnyRunClient:
         Lấy báo cáo phân tích đầy đủ cho một task.
         GET /report/{taskUuid}/summary/json
         """
+        task_uuid = validate_task_uuid(task_uuid)
         return self._request("GET", f"/report/{task_uuid}/summary/json")
 
     def get_task_iocs(self, task_uuid: str) -> dict:
@@ -101,6 +106,7 @@ class AnyRunClient:
         Lấy danh sách Indicators of Compromise (IOC).
         GET /report/{taskUuid}/ioc/json
         """
+        task_uuid = validate_task_uuid(task_uuid)
         return self._request("GET", f"/report/{task_uuid}/ioc/json")
 
     def get_history(self, team: bool = False, skip: int = 0, limit: int = 25) -> dict:
@@ -108,6 +114,10 @@ class AnyRunClient:
         Lấy lịch sử phân tích của tài khoản.
         GET /analysis
         """
+        if skip < 0:
+            raise ValueError("skip không được âm")
+        if not 1 <= limit <= 100:
+            raise ValueError("limit phải nằm trong khoảng 1-100")
         params = {"team": str(team).lower(), "skip": skip, "limit": limit}
         return self._request("GET", "/analysis", params=params)
 
@@ -123,6 +133,9 @@ class AnyRunClient:
         Gửi URL để phân tích.
         POST /analysis
         """
+        url = validate_url(url)
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds phải lớn hơn 0")
         payload = {
             "obj_type": "url",
             "obj_url": url,
@@ -145,6 +158,7 @@ class AnyRunClient:
         POST /analysis (multipart)
         """
         import os as _os
+
         if not _os.path.isfile(file_path):
             raise FileNotFoundError(f"File không tồn tại: {file_path}")
         # Tạo bản sao headers không có Content-Type để requests tự set boundary
@@ -158,10 +172,7 @@ class AnyRunClient:
                 "opt_timeout": str(timeout_seconds),
             }
             url = f"{self.BASE_URL}/analysis"
-            resp = self.session.post(
-                url, headers=headers, files=files, data=data,
-                timeout=self.timeout
-            )
+            resp = self.session.post(url, headers=headers, files=files, data=data, timeout=self.timeout)
         if resp.status_code == 200:
             return resp.json()
         raise AnyRunAPIError(f"Lỗi submit file {resp.status_code}: {resp.text[:300]}")
@@ -175,21 +186,20 @@ class AnyRunClient:
         """
         Chờ đến khi task hoàn thành rồi trả về report.
         """
+        task_uuid = validate_task_uuid(task_uuid)
+        if poll_interval <= 0:
+            raise ValueError("poll_interval phải lớn hơn 0")
+        if max_wait <= 0:
+            raise ValueError("max_wait phải lớn hơn 0")
         elapsed = 0
         while elapsed < max_wait:
             try:
                 report = self.get_task_report(task_uuid)
-                status = (
-                    report.get("data", {})
-                    .get("analysis", {})
-                    .get("status", "")
-                )
+                status = report.get("data", {}).get("analysis", {}).get("status", "")
                 if status in ("done", "failed"):
                     return report
             except AnyRunNotFoundError:
                 pass  # Task chưa sẵn sàng
             time.sleep(poll_interval)
             elapsed += poll_interval
-        raise TimeoutError(
-            f"Task {task_uuid} không hoàn thành sau {max_wait}s"
-        )
+        raise TimeoutError(f"Task {task_uuid} không hoàn thành sau {max_wait}s")
