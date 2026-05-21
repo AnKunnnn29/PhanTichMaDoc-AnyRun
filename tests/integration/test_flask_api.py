@@ -143,6 +143,62 @@ class TestExportAndHistoryEndpoints:
         assert payload["ok"] is True
         assert payload["path"].endswith(".md")
 
+    @pytest.mark.parametrize(("fmt", "suffix"), [("html", ".html"), ("pdf", ".pdf")])
+    def test_export_rich_formats_create_report_file(self, flask_test_client, fmt, suffix):
+        data = {
+            "analysis_url": "https://app.any.run/tasks/task-1",
+            "task_uuid": "task-1",
+            "threat": {"verdict": "Malicious", "threat_level": 3, "mitre": [], "tags": []},
+            "file": {"name": "sample.exe", "sha256": "hash", "type": "PE32"},
+            "network": {"ips": ["192.0.2.1"], "domains": ["evil.example"], "urls": []},
+            "processes": {"list": [], "injected": [], "dropped": [], "registry": []},
+            "playbook": {
+                "malware_name": "Emotet",
+                "severity": "HIGH",
+                "summary": "Detected Emotet activity.",
+                "mitigation": "Isolate host.",
+                "actions": [{"title": "Contain host", "description": "Isolate host.", "commands": []}],
+                "ioc_blocklist": {"ip_addresses": ["192.0.2.1"], "domains": ["evil.example"]},
+            },
+        }
+
+        response = flask_test_client.post("/api/export", json={"format": fmt, "data": data})
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert payload["path"].endswith(suffix)
+
+    @pytest.mark.parametrize(
+        ("fmt", "suffix"),
+        [("csv", ".csv"), ("splunk", ".spl"), ("elastic", ".kql"), ("sigma", ".yml")],
+    )
+    def test_export_siem_formats_create_report_file(self, flask_test_client, fmt, suffix):
+        data = {
+            "analysis_url": "https://app.any.run/tasks/task-1",
+            "task_uuid": "task-1",
+            "network": {"ips": ["192.0.2.1"], "domains": ["evil.example"], "urls": ["http://evil.example/payload"]},
+            "threat": {"verdict": "Malicious", "threat_level": 3, "mitre": [], "tags": []},
+            "playbook": {
+                "malware_name": "Emotet",
+                "severity": "HIGH",
+                "ioc_blocklist": {
+                    "ip_addresses": ["192.0.2.1"],
+                    "domains": ["evil.example"],
+                    "urls": ["http://evil.example/payload"],
+                    "file_hashes": ["sha256-test"],
+                    "filenames": ["payload.dll"],
+                },
+            },
+        }
+
+        response = flask_test_client.post("/api/export", json={"format": fmt, "data": data})
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert payload["path"].endswith(suffix)
+
     def test_history_local_returns_list(self, flask_test_client):
         flask_test_client.get("/api/demo/emotet")
 
@@ -160,7 +216,18 @@ class TestExportAndHistoryEndpoints:
         assert response.get_json()["ok"] is False
 
     def test_export_rejects_unsupported_format(self, flask_test_client):
-        response = flask_test_client.post("/api/export", json={"format": "pdf", "data": {"task_uuid": "task-1"}})
+        response = flask_test_client.post("/api/export", json={"format": "docx", "data": {"task_uuid": "task-1"}})
 
         assert response.status_code == 400
         assert "Format export" in response.get_json()["error"]
+
+
+class TestAIEndpoints:
+    def test_ai_status_returns_safe_configuration(self, flask_test_client):
+        response = flask_test_client.get("/api/ai/status")
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert "provider" in payload["data"]
+        assert "api_key" not in str(payload["data"]).lower()

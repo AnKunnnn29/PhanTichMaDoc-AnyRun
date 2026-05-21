@@ -11,3 +11,5 @@ exclude =
     htmlcov
 per-file-ignores =
     app.py:E128,E221,E231,E272,E302,E305,E401,E501,F541
+    ai_assistant.py:E128,E221,E231,E272,E302,E305,E401,E501,F541
+    reporter.py:E128,E221,E231,E272,E302,E305,E401,E501,F401,F541

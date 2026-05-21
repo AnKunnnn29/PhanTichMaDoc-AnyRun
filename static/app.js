@@ -734,12 +734,14 @@ async function askAI(question = '') {
     const modeLabel = {
       openai: 'OpenAI',
       ollama: 'Ollama local LLM',
+      local: 'Local assistant',
       ollama_fallback: 'Local assistant (Ollama timeout)',
       guardrail: 'Scope guardrail',
       local_fallback: 'Local assistant'
     }[j.mode] || 'Local assistant';
     const warningHtml = j.warning ? `<div class="ai-warning">${esc(j.warning)}</div>` : '';
-    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}</div>${warningHtml}<pre>${esc(j.answer)}</pre>`;
+    const meta = [j.model, j.latency_ms !== undefined ? `${j.latency_ms}ms` : ''].filter(Boolean).join(' · ');
+    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}${meta ? ` · ${esc(meta)}` : ''}</div>${warningHtml}<pre>${esc(j.answer)}</pre>`;
   } catch(e) {
     answerEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
     toast(e.message, 'err');

@@ -4,16 +4,19 @@ app.py  –  Flask web server cho AnyRun IR Tool GUI
 Chạy: python app.py  →  truy cập http://localhost:5000
 Chạy model LLM: & "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama.exe" pull llama3.1:8b
 """
+
 import io, sys, os, json, threading, time, tempfile
 from collections import defaultdict, deque
 from functools import wraps
 from pathlib import Path
+
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -27,8 +30,9 @@ from demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
 from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
 from ml_engine import MLThreatPredictor
 from markdown_importer import markdown_to_anyrun_report
-from ai_assistant import answer_remediation
-from reporter import build_malware_analysis
+from ai_assistant import answer_remediation, get_ai_status
+from reporter import build_html_report, build_malware_analysis, export_payload_pdf
+from siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
 from history_store import (
     extract_hashes_from_report,
     find_exact_cached_payload,
@@ -54,7 +58,7 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
 
 analyzer = MalwareAnalyzer()
-ir_gen   = IncidentResponseGenerator()
+ir_gen = IncidentResponseGenerator()
 ml_predictor = MLThreatPredictor()
 _rate_buckets = defaultdict(deque)
 
@@ -106,7 +110,9 @@ def rate_limit(max_requests=60, window_seconds=60):
 
     return decorator
 
+
 # ── helpers ────────────────────────────────────────────────────────────────
+
 
 def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
     report_hashes = extract_hashes_from_report(report_json, ioc_json)
@@ -116,7 +122,7 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
         if cached:
             return cached
 
-    result   = analyzer.parse_report(report_json, ioc_json)
+    result = analyzer.parse_report(report_json, ioc_json)
 
     if use_cache:
         cached = find_family_cached_payload(
@@ -132,66 +138,73 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
 
     actions_list = []
     for a in playbook.actions:
-        actions_list.append({
-            "priority": a.priority,
-            "phase": a.phase,
-            "category": a.category,
-            "title": a.title,
-            "description": a.description,
-            "commands": a.commands,
-            "notes": a.notes,
-        })
+        actions_list.append(
+            {
+                "priority": a.priority,
+                "phase": a.phase,
+                "category": a.category,
+                "title": a.title,
+                "description": a.description,
+                "commands": a.commands,
+                "notes": a.notes,
+            }
+        )
 
     ml_result = ml_predictor.predict(result)
 
     payload = {
-        "task_uuid":    result.task_uuid,
+        "task_uuid": result.task_uuid,
         "analysis_url": result.analysis_url,
-        "os_env":       result.os_env,
-        "duration":     result.duration_seconds,
-        "file": {
-            "name":      f.name      if f else "",
-            "size":      f.size      if f else 0,
-            "type":      f.file_type if f else "",
-            "md5":       f.md5       if f else "",
-            "sha1":      f.sha1      if f else "",
-            "sha256":    f.sha256    if f else "",
-        } if f else None,
+        "os_env": result.os_env,
+        "duration": result.duration_seconds,
+        "file": (
+            {
+                "name": f.name if f else "",
+                "size": f.size if f else 0,
+                "type": f.file_type if f else "",
+                "md5": f.md5 if f else "",
+                "sha1": f.sha1 if f else "",
+                "sha256": f.sha256 if f else "",
+            }
+            if f
+            else None
+        ),
         "threat": {
-            "verdict":      result.threat_info.verdict,
+            "verdict": result.threat_info.verdict,
             "threat_level": result.threat_info.threat_level,
-            "threat_name":  result.threat_info.threat_name,
-            "tags":         result.threat_info.tags,
-            "mitre":        result.threat_info.mitre_techniques,
-            "ml":           ml_result,
+            "threat_name": result.threat_info.threat_name,
+            "tags": result.threat_info.tags,
+            "mitre": result.threat_info.mitre_techniques,
+            "ml": ml_result,
         },
         "network": {
-            "ips":     result.network.ip_addresses,
+            "ips": result.network.ip_addresses,
             "domains": result.network.domains,
-            "urls":    result.network.urls,
-            "http":    result.network.http_requests[:20],
-            "dns":     result.network.dns_queries,
+            "urls": result.network.urls,
+            "http": result.network.http_requests[:20],
+            "dns": result.network.dns_queries,
         },
         "processes": {
-            "list":     result.processes.processes[:30],
+            "list": result.processes.processes[:30],
             "injected": result.processes.injected_processes,
-            "dropped":  result.processes.dropped_files,
+            "dropped": result.processes.dropped_files,
             "registry": result.processes.registry_keys[:20],
-            "mutexes":  result.processes.mutexes,
+            "mutexes": result.processes.mutexes,
         },
         "malware_analysis": build_malware_analysis(result),
         "playbook": {
-            "malware_name":  playbook.malware_name,
-            "severity":      playbook.severity,
-            "threat_level":  playbook.threat_level,
-            "summary":       playbook.summary,
-            "mitigation":    playbook.mitigation_summary,
-            "actions":       actions_list,
+            "malware_name": playbook.malware_name,
+            "severity": playbook.severity,
+            "threat_level": playbook.threat_level,
+            "summary": playbook.summary,
+            "mitigation": playbook.mitigation_summary,
+            "actions": actions_list,
             "ioc_blocklist": playbook.ioc_blocklist,
         },
     }
     record_analysis(payload, source=source)
     return payload
+
 
 def _load_json_upload(field_name, required=True):
     upload = request.files.get(field_name)
@@ -209,6 +222,7 @@ def _load_json_upload(field_name, required=True):
         return loaded
     except Exception as exc:
         raise ValueError(f"File {field_name} không phải JSON hợp lệ: {exc}") from exc
+
 
 def _load_report_upload(field_name, supplemental_text=""):
     upload = request.files.get(field_name)
@@ -247,23 +261,31 @@ def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
         tmp.write(raw)
         return tmp.name
 
+
 # ── routes ─────────────────────────────────────────────────────────────────
+
 
 @app.route("/")
 def index():
     return send_from_directory("templates", "index.html")
 
+
 @app.route("/api/demo/<string:malware>", methods=["GET"])
 def demo(malware):
     try:
         if malware == "wannacry":
-            return jsonify({"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC, source="demo:wannacry")})
+            return jsonify(
+                {"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC, source="demo:wannacry")}
+            )
         elif malware == "redline":
-            return jsonify({"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC, source="demo:redline")})
+            return jsonify(
+                {"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC, source="demo:redline")}
+            )
         else:
             return jsonify({"ok": True, "data": _build_payload(DEMO_REPORT, DEMO_IOC, source="demo:emotet")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
 
 @app.route("/api/analyze", methods=["POST"])
 @rate_limit(max_requests=20)
@@ -274,14 +296,21 @@ def analyze():
         task_id = validate_task_uuid(body.get("task_id"))
         force_analyze = bool(body.get("force_analyze", False))
         from anyrun_client import AnyRunClient
-        client      = AnyRunClient(api_key)
+
+        client = AnyRunClient(api_key)
         report_json = client.get_task_report(task_id)
-        ioc_json    = client.get_task_iocs(task_id)
-        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")})
+        ioc_json = client.get_task_iocs(task_id)
+        return jsonify(
+            {
+                "ok": True,
+                "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task"),
+            }
+        )
     except ValidationError as e:
         return _error_response(str(e))
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
 
 @app.route("/api/analyze/json", methods=["POST"])
 @rate_limit(max_requests=30)
@@ -292,11 +321,14 @@ def analyze_json_upload():
         force_analyze = request.form.get("force_analyze", "").lower() in ("1", "true", "yes")
         report_json = _load_report_upload("report_file", supplemental_text)
         ioc_json = _load_json_upload("ioc_file", required=False)
-        return jsonify({"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="import")})
+        return jsonify(
+            {"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="import")}
+        )
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 500, "internal_error")
+
 
 @app.route("/api/submit/url", methods=["POST"])
 @rate_limit(max_requests=10)
@@ -306,15 +338,16 @@ def submit_url():
         api_key = validate_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
-        client  = AnyRunClient(api_key)
-        res     = client.submit_url(url)
+
+        client = AnyRunClient(api_key)
+        res = client.submit_url(url)
         task_id = res.get("data", {}).get("taskid", "")
-        return jsonify({"ok": True, "task_id": task_id,
-                        "message": f"Đã submit! Task ID: {task_id}"})
+        return jsonify({"ok": True, "task_id": task_id, "message": f"Đã submit! Task ID: {task_id}"})
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 400)
+
 
 @app.route("/api/submit/file", methods=["POST"])
 @rate_limit(max_requests=10)
@@ -326,11 +359,11 @@ def submit_file():
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
         from anyrun_client import AnyRunClient
-        client  = AnyRunClient(api_key)
-        res     = client.submit_file(tmp_path)
+
+        client = AnyRunClient(api_key)
+        res = client.submit_file(tmp_path)
         task_id = res.get("data", {}).get("taskid", "")
-        return jsonify({"ok": True, "task_id": task_id,
-                        "message": f"Đã submit! Task ID: {task_id}"})
+        return jsonify({"ok": True, "task_id": task_id, "message": f"Đã submit! Task ID: {task_id}"})
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
     except Exception as e:
@@ -339,12 +372,13 @@ def submit_file():
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+
 # ── Submit + Wait + Analyze (như main.py) ─────────────────────────────────
 
 # Lưu trạng thái task đang chờ: {task_id: {status, progress, message, data, _created_at}}
 _task_jobs = {}
 _task_lock = threading.Lock()
-_JOB_TTL   = 1800  # 30 phút – tự động xóa entry cũ
+_JOB_TTL = 1800  # 30 phút – tự động xóa entry cũ
 
 
 def _cleanup_old_jobs():
@@ -354,9 +388,9 @@ def _cleanup_old_jobs():
         cutoff = time.time() - _JOB_TTL
         with _task_lock:
             expired = [
-                tid for tid, job in _task_jobs.items()
-                if job.get("_created_at", 0) < cutoff
-                and job.get("status") in ("done", "error")
+                tid
+                for tid, job in _task_jobs.items()
+                if job.get("_created_at", 0) < cutoff and job.get("status") in ("done", "error")
             ]
             for tid in expired:
                 del _task_jobs[tid]
@@ -365,10 +399,12 @@ def _cleanup_old_jobs():
 _cleanup_thread = threading.Thread(target=_cleanup_old_jobs, daemon=True)
 _cleanup_thread.start()
 
+
 def _poll_and_analyze(api_key, task_id, max_wait=300):
     """Chạy trong thread riêng: polling → analyze → lưu kết quả."""
     from anyrun_client import AnyRunClient, AnyRunNotFoundError
-    client  = AnyRunClient(api_key)
+
+    client = AnyRunClient(api_key)
     elapsed = 0
     interval = 10
     steps = [
@@ -380,39 +416,59 @@ def _poll_and_analyze(api_key, task_id, max_wait=300):
     ]
     step_idx = 0
     with _task_lock:
-        _task_jobs[task_id] = {"status": "running", "progress": 5,
-                               "message": steps[0], "data": None, "error": None,
-                               "_created_at": time.time()}
+        _task_jobs[task_id] = {
+            "status": "running",
+            "progress": 5,
+            "message": steps[0],
+            "data": None,
+            "error": None,
+            "_created_at": time.time(),
+        }
     while elapsed < max_wait:
         time.sleep(interval)
         elapsed += interval
         pct = min(85, int(elapsed / max_wait * 100))
-        msg = steps[min(step_idx, len(steps)-1)]
+        msg = steps[min(step_idx, len(steps) - 1)]
         step_idx += 1
         with _task_lock:
             _task_jobs[task_id]["progress"] = pct
-            _task_jobs[task_id]["message"]  = msg
+            _task_jobs[task_id]["message"] = msg
         try:
             report = client.get_task_report(task_id)
-            status = report.get("data",{}).get("analysis",{}).get("status","")
+            status = report.get("data", {}).get("analysis", {}).get("status", "")
             if status in ("done", "failed"):
                 ioc_json = client.get_task_iocs(task_id)
-                payload  = _build_payload(report, ioc_json, source="anyrun:submit")
+                payload = _build_payload(report, ioc_json, source="anyrun:submit")
                 with _task_lock:
-                    _task_jobs[task_id] = {"status": "done", "progress": 100,
-                                           "message": "Hoàn tất!", "data": payload, "error": None}
+                    _task_jobs[task_id] = {
+                        "status": "done",
+                        "progress": 100,
+                        "message": "Hoàn tất!",
+                        "data": payload,
+                        "error": None,
+                    }
                 return
         except AnyRunNotFoundError:
             pass
         except Exception as e:
             with _task_lock:
-                _task_jobs[task_id] = {"status": "error", "progress": 0,
-                                       "message": str(e), "data": None, "error": str(e)}
+                _task_jobs[task_id] = {
+                    "status": "error",
+                    "progress": 0,
+                    "message": str(e),
+                    "data": None,
+                    "error": str(e),
+                }
             return
     with _task_lock:
-        _task_jobs[task_id] = {"status": "error", "progress": 0,
-                               "message": f"Timeout sau {max_wait}s – sandbox chưa hoàn tất.",
-                               "data": None, "error": "timeout"}
+        _task_jobs[task_id] = {
+            "status": "error",
+            "progress": 0,
+            "message": f"Timeout sau {max_wait}s – sandbox chưa hoàn tất.",
+            "data": None,
+            "error": "timeout",
+        }
+
 
 @app.route("/api/submit_analyze/url", methods=["POST"])
 @rate_limit(max_requests=10)
@@ -423,9 +479,10 @@ def submit_analyze_url():
         api_key = validate_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
-        client  = AnyRunClient(api_key)
-        res     = client.submit_url(url)
-        task_id = res.get("data",{}).get("taskid","")
+
+        client = AnyRunClient(api_key)
+        res = client.submit_url(url)
+        task_id = res.get("data", {}).get("taskid", "")
         if not task_id:
             return jsonify({"ok": False, "error": "Không nhận được task ID từ Any.Run"}), 400
         t = threading.Thread(target=_poll_and_analyze, args=(api_key, task_id), daemon=True)
@@ -435,6 +492,7 @@ def submit_analyze_url():
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 400)
+
 
 @app.route("/api/submit_analyze/file", methods=["POST"])
 @rate_limit(max_requests=10)
@@ -447,9 +505,10 @@ def submit_analyze_file():
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
         from anyrun_client import AnyRunClient
-        client  = AnyRunClient(api_key)
-        res     = client.submit_file(tmp_path)
-        task_id = res.get("data",{}).get("taskid","")
+
+        client = AnyRunClient(api_key)
+        res = client.submit_file(tmp_path)
+        task_id = res.get("data", {}).get("taskid", "")
         if not task_id:
             return jsonify({"ok": False, "error": "Không nhận được task ID từ Any.Run"}), 400
         t = threading.Thread(target=_poll_and_analyze, args=(api_key, task_id), daemon=True)
@@ -463,6 +522,7 @@ def submit_analyze_file():
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+
 @app.route("/api/task_status/<task_id>", methods=["GET"])
 def task_status(task_id):
     """Polling endpoint: trả về trạng thái job đang chờ."""
@@ -471,6 +531,7 @@ def task_status(task_id):
     if not job:
         return jsonify({"ok": False, "error": "Không tìm thấy job"}), 404
     return jsonify({"ok": True, **job})
+
 
 @app.route("/api/open_reports", methods=["GET"])
 def open_reports():
@@ -481,6 +542,7 @@ def open_reports():
         os.startfile(reports_dir)
     return jsonify({"ok": True, "path": reports_dir})
 
+
 @app.route("/api/history", methods=["POST"])
 @rate_limit(max_requests=20)
 def history():
@@ -488,14 +550,16 @@ def history():
         body = _json_body()
         api_key = validate_api_key(body.get("api_key"))
         from anyrun_client import AnyRunClient
+
         client = AnyRunClient(api_key)
-        res    = client.get_history(limit=15)
-        tasks  = res.get("data", {}).get("tasks", []) or []
+        res = client.get_history(limit=15)
+        tasks = res.get("data", {}).get("tasks", []) or []
         return jsonify({"ok": True, "tasks": tasks})
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 400)
+
 
 @app.route("/api/history/local", methods=["GET"])
 def local_history():
@@ -506,6 +570,7 @@ def local_history():
         items.append(clean)
     return jsonify({"ok": True, "items": items})
 
+
 @app.route("/api/history/local/latest", methods=["GET"])
 def local_history_latest():
     """Return the newest local analysis payload so the UI can survive reloads."""
@@ -514,6 +579,7 @@ def local_history_latest():
         if payload:
             return jsonify({"ok": True, "data": payload})
     return jsonify({"ok": False, "error": "Chua co lich su phan tich"}), 404
+
 
 @app.route("/api/history/local/save", methods=["POST"])
 @rate_limit(max_requests=30)
@@ -531,6 +597,7 @@ def local_history_save():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
 @app.route("/api/history/local/<path:item_id>", methods=["GET"])
 def local_history_item(item_id):
     for item in load_local_history():
@@ -539,6 +606,7 @@ def local_history_item(item_id):
             if payload:
                 return jsonify({"ok": True, "data": payload})
     return jsonify({"ok": False, "error": "Khong tim thay muc lich su"}), 404
+
 
 @app.route("/api/ai/remediation", methods=["POST"])
 @rate_limit(max_requests=20)
@@ -553,27 +621,45 @@ def ai_remediation():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+@app.route("/api/ai/status", methods=["GET"])
+def ai_status():
+    return jsonify({"ok": True, "data": get_ai_status()})
+
+
 @app.route("/api/export", methods=["POST"])
 @rate_limit(max_requests=30)
 def export_report():
     body = _json_body()
-    fmt  = body.get("format", "json")  # "json" | "markdown"
+    fmt = body.get("format", "json")  # report formats plus SIEM formats
     data = body.get("data")
     if not data:
         return jsonify({"ok": False, "error": "Không có data"}), 400
-    if fmt not in {"json", "markdown"}:
+    if fmt not in {"json", "markdown", "html", "pdf", *SIEM_FORMATS}:
         return _error_response("Format export không được hỗ trợ")
     import datetime
+
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("reports", exist_ok=True)
     if fmt == "markdown":
         path = f"reports/IR_Report_{now}.md"
         _write_markdown(data, path)
+    elif fmt == "html":
+        path = f"reports/IR_Report_{now}.html"
+        _write_html(data, path)
+    elif fmt == "pdf":
+        path = f"reports/IR_Report_{now}.pdf"
+        export_payload_pdf(data, path)
+    elif fmt in SIEM_FORMATS:
+        extension = SIEM_EXTENSIONS[fmt]
+        path = f"reports/SIEM_{fmt}_{now}.{extension}"
+        _write_siem(data, fmt, path)
     else:
         path = f"reports/IR_Report_{now}.json"
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2)
     return jsonify({"ok": True, "path": path})
+
 
 def _ensure_malware_analysis(data: dict) -> dict:
     existing = data.get("malware_analysis")
@@ -587,66 +673,96 @@ def _ensure_malware_analysis(data: dict) -> dict:
     mitre = threat.get("mitre", []) or []
     technique_ids = {str(item.get("id", "")).upper() for item in mitre if item.get("id")}
 
-    proc_names = ", ".join(
-        item.get("name", "")
-        for item in (processes.get("list", []) or [])[:5]
-        if item.get("name")
-    )
+    proc_names = ", ".join(item.get("name", "") for item in (processes.get("list", []) or [])[:5] if item.get("name"))
     behavior = []
     if any(t.startswith("T1566") for t in technique_ids):
-        behavior.append("Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu.")
+        behavior.append(
+            "Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu."
+        )
     if any(t.startswith(("T1059", "T1204")) for t in technique_ids):
-        behavior.append(f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {proc_names or 'chưa đủ dữ liệu process'}.")
+        behavior.append(
+            f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {proc_names or 'chưa đủ dữ liệu process'}."
+        )
     injected = processes.get("injected", []) or []
     if injected or any(t.startswith("T1055") for t in technique_ids):
-        behavior.append(f"Mã độc có dấu hiệu process injection vào {', '.join(injected[:5]) or 'process hợp lệ của Windows'}, giúp che giấu hành vi dưới tiến trình tin cậy.")
+        behavior.append(
+            f"Mã độc có dấu hiệu process injection vào {', '.join(injected[:5]) or 'process hợp lệ của Windows'}, giúp che giấu hành vi dưới tiến trình tin cậy."
+        )
     if any(t.startswith("T1547") for t in technique_ids) or processes.get("registry"):
-        behavior.append(f"Cơ chế duy trì hiện diện được thể hiện qua {len(processes.get('registry', []) or [])} registry key/autostart artifact.")
+        behavior.append(
+            f"Cơ chế duy trì hiện diện được thể hiện qua {len(processes.get('registry', []) or [])} registry key/autostart artifact."
+        )
     if network.get("ips") or network.get("domains") or network.get("urls"):
-        behavior.append(f"Mẫu có hoạt động C2/tải payload qua mạng: {len(network.get('ips', []) or [])} IP, {len(network.get('domains', []) or [])} domain và {len(network.get('urls', []) or [])} URL được ghi nhận.")
+        behavior.append(
+            f"Mẫu có hoạt động C2/tải payload qua mạng: {len(network.get('ips', []) or [])} IP, {len(network.get('domains', []) or [])} domain và {len(network.get('urls', []) or [])} URL được ghi nhận."
+        )
     if any(t.startswith("T1486") for t in technique_ids):
-        behavior.append("Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi.")
+        behavior.append(
+            "Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi."
+        )
     if not behavior:
-        behavior.append("Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được.")
+        behavior.append(
+            "Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được."
+        )
 
     spread = []
     filename = file_info.get("name", "")
     if any(t.startswith("T1566") for t in technique_ids):
         spread.append("Vector lây nhiễm ban đầu nhiều khả năng là email phishing có đính kèm hoặc liên kết độc hại.")
     if filename and any(ext in filename.lower() for ext in (".doc", ".docm", ".xls", ".xlsm", ".rtf")):
-        spread.append(f"File đầu vào `{filename}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp.")
+        spread.append(
+            f"File đầu vào `{filename}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp."
+        )
     if any(t.startswith(("T1210", "T1021", "T1133")) for t in technique_ids):
-        spread.append("Có dấu hiệu lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ.")
+        spread.append(
+            "Có dấu hiệu lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ."
+        )
     joined_net = " ".join((network.get("urls", []) or []) + (network.get("domains", []) or [])).lower()
     if any(ind in joined_net for ind in ("payload", "download", "update", "cdn")):
-        spread.append("Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài.")
+        spread.append(
+            "Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài."
+        )
     if not spread:
-        spread.append("Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật.")
+        spread.append(
+            "Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật."
+        )
 
     rows = []
     if file_info:
-        rows.append({
-            "role": "Mẫu đầu vào",
-            "name": file_info.get("name", ""),
-            "sha256": file_info.get("sha256", ""),
-            "type": file_info.get("type", ""),
-        })
+        rows.append(
+            {
+                "role": "Mẫu đầu vào",
+                "name": file_info.get("name", ""),
+                "sha256": file_info.get("sha256", ""),
+                "type": file_info.get("type", ""),
+            }
+        )
     for item in processes.get("dropped", []) or []:
-        rows.append({
-            "role": "File được drop/tạo mới",
-            "name": item.get("name", ""),
-            "sha256": item.get("sha256", ""),
-            "type": item.get("type", ""),
-        })
+        rows.append(
+            {
+                "role": "File được drop/tạo mới",
+                "name": item.get("name", ""),
+                "sha256": item.get("sha256", ""),
+                "type": item.get("type", ""),
+            }
+        )
 
     origin = []
     if file_info:
-        origin.append(f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file_info.get('name', '')}` ({file_info.get('type', '') or 'chưa rõ loại file'}), SHA256 `{file_info.get('sha256', '') or 'N/A'}`.")
+        origin.append(
+            f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file_info.get('name', '')}` ({file_info.get('type', '') or 'chưa rõ loại file'}), SHA256 `{file_info.get('sha256', '') or 'N/A'}`."
+        )
     if network.get("urls"):
-        origin.append(f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in network.get('urls', [])[:3])}.")
+        origin.append(
+            f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in network.get('urls', [])[:3])}."
+        )
     if network.get("domains"):
-        origin.append(f"Domain liên quan: {', '.join(f'`{d}`' for d in network.get('domains', [])[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.")
-    origin.append("Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập.")
+        origin.append(
+            f"Domain liên quan: {', '.join(f'`{d}`' for d in network.get('domains', [])[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành."
+        )
+    origin.append(
+        "Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập."
+    )
 
     return {
         "behavior": behavior,
@@ -655,8 +771,10 @@ def _ensure_malware_analysis(data: dict) -> dict:
         "origin": origin,
     }
 
+
 def _write_markdown(data: dict, path: str):
     import datetime
+
     t = data.get("threat", {})
     f = data.get("file") or {}
     p = data.get("playbook", {})
@@ -670,16 +788,15 @@ def _write_markdown(data: dict, path: str):
         f"",
         f"## Tổng quan",
         f"",
-        f"| | |","|---|---|",
+        f"| | |",
+        "|---|---|",
         f"| Tên mã độc | {p.get('malware_name','')} |",
         f"| Verdict | {t.get('verdict','')} |",
         f"| Threat Level | {t.get('threat_level','')}/4 |",
         f"| OS | {data.get('os_env','')} |",
     ]
     if f:
-        lines += ["","## File","",
-            f"| MD5 | `{f.get('md5','')}` |",
-            f"| SHA256 | `{f.get('sha256','')}` |"]
+        lines += ["", "## File", "", f"| MD5 | `{f.get('md5','')}` |", f"| SHA256 | `{f.get('sha256','')}` |"]
     lines += [
         "",
         "## Phân tích chi tiết mã độc",
@@ -703,20 +820,40 @@ def _write_markdown(data: dict, path: str):
         *[f"- {item}" for item in ma.get("origin", [])],
         "",
     ]
-    lines += ["","## MITRE ATT&CK","",
-        "| ID | Technique | Tactic |","|---|---|---|",
-        *[f"| {m['id']} | {m['name']} | {m['tactic']} |"
-          for m in t.get("mitre",[])],
-        "","## IR Playbook",""]
-    for a in p.get("actions",[]):
-        lines += [f"### {a['title']}","",a['description'],""]
+    lines += [
+        "",
+        "## MITRE ATT&CK",
+        "",
+        "| ID | Technique | Tactic |",
+        "|---|---|---|",
+        *[f"| {m['id']} | {m['name']} | {m['tactic']} |" for m in t.get("mitre", [])],
+        "",
+        "## IR Playbook",
+        "",
+    ]
+    for a in p.get("actions", []):
+        lines += [f"### {a['title']}", "", a["description"], ""]
         if a.get("commands"):
-            lines += ["```powershell", *a["commands"], "```",""]
-    lines += ["","## IOC Blocklist","",
-        "**IPs:** " + ", ".join(p.get("ioc_blocklist",{}).get("ip_addresses",[])[:20]),
-        "","**Domains:** " + ", ".join(p.get("ioc_blocklist",{}).get("domains",[])[:20])]
+            lines += ["```powershell", *a["commands"], "```", ""]
+    lines += [
+        "",
+        "## IOC Blocklist",
+        "",
+        "**IPs:** " + ", ".join(p.get("ioc_blocklist", {}).get("ip_addresses", [])[:20]),
+        "",
+        "**Domains:** " + ", ".join(p.get("ioc_blocklist", {}).get("domains", [])[:20]),
+    ]
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
+
+
+def _write_html(data: dict, path: str):
+    Path(path).write_text(build_html_report(data), encoding="utf-8")
+
+
+def _write_siem(data: dict, fmt: str, path: str):
+    Path(path).write_text(build_siem_export(data, fmt), encoding="utf-8")
+
 
 if __name__ == "__main__":
     print("=== AnyRun IR Tool Web GUI ===")

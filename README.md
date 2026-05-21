@@ -596,11 +596,83 @@ Trong `.env`:
 
 ```env
 AI_PROVIDER=ollama
+AI_TEMPERATURE=0.25
+AI_MAX_TOKENS=1100
+AI_TIMEOUT=45
+AI_RETRIES=2
+AI_CONTEXT_LIMIT=12000
 OLLAMA_ENABLED=1
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.1:8b
 OLLAMA_TIMEOUT=120
-OLLAMA_NUM_PREDICT=500
+OLLAMA_NUM_PREDICT=700
 ```
 
+Neu muon dung OpenAI hoac endpoint OpenAI-compatible:
+
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Backend co endpoint `GET /api/ai/status` de kiem tra provider, model, context limit va retry config ma khong lo lo API key. Khi LLM that loi hoac timeout, app tu fallback ve Local assistant de demo khong bi dung dot ngot.
+
 Sau khi doi `.env`, restart Flask server de app nhan cau hinh moi.
+
+---
+
+## Checklist phat trien prototype do an
+
+Trang thai uu tien hien tai: tap trung lam luong demo chay tot, co dau ra ro rang de trinh bay.
+
+### Luong demo nen dung khi bao cao
+
+1. Chay server:
+
+```powershell
+python app.py
+```
+
+2. Mo Web GUI tai `http://127.0.0.1:5000`.
+3. Bam **Demo Emotet**, **Demo WannaCry** hoac **Demo RedLine** neu khong muon ton quota Any.Run.
+4. Kiem tra cac trang:
+   - **Tong quan**: threat level, MITRE, file, network, process.
+   - **IR Playbook**: cac buoc phan ung su co theo NIST.
+   - **IOC Blocklist**: IOC va lenh chan nhanh.
+5. Xuat bao cao:
+   - `Markdown`, `HTML`, `PDF`, `JSON` cho bao cao.
+   - `IOC CSV`, `Splunk SPL`, `Elastic KQL`, `Sigma` cho SIEM/hunting.
+6. Mo thu muc `reports/` de lay file dau ra.
+
+### SIEM export prototype
+
+Tinh nang SIEM trong ban prototype khong ket noi truc tiep den Splunk/ELK. Thay vao do, tool sinh cac artifact co the copy/import vao he thong:
+
+| Dinh dang | File | Muc dich |
+|-----------|------|----------|
+| IOC CSV | `SIEM_csv_*.csv` | Feed IOC don gian cho Excel, SIEM, SOAR hoac script noi bo |
+| Splunk SPL | `SIEM_splunk_*.spl` | Cau lenh search/hunt tren Splunk |
+| Elastic KQL | `SIEM_elastic_*.kql` | Cau query cho Kibana/Elastic Security |
+| Sigma | `SIEM_sigma_*.yml` | Rule hunting experimental co the chuyen doi sang SIEM khac |
+
+Day la cach phu hop voi do an/prototype: de demo, de kiem thu, khong phu thuoc moi truong Splunk/ELK that.
+
+### Lenh kiem thu truoc khi nop/demo
+
+```powershell
+python -m black reporter.py app.py siem_exporter.py tests
+python -m flake8 validation.py anyrun_client.py app.py reporter.py siem_exporter.py tests
+python -m pytest
+```
+
+Neu tat ca test pass, prototype da du on de demo luong chinh.
+
+### Huong phat trien tiep theo
+
+- Luu lich su bang SQLite thay cho `reports/analysis_history.json`.
+- Them bo ngon ngu `vi/en` cho label giao dien va report.
+- Tao Dockerfile de chay nhanh tren may khac.
+- Ket noi that den Splunk/Elastic bang API sau khi da co moi truong SIEM.
+- Bo sung them report mau benign/suspicious de demo truong hop it du lieu.

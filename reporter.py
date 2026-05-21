@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import json
 import datetime
+import html
+import textwrap
 from pathlib import Path
 from typing import Optional, Any
 
@@ -30,17 +32,17 @@ console = Console()
 # ─────────────────────────────────────────────────────────────────────────────
 _SEVERITY_STYLE = {
     "CRITICAL": "bold red",
-    "HIGH":     "bold orange1",
-    "MEDIUM":   "bold yellow",
-    "LOW":      "bold green",
-    "UNKNOWN":  "dim",
+    "HIGH": "bold orange1",
+    "MEDIUM": "bold yellow",
+    "LOW": "bold green",
+    "UNKNOWN": "dim",
 }
 
 _PRIORITY_LABEL = {
     1: ("[P1-CRITICAL]", "red"),
-    2: ("[P2-HIGH]",     "orange1"),
-    3: ("[P3-MEDIUM]",   "yellow"),
-    4: ("[P4-LOW]",      "green"),
+    2: ("[P2-HIGH]", "orange1"),
+    3: ("[P3-MEDIUM]", "yellow"),
+    4: ("[P4-LOW]", "green"),
 }
 
 
@@ -48,15 +50,14 @@ _PRIORITY_LABEL = {
 # Terminal reporter
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TerminalReporter:
     """In kết quả đẹp ra terminal bằng Rich."""
 
     def print_analysis(self, result: MalwareAnalysisResult) -> None:
         threat = result.threat_info
-        style  = _SEVERITY_STYLE.get(
-            "CRITICAL" if threat.threat_level >= 2 else
-            ("MEDIUM"  if threat.threat_level == 1 else "LOW"),
-            "white"
+        style = _SEVERITY_STYLE.get(
+            "CRITICAL" if threat.threat_level >= 2 else ("MEDIUM" if threat.threat_level == 1 else "LOW"), "white"
         )
 
         console.print()
@@ -65,48 +66,54 @@ class TerminalReporter:
         # File info panel
         if result.file_info:
             f = result.file_info
-            console.print(Panel(
-                f"[bold]Tên file:[/bold] {escape(f.name)}\n"
-                f"[bold]Loại:[/bold] {f.file_type} | [bold]MIME:[/bold] {f.mime_type}\n"
-                f"[bold]Kích thước:[/bold] {f.size:,} bytes\n"
-                f"[bold]MD5:[/bold]    [dim]{f.md5}[/dim]\n"
-                f"[bold]SHA1:[/bold]   [dim]{f.sha1}[/dim]\n"
-                f"[bold]SHA256:[/bold] [dim]{f.sha256}[/dim]",
-                title="[bold blue]📄 Thông tin mẫu mã độc[/bold blue]",
-                border_style="blue",
-            ))
+            console.print(
+                Panel(
+                    f"[bold]Tên file:[/bold] {escape(f.name)}\n"
+                    f"[bold]Loại:[/bold] {f.file_type} | [bold]MIME:[/bold] {f.mime_type}\n"
+                    f"[bold]Kích thước:[/bold] {f.size:,} bytes\n"
+                    f"[bold]MD5:[/bold]    [dim]{f.md5}[/dim]\n"
+                    f"[bold]SHA1:[/bold]   [dim]{f.sha1}[/dim]\n"
+                    f"[bold]SHA256:[/bold] [dim]{f.sha256}[/dim]",
+                    title="[bold blue]📄 Thông tin mẫu mã độc[/bold blue]",
+                    border_style="blue",
+                )
+            )
 
         # Threat verdict
         verdict_text = Text()
         verdict_text.append("● Kết luận: ", style="bold")
         verdict_text.append(threat.verdict, style=style + " bold")
         verdict_text.append(f"  (Threat Level {threat.threat_level}/4)", style="dim")
-        console.print(Panel(
-            f"{verdict_text}\n"
-            f"[bold]Tên mã độc:[/bold] {escape(threat.threat_name or 'Chưa xác định')}\n"
-            f"[bold]Tags:[/bold] {', '.join(threat.tags) or 'N/A'}\n"
-            f"[bold]Môi trường:[/bold] {result.os_env}\n"
-            f"[bold]Any.Run URL:[/bold] [link={result.analysis_url}]{result.analysis_url}[/link]",
-            title="[bold red]⚠️  Mức độ đe dọa[/bold red]",
-            border_style="red" if threat.threat_level >= 2 else "yellow",
-        ))
+        console.print(
+            Panel(
+                f"{verdict_text}\n"
+                f"[bold]Tên mã độc:[/bold] {escape(threat.threat_name or 'Chưa xác định')}\n"
+                f"[bold]Tags:[/bold] {', '.join(threat.tags) or 'N/A'}\n"
+                f"[bold]Môi trường:[/bold] {result.os_env}\n"
+                f"[bold]Any.Run URL:[/bold] [link={result.analysis_url}]{result.analysis_url}[/link]",
+                title="[bold red]⚠️  Mức độ đe dọa[/bold red]",
+                border_style="red" if threat.threat_level >= 2 else "yellow",
+            )
+        )
 
         # MITRE table
         if threat.mitre_techniques:
-            table = Table(title="🎯 MITRE ATT&CK Techniques", box=box.ROUNDED,
-                          border_style="magenta", header_style="bold magenta")
-            table.add_column("ID",     style="cyan",  no_wrap=True)
+            table = Table(
+                title="🎯 MITRE ATT&CK Techniques", box=box.ROUNDED, border_style="magenta", header_style="bold magenta"
+            )
+            table.add_column("ID", style="cyan", no_wrap=True)
             table.add_column("Tên kỹ thuật", style="white")
             table.add_column("Tactic", style="yellow")
             for t in threat.mitre_techniques[:15]:
-                table.add_row(t.get("id",""), t.get("name",""), t.get("tactic",""))
+                table.add_row(t.get("id", ""), t.get("name", ""), t.get("tactic", ""))
             console.print(table)
 
         # Network IOC table
         net = result.network
         if net.ip_addresses or net.domains:
-            net_table = Table(title="🌐 Hoạt động mạng (C2)", box=box.SIMPLE_HEAD,
-                              border_style="red", header_style="bold red")
+            net_table = Table(
+                title="🌐 Hoạt động mạng (C2)", box=box.SIMPLE_HEAD, border_style="red", header_style="bold red"
+            )
             net_table.add_column("Loại", style="bold")
             net_table.add_column("Giá trị", style="red")
             for ip in net.ip_addresses[:10]:
@@ -120,30 +127,34 @@ class TerminalReporter:
         # Process info
         procs = result.processes
         if procs.injected_processes:
-            console.print(Panel(
-                "[bold]Tiến trình bị inject:[/bold] " +
-                ", ".join(escape(p) for p in procs.injected_processes) + "\n"
-                f"[bold]Files dropped:[/bold] {len(procs.dropped_files)}\n"
-                f"[bold]Registry keys:[/bold] {len(procs.registry_keys)}\n"
-                f"[bold]Mutexes:[/bold] {len(procs.mutexes)}",
-                title="[bold yellow]⚙️  Hoạt động hệ thống[/bold yellow]",
-                border_style="yellow",
-            ))
+            console.print(
+                Panel(
+                    "[bold]Tiến trình bị inject:[/bold] "
+                    + ", ".join(escape(p) for p in procs.injected_processes)
+                    + "\n"
+                    f"[bold]Files dropped:[/bold] {len(procs.dropped_files)}\n"
+                    f"[bold]Registry keys:[/bold] {len(procs.registry_keys)}\n"
+                    f"[bold]Mutexes:[/bold] {len(procs.mutexes)}",
+                    title="[bold yellow]⚙️  Hoạt động hệ thống[/bold yellow]",
+                    border_style="yellow",
+                )
+            )
 
     def print_playbook(self, playbook: IncidentResponsePlaybook) -> None:
         console.print()
-        console.print(Rule(
-            f"[bold green]╔ QUY TRÌNH PHẢN ỨNG SỰ CỐ - {playbook.malware_name} ╗[/bold green]",
-            style="green"
-        ))
+        console.print(
+            Rule(f"[bold green]╔ QUY TRÌNH PHẢN ỨNG SỰ CỐ - {playbook.malware_name} ╗[/bold green]", style="green")
+        )
 
         style = _SEVERITY_STYLE.get(playbook.severity, "white")
-        console.print(Panel(
-            f"[bold]Tóm tắt:[/bold] {playbook.summary}\n\n"
-            f"[bold]Biện pháp ưu tiên:[/bold] {playbook.mitigation_summary}",
-            title=f"[{style}]🚨 MỨC ĐỘ: {playbook.severity}[/{style}]",
-            border_style=style.replace("bold ", ""),
-        ))
+        console.print(
+            Panel(
+                f"[bold]Tóm tắt:[/bold] {playbook.summary}\n\n"
+                f"[bold]Biện pháp ưu tiên:[/bold] {playbook.mitigation_summary}",
+                title=f"[{style}]🚨 MỨC ĐỘ: {playbook.severity}[/{style}]",
+                border_style=style.replace("bold ", ""),
+            )
+        )
 
         # Group actions by phase
         phase_map: dict = {}
@@ -155,9 +166,7 @@ class TerminalReporter:
             console.print(f"[bold cyan]📌 {phase}[/bold cyan]")
             for action in acts:
                 lbl, color = _PRIORITY_LABEL.get(action.priority, ("", "white"))
-                console.print(
-                    f"\n  [{color}]{lbl}[/{color}] [bold]{escape(action.title)}[/bold]"
-                )
+                console.print(f"\n  [{color}]{lbl}[/{color}] [bold]{escape(action.title)}[/bold]")
                 console.print(f"  [dim]{action.category}[/dim]")
                 console.print(f"  {escape(action.description)}")
                 if action.commands:
@@ -174,21 +183,22 @@ class TerminalReporter:
 
         # IOC summary table
         console.print()
-        ioc_table = Table(title="📋 IOC Blocklist Tổng hợp", box=box.ROUNDED,
-                          border_style="cyan", header_style="bold cyan")
+        ioc_table = Table(
+            title="📋 IOC Blocklist Tổng hợp", box=box.ROUNDED, border_style="cyan", header_style="bold cyan"
+        )
         ioc_table.add_column("Loại IOC", style="bold")
         ioc_table.add_column("Số lượng", justify="center")
-        ioc_table.add_column("Mẫu",      style="dim")
+        ioc_table.add_column("Mẫu", style="dim")
         bl = playbook.ioc_blocklist
-        ioc_table.add_row("IP Addresses",  str(len(bl.get("ip_addresses",[]))),
-                          ", ".join(bl.get("ip_addresses",[])[:3]))
-        ioc_table.add_row("Domains",       str(len(bl.get("domains",[]))),
-                          ", ".join(bl.get("domains",[])[:2]))
-        ioc_table.add_row("URLs",          str(len(bl.get("urls",[]))),
-                          (bl.get("urls",[""])[0][:50] if bl.get("urls") else ""))
-        ioc_table.add_row("File Hashes",   str(len(bl.get("file_hashes",[]))), "")
-        ioc_table.add_row("Filenames",     str(len(bl.get("filenames",[]))),
-                          ", ".join(bl.get("filenames",[])[:3]))
+        ioc_table.add_row(
+            "IP Addresses", str(len(bl.get("ip_addresses", []))), ", ".join(bl.get("ip_addresses", [])[:3])
+        )
+        ioc_table.add_row("Domains", str(len(bl.get("domains", []))), ", ".join(bl.get("domains", [])[:2]))
+        ioc_table.add_row(
+            "URLs", str(len(bl.get("urls", []))), (bl.get("urls", [""])[0][:50] if bl.get("urls") else "")
+        )
+        ioc_table.add_row("File Hashes", str(len(bl.get("file_hashes", []))), "")
+        ioc_table.add_row("Filenames", str(len(bl.get("filenames", []))), ", ".join(bl.get("filenames", [])[:3]))
         console.print(ioc_table)
         console.print()
 
@@ -196,6 +206,7 @@ class TerminalReporter:
 # ─────────────────────────────────────────────────────────────────────────────
 # File exporters
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _uniq(values: list[Any]) -> list[Any]:
     seen = set()
@@ -209,11 +220,7 @@ def _uniq(values: list[Any]) -> list[Any]:
 
 
 def _technique_ids(result: MalwareAnalysisResult) -> set[str]:
-    return {
-        str(t.get("id", "")).upper()
-        for t in result.threat_info.mitre_techniques
-        if t.get("id")
-    }
+    return {str(t.get("id", "")).upper() for t in result.threat_info.mitre_techniques if t.get("id")}
 
 
 def _technique_names(result: MalwareAnalysisResult, tactic: str = "") -> list[str]:
@@ -234,27 +241,45 @@ def _build_behavior_narrative(result: MalwareAnalysisResult) -> list[str]:
     parts = []
 
     if any(t.startswith("T1566") for t in ids):
-        parts.append("Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu.")
+        parts.append(
+            "Dấu hiệu truy cập ban đầu là phishing/attachment theo MITRE T1566; cần đối chiếu email gateway để tìm thư đã phát tán mẫu."
+        )
     if any(t.startswith(("T1059", "T1204")) for t in ids):
         names = ", ".join(p.get("name", "") for p in procs.processes[:5] if p.get("name"))
-        parts.append(f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {names or 'chưa đủ dữ liệu process'}.")
+        parts.append(
+            f"Sau khi được kích hoạt, mẫu thực thi lệnh hoặc script trên Windows; process liên quan quan sát được: {names or 'chưa đủ dữ liệu process'}."
+        )
     if procs.injected_processes or any(t.startswith("T1055") for t in ids):
         targets = ", ".join(procs.injected_processes[:5]) or "process hợp lệ của Windows"
-        parts.append(f"Mã độc có dấu hiệu né tránh/phòng thủ bằng process injection vào {targets}, giúp che giấu hành vi dưới tiến trình tin cậy.")
+        parts.append(
+            f"Mã độc có dấu hiệu né tránh/phòng thủ bằng process injection vào {targets}, giúp che giấu hành vi dưới tiến trình tin cậy."
+        )
     if any(t.startswith("T1547") for t in ids) or procs.registry_keys:
-        parts.append(f"Cơ chế duy trì hiện diện được thể hiện qua {len(procs.registry_keys)} registry key/autostart artifact; cần kiểm tra Run/RunOnce/Startup/Scheduled Task.")
+        parts.append(
+            f"Cơ chế duy trì hiện diện được thể hiện qua {len(procs.registry_keys)} registry key/autostart artifact; cần kiểm tra Run/RunOnce/Startup/Scheduled Task."
+        )
     discovery = _technique_names(result, "Discovery")
     if discovery:
-        parts.append(f"Mẫu thực hiện trinh sát hệ thống ({'; '.join(discovery[:4])}) để thu thập thông tin máy, process, thư mục hoặc cấu hình mạng.")
+        parts.append(
+            f"Mẫu thực hiện trinh sát hệ thống ({'; '.join(discovery[:4])}) để thu thập thông tin máy, process, thư mục hoặc cấu hình mạng."
+        )
     if net.ip_addresses or net.domains or net.urls:
-        parts.append(f"Mẫu có hoạt động C2/tải payload qua mạng: {len(net.ip_addresses)} IP, {len(net.domains)} domain và {len(net.urls)} URL được ghi nhận.")
+        parts.append(
+            f"Mẫu có hoạt động C2/tải payload qua mạng: {len(net.ip_addresses)} IP, {len(net.domains)} domain và {len(net.urls)} URL được ghi nhận."
+        )
     if any(t.startswith(("T1041", "T1056", "T1555")) for t in ids):
-        parts.append("Có chỉ dấu đánh cắp hoặc gửi dữ liệu ra ngoài; cần kiểm tra proxy/DNS/EDR để xác nhận dữ liệu nào đã rời khỏi máy.")
+        parts.append(
+            "Có chỉ dấu đánh cắp hoặc gửi dữ liệu ra ngoài; cần kiểm tra proxy/DNS/EDR để xác nhận dữ liệu nào đã rời khỏi máy."
+        )
     if any(t.startswith("T1486") for t in ids):
-        parts.append("Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi.")
+        parts.append(
+            "Có hành vi ransomware/mã hóa dữ liệu; ưu tiên cô lập máy và bảo vệ backup offline trước khi phục hồi."
+        )
 
     if not parts:
-        parts.append("Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được.")
+        parts.append(
+            "Báo cáo Any.Run chưa đủ tín hiệu để dựng toàn bộ chuỗi hành vi; phần dưới liệt kê các IOC và artifact đã quan sát được."
+        )
     return parts
 
 
@@ -267,15 +292,25 @@ def _build_spread_analysis(result: MalwareAnalysisResult) -> list[str]:
     if any(t.startswith("T1566") for t in ids):
         out.append("Vector lây nhiễm ban đầu nhiều khả năng là email phishing có đính kèm hoặc liên kết độc hại.")
     if file and any(ext in file.name.lower() for ext in (".doc", ".docm", ".xls", ".xlsm", ".rtf")):
-        out.append(f"File đầu vào `{file.name}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp.")
+        out.append(
+            f"File đầu vào `{file.name}` là tài liệu Office/RTF, phù hợp kịch bản người dùng mở file rồi macro/script tải payload kế tiếp."
+        )
     if any(t.startswith(("T1210", "T1021", "T1133")) for t in ids):
-        out.append("Có dấu hiệu kỹ thuật lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ.")
+        out.append(
+            "Có dấu hiệu kỹ thuật lateral movement/remote service; cần săn tìm host khác có cùng IOC trong log nội bộ."
+        )
     if any(ind in " ".join(net.urls + net.domains).lower() for ind in ("payload", "download", "update", "cdn")):
-        out.append("Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài.")
+        out.append(
+            "Các URL/domain có mẫu tên như payload/update/cdn cho thấy malware có thể tải stage tiếp theo từ hạ tầng ngoài."
+        )
     if any(t.startswith("T1486") for t in ids):
-        out.append("Với ransomware, nguy cơ lan truyền trong mạng nội bộ cao hơn nếu máy có SMB/share/credential dùng chung.")
+        out.append(
+            "Với ransomware, nguy cơ lan truyền trong mạng nội bộ cao hơn nếu máy có SMB/share/credential dùng chung."
+        )
     if not out:
-        out.append("Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật.")
+        out.append(
+            "Chưa thấy bằng chứng tự lây lan rõ ràng trong dữ liệu sandbox; cần kiểm tra email, proxy, SMB, VPN và EDR để xác định phạm vi thật."
+        )
     return out
 
 
@@ -285,42 +320,58 @@ def _build_origin_analysis(result: MalwareAnalysisResult) -> list[str]:
     out = []
 
     if file:
-        out.append(f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file.name}` ({file.file_type or 'chưa rõ loại file'}), SHA256 `{file.sha256 or 'N/A'}`.")
+        out.append(
+            f"Nguồn quan sát trực tiếp là mẫu được gửi vào sandbox: `{file.name}` ({file.file_type or 'chưa rõ loại file'}), SHA256 `{file.sha256 or 'N/A'}`."
+        )
     if net.urls:
-        out.append(f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in net.urls[:3])}. Đây là nơi mẫu liên lạc hoặc tải nội dung trong phiên phân tích.")
+        out.append(
+            f"Hạ tầng liên quan gồm các URL đầu tiên: {', '.join(f'`{u}`' for u in net.urls[:3])}. Đây là nơi mẫu liên lạc hoặc tải nội dung trong phiên phân tích."
+        )
     if net.domains:
-        out.append(f"Domain liên quan: {', '.join(f'`{d}`' for d in net.domains[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành.")
+        out.append(
+            f"Domain liên quan: {', '.join(f'`{d}`' for d in net.domains[:5])}. Cần tra WHOIS/passive DNS/threat intel để xác định chủ thể vận hành."
+        )
     if not out:
-        out.append("Báo cáo hiện chưa có thông tin nguồn gốc ngoài mẫu phân tích; chưa thể kết luận quốc gia, nhóm tấn công hoặc chiến dịch nếu không có threat intelligence bổ sung.")
+        out.append(
+            "Báo cáo hiện chưa có thông tin nguồn gốc ngoài mẫu phân tích; chưa thể kết luận quốc gia, nhóm tấn công hoặc chiến dịch nếu không có threat intelligence bổ sung."
+        )
     else:
-        out.append("Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập.")
+        out.append(
+            "Lưu ý: sandbox chỉ chứng minh nguồn/hạ tầng quan sát được trong phiên chạy, không đủ để quy kết quốc gia hoặc nhóm APT nếu thiếu threat intelligence độc lập."
+        )
     return out
 
 
 def _build_affected_files(result: MalwareAnalysisResult) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     if result.file_info:
-        rows.append({
-            "role": "Mẫu đầu vào",
-            "name": result.file_info.name,
-            "sha256": result.file_info.sha256,
-            "type": result.file_info.file_type,
-        })
+        rows.append(
+            {
+                "role": "Mẫu đầu vào",
+                "name": result.file_info.name,
+                "sha256": result.file_info.sha256,
+                "type": result.file_info.file_type,
+            }
+        )
     for item in result.processes.dropped_files:
-        rows.append({
-            "role": "File được drop/tạo mới",
-            "name": item.get("name", ""),
-            "sha256": item.get("sha256", ""),
-            "type": item.get("type", ""),
-        })
+        rows.append(
+            {
+                "role": "File được drop/tạo mới",
+                "name": item.get("name", ""),
+                "sha256": item.get("sha256", ""),
+                "type": item.get("type", ""),
+            }
+        )
     for filename in result.iocs.filenames:
         if filename and not any(r["name"] == filename for r in rows):
-            rows.append({
-                "role": "Tên file IOC",
-                "name": filename,
-                "sha256": "",
-                "type": "",
-            })
+            rows.append(
+                {
+                    "role": "Tên file IOC",
+                    "name": filename,
+                    "sha256": "",
+                    "type": "",
+                }
+            )
     return _uniq(rows)
 
 
@@ -331,6 +382,380 @@ def build_malware_analysis(result: MalwareAnalysisResult) -> dict[str, Any]:
         "affected_files": _build_affected_files(result),
         "origin": _build_origin_analysis(result),
     }
+
+
+def _report_payload(
+    result: MalwareAnalysisResult,
+    playbook: IncidentResponsePlaybook,
+) -> dict[str, Any]:
+    return {
+        "generated_at": datetime.datetime.now().isoformat(),
+        "task_uuid": result.task_uuid,
+        "analysis_url": result.analysis_url,
+        "os_env": result.os_env,
+        "duration": result.duration_seconds,
+        "file": (
+            {
+                "name": result.file_info.name,
+                "size": result.file_info.size,
+                "type": result.file_info.file_type,
+                "md5": result.file_info.md5,
+                "sha1": result.file_info.sha1,
+                "sha256": result.file_info.sha256,
+            }
+            if result.file_info
+            else None
+        ),
+        "threat": {
+            "verdict": result.threat_info.verdict,
+            "threat_level": result.threat_info.threat_level,
+            "threat_name": result.threat_info.threat_name,
+            "tags": result.threat_info.tags,
+            "mitre": result.threat_info.mitre_techniques,
+        },
+        "network": {
+            "ips": result.network.ip_addresses,
+            "domains": result.network.domains,
+            "urls": result.network.urls,
+            "http": result.network.http_requests,
+            "dns": result.network.dns_queries,
+        },
+        "processes": {
+            "list": result.processes.processes,
+            "injected": result.processes.injected_processes,
+            "dropped": result.processes.dropped_files,
+            "registry": result.processes.registry_keys,
+            "mutexes": result.processes.mutexes,
+        },
+        "malware_analysis": build_malware_analysis(result),
+        "playbook": {
+            "malware_name": playbook.malware_name,
+            "severity": playbook.severity,
+            "threat_level": playbook.threat_level,
+            "summary": playbook.summary,
+            "mitigation": playbook.mitigation_summary,
+            "actions": [
+                {
+                    "priority": a.priority,
+                    "phase": a.phase,
+                    "category": a.category,
+                    "title": a.title,
+                    "description": a.description,
+                    "commands": a.commands,
+                    "notes": a.notes,
+                }
+                for a in playbook.actions
+            ],
+            "ioc_blocklist": playbook.ioc_blocklist,
+        },
+    }
+
+
+def _html(value: Any) -> str:
+    return html.escape(str(value or ""), quote=True)
+
+
+def _html_list(items: list[Any], empty: str = "Không có dữ liệu") -> str:
+    if not items:
+        return f'<p class="muted">{_html(empty)}</p>'
+    return "<ul>" + "".join(f"<li>{_html(item)}</li>" for item in items) + "</ul>"
+
+
+def _html_tags(items: list[Any], css_class: str = "") -> str:
+    if not items:
+        return '<span class="muted">Không có</span>'
+    return "".join(f'<span class="tag {css_class}">{_html(item)}</span>' for item in items)
+
+
+def build_html_report(data: dict[str, Any]) -> str:
+    """Build a self-contained HTML incident response report from an app payload."""
+    threat = data.get("threat", {}) or {}
+    playbook = data.get("playbook", {}) or {}
+    file_info = data.get("file") or {}
+    malware_analysis = data.get("malware_analysis", {}) or {}
+    blocklist = playbook.get("ioc_blocklist", {}) or {}
+    actions = playbook.get("actions", []) or []
+    severity = str(playbook.get("severity", "UNKNOWN")).upper()
+    severity_class = severity.lower() if severity.lower() in {"critical", "high", "medium", "low"} else "unknown"
+
+    mitre_rows = "".join(
+        "<tr>"
+        f"<td>{_html(item.get('id'))}</td>"
+        f"<td>{_html(item.get('name'))}</td>"
+        f"<td>{_html(item.get('tactic'))}</td>"
+        "</tr>"
+        for item in threat.get("mitre", []) or []
+    )
+    affected_rows = "".join(
+        "<tr>"
+        f"<td>{_html(item.get('role'))}</td>"
+        f"<td>{_html(item.get('name'))}</td>"
+        f"<td class=\"mono\">{_html(item.get('sha256') or 'N/A')}</td>"
+        f"<td>{_html(item.get('type') or 'N/A')}</td>"
+        "</tr>"
+        for item in malware_analysis.get("affected_files", []) or []
+    )
+    action_html = "".join(
+        '<section class="action">'
+        f"<div class=\"priority\">P{_html(action.get('priority'))}</div>"
+        f"<h3>{_html(action.get('title'))}</h3>"
+        f"<p class=\"muted\">{_html(action.get('phase'))} · {_html(action.get('category'))}</p>"
+        f"<p>{_html(action.get('description'))}</p>"
+        + (
+            "<pre>" + "\n".join(_html(command) for command in action.get("commands", []) or []) + "</pre>"
+            if action.get("commands")
+            else ""
+        )
+        + _html_list(action.get("notes", []) or [], empty="")
+        + "</section>"
+        for action in actions
+    )
+
+    return f"""<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IR Report - {_html(playbook.get("malware_name", "Malware"))}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; color: #18212f; margin: 0; background: #f5f7fb; }}
+    main {{ max-width: 1080px; margin: 0 auto; padding: 32px 24px 56px; }}
+    header {{ background: #111827; color: white; padding: 28px; border-radius: 10px; margin-bottom: 22px; }}
+    h1 {{ margin: 0 0 10px; font-size: 28px; }}
+    h2 {{ margin-top: 28px; border-bottom: 2px solid #d8dee9; padding-bottom: 8px; }}
+    h3 {{ margin: 0 0 6px; }}
+    .summary {{ font-size: 15px; line-height: 1.65; }}
+    .badge {{ display: inline-block; padding: 6px 12px; border-radius: 999px; font-weight: 700; }}
+    .critical {{ background: #fee2e2; color: #b91c1c; }}
+    .high {{ background: #ffedd5; color: #c2410c; }}
+    .medium {{ background: #fef3c7; color: #b45309; }}
+    .low {{ background: #dcfce7; color: #15803d; }}
+    .unknown {{ background: #e5e7eb; color: #374151; }}
+    .grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }}
+    .card {{ background: white; border: 1px solid #d8dee9; border-radius: 8px; padding: 16px; margin: 12px 0; }}
+    .metric {{ color: #64748b; font-size: 12px; text-transform: uppercase; }}
+    .metric strong {{ display: block; color: #0f172a; font-size: 22px; margin-top: 4px; }}
+    .muted {{ color: #64748b; }}
+    .mono, pre {{ font-family: Consolas, monospace; }}
+    table {{ border-collapse: collapse; width: 100%; background: white; }}
+    th, td {{ border: 1px solid #d8dee9; padding: 9px 10px; text-align: left; vertical-align: top; }}
+    th {{ background: #eef2f7; }}
+    .tag {{ display: inline-block; background: #e0f2fe; color: #075985; padding: 4px 8px; border-radius: 5px; margin: 3px; font-family: Consolas, monospace; font-size: 12px; }}
+    .tag.domain {{ background: #ffedd5; color: #9a3412; }}
+    .tag.hash {{ background: #ede9fe; color: #5b21b6; }}
+    .action {{ background: white; border-left: 5px solid #2563eb; border-radius: 8px; padding: 14px 16px; margin: 12px 0; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); }}
+    .priority {{ float: right; font-weight: 700; color: #2563eb; }}
+    pre {{ white-space: pre-wrap; background: #0f172a; color: #bbf7d0; padding: 12px; border-radius: 6px; overflow-x: auto; }}
+    @media print {{ body {{ background: white; }} main {{ padding: 0; }} header, .card, .action {{ break-inside: avoid; }} }}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="badge {severity_class}">{_html(severity)}</span>
+    <h1>Báo Cáo Phản Ứng Sự Cố - {_html(playbook.get("malware_name", "Unknown"))}</h1>
+    <p class="summary">{_html(playbook.get("summary", ""))}</p>
+    <p class="muted">Task: {_html(data.get("task_uuid"))} · OS: {_html(data.get("os_env"))} · Duration: {_html(data.get("duration"))}s</p>
+  </header>
+
+  <section class="grid">
+    <div class="card"><div class="metric">Threat Level<strong>{_html(threat.get("threat_level"))}/4</strong></div></div>
+    <div class="card"><div class="metric">MITRE Techniques<strong>{len(threat.get("mitre", []) or [])}</strong></div></div>
+    <div class="card"><div class="metric">IOC Count<strong>{len(blocklist.get("ip_addresses", []) or []) + len(blocklist.get("domains", []) or []) + len(blocklist.get("file_hashes", []) or [])}</strong></div></div>
+  </section>
+
+  <h2>1. Tổng Quan</h2>
+  <div class="card">
+    <p><strong>Verdict:</strong> {_html(threat.get("verdict"))}</p>
+    <p><strong>Threat name:</strong> {_html(threat.get("threat_name") or playbook.get("malware_name"))}</p>
+    <p><strong>Tags:</strong> {_html(", ".join(threat.get("tags", []) or []))}</p>
+    <p><strong>Any.Run:</strong> <a href="{_html(data.get("analysis_url"))}">{_html(data.get("analysis_url"))}</a></p>
+  </div>
+
+  <h2>2. File & Hành Vi</h2>
+  <div class="card">
+    <p><strong>File:</strong> {_html(file_info.get("name", "N/A"))}</p>
+    <p><strong>Type:</strong> {_html(file_info.get("type", "N/A"))}</p>
+    <p><strong>SHA256:</strong> <span class="mono">{_html(file_info.get("sha256", "N/A"))}</span></p>
+  </div>
+  <div class="card">
+    <h3>Cách mã độc hoạt động</h3>
+    {_html_list(malware_analysis.get("behavior", []) or [])}
+    <h3>Cách lây lan / vector xâm nhập</h3>
+    {_html_list(malware_analysis.get("spread", []) or [])}
+  </div>
+
+  <h2>3. MITRE ATT&CK</h2>
+  <table><thead><tr><th>ID</th><th>Technique</th><th>Tactic</th></tr></thead><tbody>{mitre_rows}</tbody></table>
+
+  <h2>4. IOC Blocklist</h2>
+  <div class="card">
+    <h3>IP Addresses</h3>{_html_tags(blocklist.get("ip_addresses", []) or [])}
+    <h3>Domains</h3>{_html_tags(blocklist.get("domains", []) or [], "domain")}
+    <h3>File Hashes</h3>{_html_tags(blocklist.get("file_hashes", []) or [], "hash")}
+  </div>
+
+  <h2>5. Affected Files</h2>
+  <table><thead><tr><th>Vai trò</th><th>File</th><th>SHA256</th><th>Loại</th></tr></thead><tbody>{affected_rows}</tbody></table>
+
+  <h2>6. IR Playbook</h2>
+  <div class="card"><strong>Biện pháp ưu tiên:</strong> {_html(playbook.get("mitigation", ""))}</div>
+  {action_html}
+</main>
+</body>
+</html>
+"""
+
+
+def _pdf_literal(text: Any) -> str:
+    value = str(text or "").replace("\r", " ").replace("\n", " ")
+    value = value.encode("latin-1", errors="replace").decode("latin-1")
+    value = value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    return f"({value})"
+
+
+def _simple_pdf_lines(data: dict[str, Any]) -> list[str]:
+    threat = data.get("threat", {}) or {}
+    playbook = data.get("playbook", {}) or {}
+    blocklist = playbook.get("ioc_blocklist", {}) or {}
+    lines = [
+        f"Incident Response Report - {playbook.get('malware_name', 'Unknown')}",
+        f"Severity: {playbook.get('severity', 'UNKNOWN')} | Threat Level: {threat.get('threat_level', 'N/A')}/4",
+        f"Task UUID: {data.get('task_uuid', '')}",
+        f"Any.Run: {data.get('analysis_url', '')}",
+        f"OS: {data.get('os_env', '')}",
+        "",
+        "Summary:",
+        playbook.get("summary", ""),
+        "",
+        "IOC Blocklist:",
+        "IPs: " + ", ".join(blocklist.get("ip_addresses", [])[:20]),
+        "Domains: " + ", ".join(blocklist.get("domains", [])[:20]),
+        "Hashes: " + ", ".join(blocklist.get("file_hashes", [])[:10]),
+        "",
+        "Priority Actions:",
+    ]
+    for action in (playbook.get("actions", []) or [])[:12]:
+        lines.extend(
+            [
+                f"P{action.get('priority')} - {action.get('title')}",
+                action.get("description", ""),
+            ]
+        )
+        if action.get("commands"):
+            lines.append("Commands: " + " | ".join(action.get("commands", [])[:4]))
+    wrapped = []
+    for line in lines:
+        wrapped.extend(textwrap.wrap(str(line), width=95) or [""])
+    return wrapped
+
+
+def _export_simple_pdf(data: dict[str, Any], filename: str | Path) -> Path:
+    path = Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content_lines = ["BT", "/F1 10 Tf", "14 TL", "50 790 Td"]
+    for line in _simple_pdf_lines(data)[:54]:
+        content_lines.append(f"{_pdf_literal(line)} Tj")
+        content_lines.append("T*")
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode("latin-1", errors="replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+        ),
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("ascii"))
+        output.extend(obj)
+        output.extend(b"\nendobj\n")
+    xref_offset = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    output.extend(
+        (f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n" f"startxref\n{xref_offset}\n%%EOF\n").encode("ascii")
+    )
+    path.write_bytes(bytes(output))
+    return path
+
+
+def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
+    """Export a compact PDF report from an app payload."""
+    path = Path(filename)
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table as PdfTable, TableStyle
+    except ModuleNotFoundError:
+        return _export_simple_pdf(data, path)
+
+    styles = getSampleStyleSheet()
+    story = []
+    threat = data.get("threat", {}) or {}
+    playbook = data.get("playbook", {}) or {}
+    blocklist = playbook.get("ioc_blocklist", {}) or {}
+
+    def add_para(text: str, style: str = "BodyText") -> None:
+        story.append(Paragraph(html.escape(str(text or "")), styles[style]))
+
+    story.append(
+        Paragraph(
+            f"Incident Response Report - {html.escape(str(playbook.get('malware_name', 'Unknown')))}", styles["Title"]
+        )
+    )
+    add_para(f"Severity: {playbook.get('severity', 'UNKNOWN')} | Threat Level: {threat.get('threat_level', 'N/A')}/4")
+    add_para(playbook.get("summary", ""))
+    story.append(Spacer(1, 12))
+
+    meta_rows = [
+        ["Task UUID", data.get("task_uuid", "")],
+        ["Any.Run", data.get("analysis_url", "")],
+        ["OS", data.get("os_env", "")],
+        ["Verdict", threat.get("verdict", "")],
+    ]
+    table = PdfTable(meta_rows, colWidths=[100, 370])
+    table.setStyle(
+        TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey)])
+    )
+    story.extend([table, Spacer(1, 12)])
+
+    story.append(Paragraph("MITRE ATT&CK", styles["Heading2"]))
+    mitre_rows = [["ID", "Technique", "Tactic"]] + [
+        [item.get("id", ""), item.get("name", ""), item.get("tactic", "")] for item in threat.get("mitre", [])[:20]
+    ]
+    mitre_table = PdfTable(mitre_rows, colWidths=[70, 250, 150])
+    mitre_table.setStyle(
+        TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey)])
+    )
+    story.extend([mitre_table, Spacer(1, 12)])
+
+    story.append(Paragraph("IOC Blocklist", styles["Heading2"]))
+    add_para("IPs: " + ", ".join(blocklist.get("ip_addresses", [])[:20]))
+    add_para("Domains: " + ", ".join(blocklist.get("domains", [])[:20]))
+    add_para("Hashes: " + ", ".join(blocklist.get("file_hashes", [])[:10]))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Priority Actions", styles["Heading2"]))
+    for action in (playbook.get("actions", []) or [])[:12]:
+        add_para(f"P{action.get('priority')} - {action.get('title')}", "Heading3")
+        add_para(action.get("description", ""))
+        if action.get("commands"):
+            add_para("Commands: " + " | ".join(action.get("commands", [])[:4]))
+
+    doc = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    doc.build(story)
+    return path
 
 
 class ReportExporter:
@@ -349,9 +774,9 @@ class ReportExporter:
         filename = self.output_dir / f"IR_Report_{now}.md"
 
         threat = result.threat_info
-        file   = result.file_info
-        net    = result.network
-        procs  = result.processes
+        file = result.file_info
+        net = result.network
+        procs = result.processes
 
         lines = [
             f"# Báo Cáo Phản Ứng Sự Cố Mã Độc",
@@ -419,8 +844,7 @@ class ReportExporter:
                 f"",
                 f"| ID | Tên kỹ thuật | Tactic |",
                 f"|---|---|---|",
-                *[f"| {t['id']} | {t['name']} | {t['tactic']} |"
-                  for t in threat.mitre_techniques],
+                *[f"| {t['id']} | {t['name']} | {t['tactic']} |" for t in threat.mitre_techniques],
                 f"",
             ]
 
@@ -458,8 +882,7 @@ class ReportExporter:
                 f"",
                 f"| Tên file | SHA256 | Loại |",
                 f"|---|---|---|",
-                *[f"| `{f['name']}` | `{f['sha256'][:16]}...` | {f['type']} |"
-                  for f in procs.dropped_files[:10]],
+                *[f"| `{f['name']}` | `{f['sha256'][:16]}...` | {f['type']} |" for f in procs.dropped_files[:10]],
                 f"",
             ]
 
@@ -480,7 +903,7 @@ class ReportExporter:
             lines.append(f"### {phase}")
             lines.append("")
             for action in acts:
-                pri_labels = {1:"🔴 P1-CRITICAL", 2:"🟠 P2-HIGH", 3:"🟡 P3-MEDIUM", 4:"🟢 P4-LOW"}
+                pri_labels = {1: "🔴 P1-CRITICAL", 2: "🟠 P2-HIGH", 3: "🟡 P3-MEDIUM", 4: "🟢 P4-LOW"}
                 lines.append(f"#### {pri_labels.get(action.priority,'')} – {action.title}")
                 lines.append(f"")
                 lines.append(f"**Danh mục:** {action.category}")
@@ -524,28 +947,37 @@ class ReportExporter:
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.output_dir / f"IR_Report_{now}.json"
 
+        payload = _report_payload(result, playbook)
         data = {
-            "generated_at": datetime.datetime.now().isoformat(),
-            "task_uuid":    result.task_uuid,
-            "analysis_url": result.analysis_url,
-            "severity":     playbook.severity,
+            "generated_at": payload["generated_at"],
+            "task_uuid": payload["task_uuid"],
+            "analysis_url": payload["analysis_url"],
+            "severity": playbook.severity,
             "malware_name": playbook.malware_name,
-            "summary":      playbook.summary,
-            "malware_analysis": build_malware_analysis(result),
+            "summary": playbook.summary,
+            "malware_analysis": payload["malware_analysis"],
             "ioc_blocklist": playbook.ioc_blocklist,
             "mitre_techniques": result.threat_info.mitre_techniques,
-            "actions": [
-                {
-                    "priority":    a.priority,
-                    "phase":       a.phase,
-                    "category":    a.category,
-                    "title":       a.title,
-                    "description": a.description,
-                    "commands":    a.commands,
-                    "notes":       a.notes,
-                }
-                for a in playbook.actions
-            ],
+            "actions": payload["playbook"]["actions"],
         }
         filename.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return filename
+
+    def export_html(
+        self,
+        result: MalwareAnalysisResult,
+        playbook: IncidentResponsePlaybook,
+    ) -> Path:
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = self.output_dir / f"IR_Report_{now}.html"
+        filename.write_text(build_html_report(_report_payload(result, playbook)), encoding="utf-8")
+        return filename
+
+    def export_pdf(
+        self,
+        result: MalwareAnalysisResult,
+        playbook: IncidentResponsePlaybook,
+    ) -> Path:
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = self.output_dir / f"IR_Report_{now}.pdf"
+        return export_payload_pdf(_report_payload(result, playbook), filename)

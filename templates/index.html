@@ -254,6 +254,8 @@
         <div><h2>IR Playbook</h2><span>Quy trình phản ứng sự cố – NIST 800-61</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
+          <button class="btn btn-outline" onclick="exportReport('html')">⬇ HTML</button>
+          <button class="btn btn-green" onclick="exportReport('pdf')">⬇ PDF</button>
           <button class="btn btn-green" onclick="exportReport('json')">⬇ JSON</button>
           <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">📁 Mở Folder</button>
         </div>
@@ -285,9 +287,13 @@
     <div id="page-iocs" style="display:none">
       <div class="topbar">
         <div><h2>IOC Blocklist</h2><span>Indicators of Compromise để chặn &amp; săn mối đe dọa</span></div>
-        <div style="display:flex;gap:10px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="copyAllIOCs()">📋 Copy tất cả</button>
           <button class="btn btn-outline" onclick="exportReport('json')">⬇ Export JSON</button>
+          <button class="btn btn-outline" onclick="exportReport('csv')">⬇ IOC CSV</button>
+          <button class="btn btn-outline" onclick="exportReport('splunk')">⬇ Splunk SPL</button>
+          <button class="btn btn-outline" onclick="exportReport('elastic')">⬇ Elastic KQL</button>
+          <button class="btn btn-green" onclick="exportReport('sigma')">⬇ Sigma</button>
         </div>
       </div>
       <div id="ioc-content">

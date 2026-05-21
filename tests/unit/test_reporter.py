@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 import reporter
-from reporter import ReportExporter, TerminalReporter, build_malware_analysis
+from reporter import ReportExporter, TerminalReporter, build_html_report, build_malware_analysis
 
 pytestmark = pytest.mark.unit
 
@@ -59,6 +59,46 @@ class TestJSONExport:
 
         for field in ["task_uuid", "severity", "actions", "ioc_blocklist"]:
             assert field in parsed
+
+
+class TestHTMLPDFExport:
+    def test_export_html_creates_self_contained_report(self, sample_analysis_result, sample_playbook, temp_output_dir):
+        path = ReportExporter(str(temp_output_dir)).export_html(sample_analysis_result, sample_playbook)
+        text = path.read_text(encoding="utf-8")
+
+        assert path.exists()
+        assert path.suffix == ".html"
+        assert text.startswith("<!doctype html>")
+        assert "Emotet" in text
+        assert "IOC Blocklist" in text
+
+    def test_export_pdf_creates_pdf_file(self, sample_analysis_result, sample_playbook, temp_output_dir):
+        path = ReportExporter(str(temp_output_dir)).export_pdf(sample_analysis_result, sample_playbook)
+
+        assert path.exists()
+        assert path.suffix == ".pdf"
+        assert path.read_bytes().startswith(b"%PDF")
+        assert path.stat().st_size > 1000
+
+    def test_build_html_report_escapes_untrusted_content(self):
+        html = build_html_report(
+            {
+                "task_uuid": "task-1",
+                "analysis_url": "https://app.any.run/tasks/task-1",
+                "playbook": {
+                    "malware_name": "<script>alert(1)</script>",
+                    "severity": "HIGH",
+                    "summary": "<b>malicious</b>",
+                    "actions": [],
+                    "ioc_blocklist": {},
+                },
+                "threat": {"mitre": [], "tags": []},
+            }
+        )
+
+        assert "<script>alert(1)</script>" not in html
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+        assert "&lt;b&gt;malicious&lt;/b&gt;" in html
 
 
 class TestReportContent:
