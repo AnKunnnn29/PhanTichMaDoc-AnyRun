@@ -1,5 +1,10 @@
 // ── State ────────────────────────────────────────────────────────────────────
-let G = { data: null, apiKey: localStorage.getItem('ir_apikey') || '' };
+let G = {
+  data: null,
+  apiKey: localStorage.getItem('ir_apikey') || '',
+  aiController: null,
+  aiRequestId: 0
+};
 const LAST_ANALYSIS_KEY = 'ir_last_analysis_payload';
 
 window.onload = async () => {
@@ -717,33 +722,140 @@ function renderAIProactive(d) {
     </div>`;
 }
 
+async function askAILegacy(question = '') {
+  return askAI(question);
+}
+
+function setAIControlsRunning(isRunning) {
+  const stopBtn = document.getElementById('ai-stop-btn');
+  if (stopBtn) stopBtn.disabled = !isRunning;
+}
+
+function stopAI(showToast = true) {
+  if (!G.aiController) return;
+  G.aiController.abort();
+  G.aiController = null;
+  setAIControlsRunning(false);
+  if (showToast) toast('Đã dừng AI');
+}
+
 async function askAI(question = '') {
   if (!G.data) return toast('Chưa có dữ liệu phân tích để hỏi AI', 'err');
+  stopAI(false);
+  const requestId = ++G.aiRequestId;
+  const controller = new AbortController();
+  G.aiController = controller;
+  setAIControlsRunning(true);
+
   const input = document.getElementById('ai-question');
   const q = (question || input.value || '').trim();
   const answerEl = document.getElementById('ai-answer');
+  let streamedAnswer = '';
+  let meta = { mode: 'local_fallback', model: '' };
   answerEl.innerHTML = '<div class="loading-wrap" style="padding:18px"><div class="spinner"></div><p>AI đang phân tích dữ liệu sự cố...</p></div>';
-  try {
+
+  const modeLabel = {
+    openai: 'OpenAI',
+    ollama: 'Ollama local LLM',
+    local: 'Local assistant',
+    fast_local: 'Fast local assistant',
+    ollama_fallback: 'Local assistant (Ollama timeout)',
+    guardrail: 'Scope guardrail',
+    local_fallback: 'Local assistant'
+  };
+
+  const renderAnswer = (meta, answer, latencyMs) => {
+    if (G.aiRequestId !== requestId) return;
+    const label = modeLabel[meta.mode] || 'Local assistant';
+    const warningHtml = meta.warning ? `<div class="ai-warning">${esc(meta.warning)}</div>` : '';
+    const parts = [meta.model, latencyMs !== undefined ? `${latencyMs}ms` : 'streaming...'].filter(Boolean);
+    answerEl.innerHTML = `<div class="ai-mode">${label}${parts.length ? ` · ${esc(parts.join(' · '))}` : ''}</div>${warningHtml}<pre>${esc(answer)}</pre>`;
+  };
+
+  const fallbackJson = async () => {
     const r = await fetch('/api/ai/remediation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, data: G.data })
+      body: JSON.stringify({ question: q, data: G.data }),
+      signal: controller.signal
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    const modeLabel = {
-      openai: 'OpenAI',
-      ollama: 'Ollama local LLM',
-      local: 'Local assistant',
-      ollama_fallback: 'Local assistant (Ollama timeout)',
-      guardrail: 'Scope guardrail',
-      local_fallback: 'Local assistant'
-    }[j.mode] || 'Local assistant';
-    const warningHtml = j.warning ? `<div class="ai-warning">${esc(j.warning)}</div>` : '';
-    const meta = [j.model, j.latency_ms !== undefined ? `${j.latency_ms}ms` : ''].filter(Boolean).join(' · ');
-    answerEl.innerHTML = `<div class="ai-mode">${modeLabel}${meta ? ` · ${esc(meta)}` : ''}</div>${warningHtml}<pre>${esc(j.answer)}</pre>`;
+    renderAnswer(j, j.answer || '', j.latency_ms);
+  };
+
+  try {
+    const r = await fetch('/api/ai/remediation/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, data: G.data }),
+      signal: controller.signal
+    });
+    if (!r.ok) {
+      let message = `HTTP ${r.status}`;
+      try {
+        const j = await r.json();
+        message = j.error || message;
+      } catch (_) {}
+      throw new Error(message);
+    }
+    if (!r.body || !window.TextDecoder) {
+      await fallbackJson();
+      return;
+    }
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const handleLine = (line) => {
+      if (G.aiRequestId !== requestId) return;
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (!event.ok) throw new Error(event.error || 'AI stream error');
+      if (event.event === 'meta') {
+        meta = { ...meta, ...event };
+        renderAnswer(meta, streamedAnswer, undefined);
+      } else if (event.event === 'delta') {
+        streamedAnswer += event.text || '';
+        renderAnswer(meta, streamedAnswer, undefined);
+      } else if (event.event === 'done') {
+        renderAnswer(meta, streamedAnswer, event.latency_ms);
+      } else if (event.event === 'error') {
+        throw new Error(event.error || 'AI stream error');
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      lines.forEach(handleLine);
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) handleLine(buffer);
   } catch(e) {
-    answerEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
-    toast(e.message, 'err');
+    if (e.name === 'AbortError') {
+      renderAnswer(meta, streamedAnswer + (streamedAnswer ? '\n\n' : '') + '[Đã dừng theo yêu cầu]', undefined);
+      return;
+    }
+    try {
+      await fallbackJson();
+    } catch (fallbackError) {
+      if (fallbackError.name === 'AbortError') {
+        renderAnswer(meta, streamedAnswer + (streamedAnswer ? '\n\n' : '') + '[Đã dừng theo yêu cầu]', undefined);
+        return;
+      }
+      if (G.aiRequestId !== requestId) return;
+      answerEl.innerHTML = `<span style="color:var(--red)">${esc(fallbackError.message || e.message)}</span>`;
+      toast(fallbackError.message || e.message, 'err');
+    }
+  } finally {
+    if (G.aiRequestId === requestId) {
+      G.aiController = null;
+      setAIControlsRunning(false);
+    }
   }
 }

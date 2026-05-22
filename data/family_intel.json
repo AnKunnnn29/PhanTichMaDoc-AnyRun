@@ -9,6 +9,23 @@
       "wncry"
     ],
     "summary": "Ransomware có khả năng lan truyền trong mạng nội bộ, nổi bật với SMB/EternalBlue/MS17-010 trên Windows chưa vá.",
+    "similar_families": [
+      {
+        "name": "NotPetya",
+        "why": "Ransomware/wiper co kha nang lan truyen trong mang noi bo va lam gian doan dien rong.",
+        "hunt_hint": "Hunt SMB/lateral movement, credential reuse va artifact ma hoa/wiper tren host Windows."
+      },
+      {
+        "name": "BadRabbit",
+        "why": "Ransomware co hanh vi ma hoa va lan truyen noi bo trong mot so chien dich.",
+        "hunt_hint": "Kiem tra SMB, scheduled task, dropped payload va ket noi den ha tang phat tan."
+      },
+      {
+        "name": "Ryuk",
+        "why": "Ransomware tac dong cao, thuong xuat hien sau giai doan loader/credential compromise.",
+        "hunt_hint": "Tim dau hieu lateral movement, credential theft va file encryption tren nhieu endpoint."
+      }
+    ],
     "common_spread": [
       "Lan truyền qua SMB/445, đặc biệt khi host Windows chưa vá MS17-010.",
       "Có thể quét mạng nội bộ để tìm máy có SMB có thể khai thác.",
@@ -38,6 +55,28 @@
       "geodo"
     ],
     "summary": "Trojan/loader thuong bat dau tu phishing Office document, dung script/PowerShell de tai payload va lien lac C2.",
+    "similar_families": [
+      {
+        "name": "QakBot",
+        "why": "Trojan/loader thuong vao qua phishing, co C2 va co the lam ban dap cho ransomware hoac payload khac.",
+        "hunt_hint": "Hunt Office child process, rundll32/regsvr32, C2 HTTP(S), mailbox co cung attachment/link."
+      },
+      {
+        "name": "IcedID",
+        "why": "Banking trojan/loader dung email phishing va payload nhieu stage, co hanh vi C2 tuong tu.",
+        "hunt_hint": "Kiem tra email gateway, proxy/DNS, PowerShell/cmd child process va dropped DLL/EXE."
+      },
+      {
+        "name": "Dridex",
+        "why": "Trojan ngan hang/loader thuong phat tan qua macro document va dung C2 de tai thanh phan tiep theo.",
+        "hunt_hint": "Pivot theo sender/subject, document macro, process Office bat thuong va IOC C2."
+      },
+      {
+        "name": "TrickBot",
+        "why": "Modular trojan/loader co kha nang credential theft va di chuyen ngang sau xam nhap ban dau.",
+        "hunt_hint": "Kiem tra credential access, SMB/RDP bat thuong, scheduled task/service va C2."
+      }
+    ],
     "common_spread": [
       "Thuong xam nhap qua email phishing co attachment/link doc hai.",
       "Co the dung macro/script de tai stage tiep theo va credential/email thread theft de phat tan tiep.",
@@ -66,6 +105,28 @@
       "redline stealer"
     ],
     "summary": "Infostealer thuong phat tan qua crack/fake installer, danh cap browser credential, cookie, wallet va gui ve C2.",
+    "similar_families": [
+      {
+        "name": "Vidar",
+        "why": "Infostealer danh cap credential, cookie, browser data va wallet, thuong phat tan qua installer gia/crack.",
+        "hunt_hint": "Hunt file trong Downloads/AppData/Temp, C2 exfiltration va login bat thuong sau thoi diem nhiem."
+      },
+      {
+        "name": "Lumma",
+        "why": "Commodity stealer nham vao browser/session token/wallet va co ha tang C2 de nhan du lieu danh cap.",
+        "hunt_hint": "Kiem tra browser profile access, token/session abuse va cac hash/filename cung chien dich."
+      },
+      {
+        "name": "Stealc",
+        "why": "Infostealer co muc tieu gan RedLine: credential, cookie, wallet va thong tin he thong.",
+        "hunt_hint": "Reset mat khau, revoke session/token va hunt C2/proxy logs quanh thoi diem chay mau."
+      },
+      {
+        "name": "AZORult",
+        "why": "Stealer cu hon nhung cung nhom hanh vi danh cap credential/browser data va exfil ve C2.",
+        "hunt_hint": "Pivot theo C2, dropped file, browser credential access va tai khoan dang nhap bat thuong."
+      }
+    ],
     "common_spread": [
       "Thuong den tu crack/keygen/fake installer hoac link download khong tin cay.",
       "Khong phai worm tu lan truyen manh; rui ro chinh la credential/cookie/token da bi danh cap.",
@@ -91,6 +152,7 @@
   "default": {
     "aliases": [],
     "summary": "Chua co threat intel rieng cho family nay; su dung sandbox observation va IOC hien co.",
+    "similar_families": [],
     "common_spread": [
       "Can xac dinh vector ban dau qua email, web download, USB, share noi bo hoac remote service.",
       "Neu co C2/HTTP/DNS thi hunt host khac cham cung IOC.",

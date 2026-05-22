@@ -231,3 +231,27 @@ class TestAIEndpoints:
         assert payload["ok"] is True
         assert "provider" in payload["data"]
         assert "api_key" not in str(payload["data"]).lower()
+
+    def test_ai_stream_returns_ndjson_events(self, flask_test_client):
+        data = {
+            "threat": {"verdict": "Malicious", "threat_level": 3, "threat_name": "Emotet"},
+            "network": {"ips": ["192.0.2.10"], "domains": ["evil.example"], "urls": []},
+            "processes": {"dropped": [], "registry": [], "injected": []},
+            "playbook": {
+                "malware_name": "Emotet",
+                "severity": "HIGH",
+                "ioc_blocklist": {"ip_addresses": ["192.0.2.10"], "domains": ["evil.example"]},
+                "actions": [],
+            },
+        }
+
+        response = flask_test_client.post(
+            "/api/ai/remediation/stream",
+            json={"question": "cần chặn IOC nào trước?", "data": data},
+        )
+
+        events = [json.loads(line) for line in response.data.decode("utf-8").splitlines()]
+        assert response.status_code == 200
+        assert [event["event"] for event in events] == ["meta", "delta", "done"]
+        assert events[0]["mode"] == "fast_local"
+        assert "IOC" in events[1]["text"]

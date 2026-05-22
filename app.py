@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, Response, request, jsonify, send_from_directory, stream_with_context
 from werkzeug.exceptions import RequestEntityTooLarge
 from analyzer import MalwareAnalyzer
 from incident_response import IncidentResponseGenerator
@@ -30,7 +30,7 @@ from demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
 from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
 from ml_engine import MLThreatPredictor
 from markdown_importer import markdown_to_anyrun_report
-from ai_assistant import answer_remediation, get_ai_status
+from ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
 from reporter import build_html_report, build_malware_analysis, export_payload_pdf
 from siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
 from history_store import (
@@ -620,6 +620,25 @@ def ai_remediation():
         return jsonify({"ok": True, **answer_remediation(question, data)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/ai/remediation/stream", methods=["POST"])
+@rate_limit(max_requests=20)
+def ai_remediation_stream():
+    body = _json_body()
+    question = body.get("question", "")
+    data = body.get("data") or {}
+    if not data:
+        return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
+
+    def generate():
+        try:
+            for event in answer_remediation_stream(question, data):
+                yield json.dumps({"ok": True, **event}, ensure_ascii=False) + "\n"
+        except Exception as exc:
+            yield json.dumps({"ok": False, "event": "error", "error": str(exc)}, ensure_ascii=False) + "\n"
+
+    return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
 
 
 @app.route("/api/ai/status", methods=["GET"])

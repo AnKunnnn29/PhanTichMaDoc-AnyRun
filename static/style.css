@@ -384,7 +384,7 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 }
 .ai-input-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
 }
 .ai-input-row input {
@@ -504,6 +504,8 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   .nav-item { justify-content: center; padding: 12px; }
   .main { padding: 20px 16px; }
   .ai-brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-input-row { grid-template-columns: 1fr; }
+  .ai-input-row .btn { justify-content: center; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .welcome-grid { grid-template-columns: 1fr 1fr; }
   .topbar { align-items: flex-start; gap: 14px; flex-direction: column; }

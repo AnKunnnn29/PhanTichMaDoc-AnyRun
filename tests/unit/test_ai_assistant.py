@@ -5,7 +5,7 @@ import requests
 import pytest
 
 import ai_assistant
-from ai_assistant import answer_remediation, get_ai_status
+from ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
 
 pytestmark = pytest.mark.unit
 
@@ -19,6 +19,7 @@ def clear_ai_env(monkeypatch):
         "AI_TIMEOUT",
         "AI_RETRIES",
         "AI_CONTEXT_LIMIT",
+        "AI_FAST_MODE",
         "OPENAI_API_KEY",
         "OPENAI_API_BASE",
         "OPENAI_MODEL",
@@ -130,6 +131,96 @@ def test_openai_failure_falls_back_locally(monkeypatch, ai_payload):
     assert result["mode"] == "local_fallback"
     assert result["model"] == "rule-based"
     assert "warning" in result
+
+
+def test_fast_mode_answers_simple_ioc_question_without_llm(monkeypatch, ai_payload):
+    def fake_post(_url, **_kwargs):
+        raise AssertionError("LLM should not be called for fast local questions")
+
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(ai_assistant.requests, "post", fake_post)
+
+    result = answer_remediation("cần chặn IOC nào trước?", ai_payload)
+
+    assert result["mode"] == "fast_local"
+    assert result["model"] == "rule-based"
+    assert "IOC" in result["answer"]
+
+
+def test_fast_mode_answers_similar_malware_question(monkeypatch, ai_payload):
+    def fake_post(_url, **_kwargs):
+        raise AssertionError("LLM should not be called for similar-family questions")
+
+    monkeypatch.setenv("AI_PROVIDER", "ollama")
+    monkeypatch.setattr(ai_assistant.requests, "post", fake_post)
+
+    result = answer_remediation("có những malware nào tương tự?", ai_payload)
+
+    assert result["mode"] == "fast_local"
+    assert result["answer"].startswith("Đáp án:")
+    assert "QakBot" in result["answer"]
+    assert "IcedID" in result["answer"]
+    assert "không có nghĩa" in result["answer"] or "khong co nghia" in result["answer"]
+    assert "Quan sát" not in result["answer"]
+
+
+def test_related_malware_question_lists_answer_before_explanation(monkeypatch, ai_payload):
+    def fake_post(_url, **_kwargs):
+        raise AssertionError("LLM should not be called for related-family questions")
+
+    monkeypatch.setenv("AI_PROVIDER", "ollama")
+    monkeypatch.setattr(ai_assistant.requests, "post", fake_post)
+
+    result = answer_remediation("có những malware nào liên quan?", ai_payload)
+
+    assert result["mode"] == "fast_local"
+    assert result["answer"].splitlines()[0].startswith("Đáp án:")
+    assert "QakBot" in result["answer"].splitlines()[0]
+    assert "Vì sao liên quan:" in result["answer"]
+    assert "Quan sát" not in result["answer"]
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_group", "expected_family"),
+    [
+        ("các ransomware nào tương tự?", "Ransomware", "LockBit"),
+        ("rootkin nào có hành vi tương tự?", "Rootkit/bootkit", "TDSS"),
+        ("zombie botnet nào tương tự?", "Botnet/zombie", "Mirai"),
+        ("trojan nào giống mẫu này?", "Trojan/loader", "QakBot"),
+    ],
+)
+def test_similar_malware_uses_generic_category_taxonomy(monkeypatch, question, expected_group, expected_family):
+    def fake_post(_url, **_kwargs):
+        raise AssertionError("LLM should not be called for similar category questions")
+
+    payload = {
+        "threat": {"verdict": "Malicious", "threat_level": 3, "threat_name": "Unknown"},
+        "network": {},
+        "processes": {},
+        "malware_analysis": {},
+        "playbook": {"malware_name": "Unknown", "ioc_blocklist": {}, "actions": []},
+    }
+    monkeypatch.setenv("AI_PROVIDER", "ollama")
+    monkeypatch.setattr(ai_assistant.requests, "post", fake_post)
+
+    result = answer_remediation(question, payload)
+
+    assert result["mode"] == "fast_local"
+    assert expected_group in result["answer"]
+    assert expected_family in result["answer"]
+
+
+def test_stream_returns_meta_delta_and_done_for_fast_mode(monkeypatch, ai_payload):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    events = list(answer_remediation_stream("cần chặn IOC nào trước?", ai_payload))
+
+    assert [event["event"] for event in events] == ["meta", "delta", "done"]
+    assert events[0]["mode"] == "fast_local"
+    assert "IOC" in events[1]["text"]
+    assert isinstance(events[2]["latency_ms"], int)
 
 
 def test_ai_status_does_not_expose_secret(monkeypatch):
