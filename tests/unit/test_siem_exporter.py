@@ -9,6 +9,7 @@ import pytest
 from siem_exporter import (
     build_elastic_kql,
     build_ioc_csv,
+    build_ioc_manifest,
     build_sentinel_kql,
     build_siem_export,
     build_sigma_rule,
@@ -95,7 +96,19 @@ def test_build_stix_bundle_contains_indicator_objects(siem_payload):
     indicator_patterns = [obj.get("pattern", "") for obj in bundle["objects"] if obj["type"] == "indicator"]
     assert any("ipv4-addr:value" in pattern for pattern in indicator_patterns)
     assert any("domain-name:value" in pattern for pattern in indicator_patterns)
-    assert any("file:hashes" in pattern for pattern in indicator_patterns)
+    assert not any("sha256-test" in pattern for pattern in indicator_patterns)
+
+
+def test_build_ioc_manifest_classifies_invalid_and_actionable_iocs(siem_payload):
+    manifest = json.loads(build_ioc_manifest(siem_payload))
+
+    assert manifest["counts"]["total"] == 5
+    assert manifest["counts"]["invalid"] == 1
+    hash_item = next(item for item in manifest["items"] if item["value"] == "sha256-test")
+    assert hash_item["valid"] is False
+    assert hash_item["recommended_action"] == "review"
+    domain_item = next(item for item in manifest["items"] if item["value"] == "evil.example")
+    assert domain_item["recommended_action"] == "block_and_hunt"
 
 
 def test_build_ioc_csv_is_parseable(siem_payload):
@@ -107,7 +120,7 @@ def test_build_ioc_csv_is_parseable(siem_payload):
     assert {row["value"] for row in rows} >= {"evil.example", "sha256-test", "payload.dll"}
 
 
-@pytest.mark.parametrize("fmt", ["splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "csv"])
+@pytest.mark.parametrize("fmt", ["splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "manifest", "csv"])
 def test_build_siem_export_dispatches_all_supported_formats(siem_payload, fmt):
     assert build_siem_export(siem_payload, fmt)
 

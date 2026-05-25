@@ -182,6 +182,7 @@ class TestExportAndHistoryEndpoints:
             ("sigma", ".yml"),
             ("suricata", ".rules"),
             ("stix", ".json"),
+            ("manifest", ".json"),
         ],
     )
     def test_export_siem_formats_create_report_file(self, flask_test_client, fmt, suffix):

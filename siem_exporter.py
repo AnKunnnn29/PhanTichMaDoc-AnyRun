@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import csv
+import ipaddress
 import io
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
-SIEM_FORMATS = {"splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "csv"}
+SIEM_FORMATS = {"splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "manifest", "csv"}
 SIEM_EXTENSIONS = {
     "splunk": "spl",
     "elastic": "kql",
@@ -15,8 +18,12 @@ SIEM_EXTENSIONS = {
     "sigma": "yml",
     "suricata": "rules",
     "stix": "json",
+    "manifest": "json",
     "csv": "csv",
 }
+
+HASH_RE = re.compile(r"^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$")
+DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?!-)(?:[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$")
 
 
 def _clean_values(values: list[Any]) -> list[str]:
@@ -41,6 +48,103 @@ def _blocklist(data: dict[str, Any]) -> dict[str, list[str]]:
         "file_hashes": _clean_values(blocklist.get("file_hashes", [])),
         "filenames": _clean_values(blocklist.get("filenames", [])),
     }
+
+
+def _classify_ip(value: str) -> tuple[bool, str, str]:
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False, "invalid", "Invalid IP address"
+    if ip.is_global:
+        return True, "public", "Public routable IP; suitable for blocking and hunting"
+    if ip.is_private:
+        return True, "private", "Private/lab IP; use for scope hunting before blocking"
+    return True, "reserved", "Reserved/special IP; verify before production blocking"
+
+
+def _classify_domain(value: str) -> tuple[bool, str, str]:
+    domain = value.rstrip(".").lower()
+    if DOMAIN_RE.match(domain):
+        return True, "public", "Domain-shaped IOC; suitable for DNS/proxy hunting"
+    return False, "invalid", "Invalid domain syntax"
+
+
+def _classify_url(value: str) -> tuple[bool, str, str]:
+    parsed = urlparse(value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return True, "public", "HTTP(S) URL IOC; suitable for proxy/SIEM hunting"
+    return False, "invalid", "Invalid or unsupported URL syntax"
+
+
+def _classify_hash(value: str) -> tuple[bool, str, str]:
+    if HASH_RE.match(value):
+        return True, "host", "Valid MD5/SHA1/SHA256 hash; suitable for EDR/file hunting"
+    return False, "invalid", "Invalid hash syntax"
+
+
+def _classify_filename(value: str) -> tuple[bool, str, str]:
+    if value and not any(char in value for char in "\r\n\x00"):
+        return True, "host", "Filename/path artifact; hunt before blocking by name"
+    return False, "invalid", "Invalid filename/path artifact"
+
+
+def build_ioc_manifest(data: dict[str, Any]) -> str:
+    iocs = _blocklist(data)
+    classifiers = {
+        "ip_addresses": _classify_ip,
+        "domains": _classify_domain,
+        "urls": _classify_url,
+        "file_hashes": _classify_hash,
+        "filenames": _classify_filename,
+    }
+    items = []
+    counts = {"total": 0, "valid": 0, "invalid": 0, "public": 0, "private": 0, "reserved": 0, "host": 0}
+
+    for ioc_type, values in iocs.items():
+        for value in values:
+            valid, scope, note = classifiers[ioc_type](value)
+            action = "hunt"
+            if valid and scope == "public" and ioc_type in {"ip_addresses", "domains", "urls"}:
+                action = "block_and_hunt"
+            elif valid and ioc_type == "file_hashes":
+                action = "edr_block_and_hunt"
+            elif not valid:
+                action = "review"
+
+            counts["total"] += 1
+            counts["valid" if valid else "invalid"] += 1
+            if scope not in {"valid", "invalid"}:
+                counts[scope] = counts.get(scope, 0) + 1
+            items.append(
+                {
+                    "type": ioc_type,
+                    "value": value,
+                    "valid": valid,
+                    "scope": scope,
+                    "recommended_action": action,
+                    "note": note,
+                }
+            )
+
+    manifest = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "malware_name": (data.get("playbook", {}) or {}).get("malware_name", "Unknown"),
+        "severity": (data.get("playbook", {}) or {}).get("severity", "UNKNOWN"),
+        "task_uuid": data.get("task_uuid", ""),
+        "analysis_url": data.get("analysis_url", ""),
+        "counts": counts,
+        "items": items,
+    }
+    return json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+
+
+def _valid_values_for(data: dict[str, Any], ioc_type: str) -> list[str]:
+    manifest = json.loads(build_ioc_manifest(data))
+    return [
+        item["value"]
+        for item in manifest["items"]
+        if item["type"] == ioc_type and item["valid"]
+    ]
 
 
 def _quote(value: str) -> str:
@@ -332,7 +436,13 @@ def _hash_pattern(value: str) -> str:
 
 
 def build_stix_bundle(data: dict[str, Any]) -> str:
-    iocs = _blocklist(data)
+    iocs = {
+        "ip_addresses": _valid_values_for(data, "ip_addresses"),
+        "domains": _valid_values_for(data, "domains"),
+        "urls": _valid_values_for(data, "urls"),
+        "file_hashes": _valid_values_for(data, "file_hashes"),
+        "filenames": _valid_values_for(data, "filenames"),
+    }
     playbook = data.get("playbook", {}) or {}
     malware = playbook.get("malware_name", "Unknown Malware")
     severity = playbook.get("severity", "UNKNOWN")
@@ -405,6 +515,8 @@ def build_siem_export(data: dict[str, Any], fmt: str) -> str:
         return build_suricata_rules(data)
     if fmt == "stix":
         return build_stix_bundle(data)
+    if fmt == "manifest":
+        return build_ioc_manifest(data)
     if fmt == "csv":
         return build_ioc_csv(data)
     raise ValueError(f"Unsupported SIEM export format: {fmt}")
