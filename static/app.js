@@ -401,6 +401,35 @@ function buildThreatGauge(score, lvl) {
     </div>`;
 }
 
+function isValidFileHash(value) {
+  return /^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$/i.test(String(value || '').trim());
+}
+
+function pickVirusTotalHash(fileInfo = {}) {
+  return [fileInfo.sha256, fileInfo.sha1, fileInfo.md5].find(isValidFileHash) || '';
+}
+
+function renderHashValue(value) {
+  return value ? esc(value) : '<span style="color:var(--text2)">N/A</span>';
+}
+
+function renderVirusTotalLink(fileInfo = {}) {
+  const hash = pickVirusTotalHash(fileInfo);
+  if (!hash) {
+    return `<div style="margin-top:12px;font-size:12px;color:var(--yellow)">
+      Không có hash hợp lệ để tra VirusTotal. Mục này có thể là URL analysis, import thiếu main-object hash, hoặc bản ghi lịch sử chỉ có metadata.
+    </div>`;
+  }
+  return `<a href="https://www.virustotal.com/gui/file/${hash}" target="_blank" rel="noopener" title="Nếu VirusTotal trống: hash chưa từng được submit/public hoặc đây là hash demo/synthetic." style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent)">🔗 Xem trên VirusTotal</a>
+    <div style="margin-top:6px;font-size:11px;color:var(--text2)">Tra cứu theo hash: <code>${esc(hash)}</code></div>`;
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return 'N/A';
+  return `${(size / 1024).toFixed(1)} KB`;
+}
+
 function renderDashboard(d) {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
@@ -456,15 +485,17 @@ function renderDashboard(d) {
   const f = d.file;
   document.getElementById('card-file').innerHTML = f ? `
     <div class="card-title">📄 Thông tin File</div>
-    <div style="font-size:16px;font-weight:600;margin-bottom:12px;word-break:break-all">${f.name}</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${f.type} &nbsp;|&nbsp; ${(f.size/1024).toFixed(1)} KB</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:12px;word-break:break-all">${esc(f.name || 'N/A')}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${esc(f.type || 'N/A')} &nbsp;|&nbsp; ${formatFileSize(f.size)}</div>
     <div style="margin-top:12px">
       <div style="font-size:11px;color:var(--text2);margin-bottom:3px">MD5</div>
-      <div class="mono" style="font-size:11px;word-break:break-all">${f.md5}</div>
+      <div class="mono" style="font-size:11px;word-break:break-all">${renderHashValue(f.md5)}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px;margin-bottom:3px">SHA1</div>
+      <div class="mono" style="font-size:11px;word-break:break-all">${renderHashValue(f.sha1)}</div>
       <div style="font-size:11px;color:var(--text2);margin-top:8px;margin-bottom:3px">SHA256</div>
-      <div class="mono" style="font-size:11px;word-break:break-all">${f.sha256}</div>
+      <div class="mono" style="font-size:11px;word-break:break-all">${renderHashValue(f.sha256)}</div>
     </div>
-    <a href="https://www.virustotal.com/gui/file/${f.sha256}" target="_blank" style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent)">🔗 Xem trên VirusTotal</a>`
+    ${renderVirusTotalLink(f)}`
     : `<div class="card-title">📄 Thông tin File</div><p style="color:var(--text2)">Không có thông tin file (phân tích URL).</p>`;
 
   // MITRE
