@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import csv
+import json
 from io import StringIO
 
 import pytest
 
-from siem_exporter import build_elastic_kql, build_ioc_csv, build_siem_export, build_sigma_rule, build_splunk_query
+from siem_exporter import (
+    build_elastic_kql,
+    build_ioc_csv,
+    build_sentinel_kql,
+    build_siem_export,
+    build_sigma_rule,
+    build_splunk_query,
+    build_stix_bundle,
+    build_suricata_rules,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -50,6 +60,15 @@ def test_build_elastic_kql_contains_ecs_fields(siem_payload):
     assert '"evil.example"' in query
 
 
+def test_build_sentinel_kql_contains_m365_tables(siem_payload):
+    query = build_sentinel_kql(siem_payload)
+
+    assert "DeviceNetworkEvents" in query
+    assert "CommonSecurityLog" in query
+    assert "DeviceFileEvents" in query
+    assert '"evil.example"' in query
+
+
 def test_build_sigma_rule_contains_detection_sections(siem_payload):
     rule = build_sigma_rule(siem_payload)
 
@@ -58,6 +77,25 @@ def test_build_sigma_rule_contains_detection_sections(siem_payload):
     assert "selection_domain" in rule
     assert "selection_hash" in rule
     assert "level: critical" in rule
+
+
+def test_build_suricata_rules_contains_network_iocs(siem_payload):
+    rules = build_suricata_rules(siem_payload)
+
+    assert "alert ip" in rules
+    assert "alert dns" in rules
+    assert "192.0.2.10" in rules
+    assert "evil.example" in rules
+
+
+def test_build_stix_bundle_contains_indicator_objects(siem_payload):
+    bundle = json.loads(build_stix_bundle(siem_payload))
+
+    assert bundle["type"] == "bundle"
+    indicator_patterns = [obj.get("pattern", "") for obj in bundle["objects"] if obj["type"] == "indicator"]
+    assert any("ipv4-addr:value" in pattern for pattern in indicator_patterns)
+    assert any("domain-name:value" in pattern for pattern in indicator_patterns)
+    assert any("file:hashes" in pattern for pattern in indicator_patterns)
 
 
 def test_build_ioc_csv_is_parseable(siem_payload):
@@ -69,7 +107,7 @@ def test_build_ioc_csv_is_parseable(siem_payload):
     assert {row["value"] for row in rows} >= {"evil.example", "sha256-test", "payload.dll"}
 
 
-@pytest.mark.parametrize("fmt", ["splunk", "elastic", "sigma", "csv"])
+@pytest.mark.parametrize("fmt", ["splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "csv"])
 def test_build_siem_export_dispatches_all_supported_formats(siem_payload, fmt):
     assert build_siem_export(siem_payload, fmt)
 

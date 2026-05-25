@@ -483,6 +483,10 @@ function renderPlaybook(d) {
   p.actions.forEach(a => { (phaseMap[a.phase] = phaseMap[a.phase]||[]).push(a); });
   const pColors = { 1:'p1', 2:'p2', 3:'p3', 4:'p4' };
   const pIcons  = { 1:'🔴', 2:'🟠', 3:'🟡', 4:'🟢' };
+  const score = p.severity_score || {};
+  const evalData = d.ir_evaluation || {};
+  const timeline = p.timeline || [];
+  const hunts = p.scope_hunting || [];
 
   let html = `
     <div class="card" style="margin-bottom:20px">
@@ -493,6 +497,52 @@ function renderPlaybook(d) {
       <p style="color:var(--text2);font-size:13.5px;line-height:1.7;margin-bottom:10px">${p.summary}</p>
       <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--accent);font-size:13px;line-height:1.7">${p.mitigation}</div>
     </div>`;
+
+  html += `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Ma trận đánh giá mức độ</div>
+      <div class="grid-3">
+        <div class="stat-box"><div class="val">${esc(score.score ?? 'N/A')}/100</div><div class="lbl">Risk Score</div></div>
+        <div class="stat-box"><div class="val">${esc(score.recommended_severity || 'N/A')}</div><div class="lbl">Đề xuất</div></div>
+        <div class="stat-box"><div class="val">${esc(evalData.readiness_score ?? 'N/A')}%</div><div class="lbl">IR Readiness</div></div>
+      </div>
+      <div style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
+        ${(score.reasons || []).map(r => `<div>• ${esc(r)}</div>`).join('') || 'Chưa có lý do scoring.'}
+      </div>
+      <div style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
+        Outputs: ${(evalData.detection_outputs || []).map(x => esc(x)).join(', ') || 'N/A'}
+      </div>
+    </div>`;
+
+  if (timeline.length) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="card-title">Timeline điều tra</div>
+      <div class="table-wrap"><table><thead><tr><th>Bước</th><th>Giai đoạn</th><th>Sự kiện</th><th>Bằng chứng</th><th>Hành động IR</th></tr></thead><tbody>
+      ${timeline.map(row => `<tr>
+        <td>${esc(row.step)}</td>
+        <td>${esc(row.stage)}</td>
+        <td>${esc(row.event)}</td>
+        <td><code>${esc(row.evidence || 'N/A')}</code></td>
+        <td>${esc(row.ir_action || '')}</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  }
+
+  if (hunts.length) {
+    html += `<div class="card" style="margin-bottom:20px">
+      <div class="card-title">Scope & Threat Hunting</div>
+      ${hunts.map(h => `<div class="action-card p2">
+        <div class="action-header">
+          <span>${esc(h.priority || 'P2')}</span>
+          <span class="action-title">${esc(h.question || 'Hunting query')}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${esc(h.data_source || '')}</span>
+        </div>
+        <div class="action-desc">${esc(h.evidence || '')}</div>
+        <div class="code-block"><span class="cmd-line">${esc(h.query || '')}</span></div>
+      </div>`).join('')}
+    </div>`;
+  }
 
   Object.entries(phaseMap).forEach(([phase, acts]) => {
     html += `<div class="phase-group">
@@ -510,6 +560,11 @@ function renderPlaybook(d) {
           <span style="margin-left:auto;font-size:11px;color:var(--text2)">${a.category}</span>
         </div>
         <div class="action-desc">${a.description}</div>`;
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:11px;color:var(--text2)">
+        <span class="tag">Owner: ${esc(a.owner || 'N/A')}</span>
+        <span class="tag">SLA: ${esc(a.sla || 'N/A')}</span>
+        <span class="tag">Status: ${esc(a.status || 'pending')}</span>
+      </div>`;
       if (a.commands && a.commands.length) {
         html += `<div class="code-block">${a.commands.map(c =>
           c.startsWith('#')||!c.trim()
@@ -519,6 +574,9 @@ function renderPlaybook(d) {
       }
       if (a.notes && a.notes.length) {
         html += `<div class="action-notes">${a.notes.map(n=>`<div class="action-note">💡 <span>${esc(n)}</span></div>`).join('')}</div>`;
+      }
+      if (a.evidence_required && a.evidence_required.length) {
+        html += `<div class="action-notes">${a.evidence_required.map(n=>`<div class="action-note">Evidence: <span>${esc(n)}</span></div>`).join('')}</div>`;
       }
       html += `</div>`;
     });

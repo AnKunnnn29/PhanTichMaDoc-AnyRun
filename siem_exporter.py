@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-SIEM_FORMATS = {"splunk", "elastic", "sigma", "csv"}
+SIEM_FORMATS = {"splunk", "elastic", "sentinel", "sigma", "suricata", "stix", "csv"}
 SIEM_EXTENSIONS = {
     "splunk": "spl",
     "elastic": "kql",
+    "sentinel": "kql",
     "sigma": "yml",
+    "suricata": "rules",
+    "stix": "json",
     "csv": "csv",
 }
 
@@ -40,6 +45,10 @@ def _blocklist(data: dict[str, Any]) -> dict[str, list[str]]:
 
 def _quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _single_quote(value: str) -> str:
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 def _splunk_in(field: str, values: list[str]) -> str:
@@ -142,6 +151,39 @@ def build_elastic_kql(data: dict[str, Any]) -> str:
     return " or\n".join(clauses) if clauses else 'message: "AnyRun IR Tool" and not *'
 
 
+def _kql_dynamic(values: list[str]) -> str:
+    return "dynamic([" + ", ".join(_quote(value) for value in values) + "])"
+
+
+def build_sentinel_kql(data: dict[str, Any]) -> str:
+    iocs = _blocklist(data)
+    malware = data.get("playbook", {}).get("malware_name", "Unknown")
+    severity = data.get("playbook", {}).get("severity", "UNKNOWN")
+    ip_values = _kql_dynamic(iocs["ip_addresses"])
+    domain_values = _kql_dynamic(iocs["domains"])
+    url_values = _kql_dynamic(iocs["urls"])
+    hash_values = _kql_dynamic(iocs["file_hashes"])
+    file_values = _kql_dynamic(iocs["filenames"])
+
+    return "\n".join(
+        [
+            f"// AnyRun IR IOC hunt - {malware} ({severity})",
+            f"let ir_ips = {ip_values};",
+            f"let ir_domains = {domain_values};",
+            f"let ir_urls = {url_values};",
+            f"let ir_hashes = {hash_values};",
+            f"let ir_files = {file_values};",
+            "let network_hits = union isfuzzy=true",
+            "  (DeviceNetworkEvents | where RemoteIP in (ir_ips) or RemoteUrl in (ir_domains) or RemoteUrl in (ir_urls) | project TimeGenerated, DeviceName, AccountName, Indicator=coalesce(RemoteUrl, RemoteIP), Source='DeviceNetworkEvents'),",
+            "  (CommonSecurityLog | where DestinationIP in (ir_ips) or RequestURL in (ir_urls) or DestinationHostName in (ir_domains) | project TimeGenerated, DeviceName=Computer, AccountName=SourceUserName, Indicator=coalesce(RequestURL, DestinationHostName, DestinationIP), Source='CommonSecurityLog');",
+            "let file_hits = DeviceFileEvents | where SHA256 in (ir_hashes) or FileName in (ir_files) | project TimeGenerated, DeviceName, AccountName, Indicator=coalesce(SHA256, FileName), Source='DeviceFileEvents';",
+            "union network_hits, file_hits",
+            "| summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), Sources=make_set(Source), Indicators=make_set(Indicator) by DeviceName, AccountName",
+            "| order by LastSeen desc",
+        ]
+    )
+
+
 def _yaml_list(values: list[str], indent: int = 6) -> list[str]:
     prefix = " " * indent + "- "
     return [prefix + _quote(value) for value in values]
@@ -225,13 +267,144 @@ def build_ioc_csv(data: dict[str, Any]) -> str:
     return output.getvalue()
 
 
+def _sid_base(data: dict[str, Any]) -> int:
+    key = str(data.get("task_uuid") or data.get("analysis_url") or data.get("playbook", {}).get("malware_name") or "anyrun")
+    return 9000000 + (uuid.uuid5(uuid.NAMESPACE_URL, key).int % 500000)
+
+
+def _suricata_content(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace(";", "\\;")
+
+
+def build_suricata_rules(data: dict[str, Any]) -> str:
+    iocs = _blocklist(data)
+    playbook = data.get("playbook", {}) or {}
+    malware = playbook.get("malware_name", "Unknown")
+    severity = playbook.get("severity", "UNKNOWN")
+    sid = _sid_base(data)
+    rev = 1
+    rules = [
+        f"# AnyRun IR Suricata rules - {malware} ({severity})",
+        "# Review internally before deploying to production sensors.",
+    ]
+
+    for ip in iocs["ip_addresses"][:100]:
+        rules.append(
+            f'alert ip any any -> {ip} any (msg:"ANYRUN IR {malware} IP IOC {ip}"; '
+            f"metadata:malware {malware}, severity {severity}; sid:{sid}; rev:{rev};)"
+        )
+        sid += 1
+    for domain in iocs["domains"][:100]:
+        escaped = _suricata_content(domain)
+        rules.append(
+            f'alert dns any any -> any any (msg:"ANYRUN IR {malware} DNS IOC {domain}"; '
+            f'dns.query; content:"{escaped}"; nocase; '
+            f"metadata:malware {malware}, severity {severity}; sid:{sid}; rev:{rev};)"
+        )
+        sid += 1
+        rules.append(
+            f'alert http any any -> any any (msg:"ANYRUN IR {malware} HTTP Host IOC {domain}"; '
+            f'http.host; content:"{escaped}"; nocase; '
+            f"metadata:malware {malware}, severity {severity}; sid:{sid}; rev:{rev};)"
+        )
+        sid += 1
+    for url in iocs["urls"][:100]:
+        escaped = _suricata_content(url)
+        rules.append(
+            f'alert http any any -> any any (msg:"ANYRUN IR {malware} URL IOC"; '
+            f'http.uri; content:"{escaped}"; nocase; '
+            f"metadata:malware {malware}, severity {severity}; sid:{sid}; rev:{rev};)"
+        )
+        sid += 1
+
+    if len(rules) == 2:
+        rules.append("# No network IOC available for Suricata rule generation.")
+    return "\n".join(rules) + "\n"
+
+
+def _stix_id(stix_type: str, key: str) -> str:
+    return f"{stix_type}--{uuid.uuid5(uuid.NAMESPACE_URL, stix_type + ':' + key)}"
+
+
+def _hash_pattern(value: str) -> str:
+    algo = "SHA-256" if len(value) == 64 else "SHA-1" if len(value) == 40 else "MD5" if len(value) == 32 else "SHA-256"
+    return f"[file:hashes.'{algo}' = {_single_quote(value)}]"
+
+
+def build_stix_bundle(data: dict[str, Any]) -> str:
+    iocs = _blocklist(data)
+    playbook = data.get("playbook", {}) or {}
+    malware = playbook.get("malware_name", "Unknown Malware")
+    severity = playbook.get("severity", "UNKNOWN")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    identity_id = _stix_id("identity", "AnyRun IR Tool")
+    objects: list[dict[str, Any]] = [
+        {
+            "type": "identity",
+            "spec_version": "2.1",
+            "id": identity_id,
+            "created": now,
+            "modified": now,
+            "name": "AnyRun IR Tool",
+            "identity_class": "system",
+        }
+    ]
+
+    def add_indicator(kind: str, value: str, pattern: str) -> None:
+        name = f"{malware} {kind} IOC"
+        objects.append(
+            {
+                "type": "indicator",
+                "spec_version": "2.1",
+                "id": _stix_id("indicator", kind + ":" + value),
+                "created": now,
+                "modified": now,
+                "created_by_ref": identity_id,
+                "name": name,
+                "description": f"IOC extracted from Any.Run IR workflow. Severity: {severity}.",
+                "indicator_types": ["malicious-activity"],
+                "pattern": pattern,
+                "pattern_type": "stix",
+                "valid_from": now,
+                "labels": ["anyrun-ir", str(severity).lower(), str(malware).lower().replace(" ", "-")],
+                "external_references": [
+                    {"source_name": "ANY.RUN", "url": data.get("analysis_url", "")}
+                ],
+            }
+        )
+
+    for ip in iocs["ip_addresses"]:
+        add_indicator("ip", ip, f"[ipv4-addr:value = {_single_quote(ip)}]")
+    for domain in iocs["domains"]:
+        add_indicator("domain", domain, f"[domain-name:value = {_single_quote(domain)}]")
+    for url in iocs["urls"]:
+        add_indicator("url", url, f"[url:value = {_single_quote(url)}]")
+    for file_hash in iocs["file_hashes"]:
+        add_indicator("file-hash", file_hash, _hash_pattern(file_hash))
+    for filename in iocs["filenames"]:
+        add_indicator("filename", filename, f"[file:name = {_single_quote(filename)}]")
+
+    bundle = {
+        "type": "bundle",
+        "id": _stix_id("bundle", str(data.get("task_uuid") or now)),
+        "objects": objects,
+    }
+    return json.dumps(bundle, ensure_ascii=False, indent=2) + "\n"
+
+
 def build_siem_export(data: dict[str, Any], fmt: str) -> str:
     if fmt == "splunk":
         return build_splunk_query(data)
     if fmt == "elastic":
         return build_elastic_kql(data)
+    if fmt == "sentinel":
+        return build_sentinel_kql(data)
     if fmt == "sigma":
         return build_sigma_rule(data)
+    if fmt == "suricata":
+        return build_suricata_rules(data)
+    if fmt == "stix":
+        return build_stix_bundle(data)
     if fmt == "csv":
         return build_ioc_csv(data)
     raise ValueError(f"Unsupported SIEM export format: {fmt}")

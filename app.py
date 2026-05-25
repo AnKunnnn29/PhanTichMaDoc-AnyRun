@@ -31,7 +31,7 @@ from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
 from ml_engine import MLThreatPredictor
 from markdown_importer import markdown_to_anyrun_report
 from ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
-from reporter import build_html_report, build_malware_analysis, export_payload_pdf
+from reporter import build_html_report, build_ir_evaluation, build_malware_analysis, export_payload_pdf
 from siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
 from history_store import (
     extract_hashes_from_report,
@@ -147,6 +147,10 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
                 "description": a.description,
                 "commands": a.commands,
                 "notes": a.notes,
+                "owner": a.owner,
+                "sla": a.sla,
+                "evidence_required": a.evidence_required,
+                "status": a.status,
             }
         )
 
@@ -192,6 +196,7 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
             "mutexes": result.processes.mutexes,
         },
         "malware_analysis": build_malware_analysis(result),
+        "ir_evaluation": build_ir_evaluation(result, playbook),
         "playbook": {
             "malware_name": playbook.malware_name,
             "severity": playbook.severity,
@@ -200,6 +205,9 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
             "mitigation": playbook.mitigation_summary,
             "actions": actions_list,
             "ioc_blocklist": playbook.ioc_blocklist,
+            "severity_score": playbook.severity_score,
+            "timeline": playbook.timeline,
+            "scope_hunting": playbook.scope_hunting,
         },
     }
     record_analysis(payload, source=source)
@@ -275,14 +283,14 @@ def demo(malware):
     try:
         if malware == "wannacry":
             return jsonify(
-                {"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC, source="demo:wannacry")}
+                {"ok": True, "data": _build_payload(DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC, use_cache=False, source="demo:wannacry")}
             )
         elif malware == "redline":
             return jsonify(
-                {"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC, source="demo:redline")}
+                {"ok": True, "data": _build_payload(DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC, use_cache=False, source="demo:redline")}
             )
         else:
-            return jsonify({"ok": True, "data": _build_payload(DEMO_REPORT, DEMO_IOC, source="demo:emotet")})
+            return jsonify({"ok": True, "data": _build_payload(DEMO_REPORT, DEMO_IOC, use_cache=False, source="demo:emotet")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -798,6 +806,7 @@ def _write_markdown(data: dict, path: str):
     f = data.get("file") or {}
     p = data.get("playbook", {})
     ma = _ensure_malware_analysis(data)
+    ev = data.get("ir_evaluation", {}) or {}
     lines = [
         f"# Báo Cáo Phản Ứng Sự Cố – {p.get('malware_name','')}",
         f"",
@@ -849,11 +858,50 @@ def _write_markdown(data: dict, path: str):
         "",
         "## IR Playbook",
         "",
+        "### Đánh giá kết quả tự động hóa",
+        "",
+        f"- **Readiness score:** {ev.get('readiness_score', 'N/A')}%",
+        f"- **Tổng IOC:** {ev.get('ioc_count', 'N/A')}",
+        f"- **MITRE techniques:** {ev.get('mitre_count', 'N/A')}",
+        f"- **Hunting queries:** {ev.get('hunting_queries', 'N/A')}",
+        f"- **Detection outputs:** {', '.join(ev.get('detection_outputs', []) or [])}",
+        "",
+        "### Ma trận đánh giá mức độ",
+        "",
+        f"- **Risk score:** {p.get('severity_score', {}).get('score', 'N/A')}/100",
+        f"- **Recommended severity:** {p.get('severity_score', {}).get('recommended_severity', 'N/A')}",
+        "",
+        "### Timeline điều tra",
+        "",
+        "| Bước | Giai đoạn | Sự kiện | Bằng chứng | MITRE | Hành động IR |",
+        "|---|---|---|---|---|---|",
+        *[
+            f"| {row.get('step')} | {row.get('stage')} | {row.get('event')} | `{row.get('evidence')}` | {row.get('mitre') or 'N/A'} | {row.get('ir_action')} |"
+            for row in p.get("timeline", [])
+        ],
+        "",
+        "### Scope & Threat Hunting",
+        "",
+        "| Ưu tiên | Nguồn log | Câu hỏi | Query |",
+        "|---|---|---|---|",
+        *[
+            f"| {row.get('priority')} | {row.get('data_source')} | {row.get('question')} | `{row.get('query')}` |"
+            for row in p.get("scope_hunting", [])
+        ],
+        "",
     ]
     for a in p.get("actions", []):
         lines += [f"### {a['title']}", "", a["description"], ""]
+        lines += [
+            f"- **Owner:** {a.get('owner', 'N/A')}",
+            f"- **SLA:** {a.get('sla', 'N/A')}",
+            f"- **Status:** {a.get('status', 'pending')}",
+            "",
+        ]
         if a.get("commands"):
             lines += ["```powershell", *a["commands"], "```", ""]
+        if a.get("evidence_required"):
+            lines += ["**Bằng chứng cần lưu:**", *[f"- {item}" for item in a.get("evidence_required", [])], ""]
     lines += [
         "",
         "## IOC Blocklist",

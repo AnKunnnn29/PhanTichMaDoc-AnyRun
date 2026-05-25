@@ -93,6 +93,23 @@ class TestMITREActions:
         assert playbook.actions
         assert playbook.ioc_blocklist["ip_addresses"] == []
 
+    def test_playbook_includes_operational_owner_sla_and_evidence(self, sample_analysis_result):
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+
+        assert all(action.owner for action in playbook.actions)
+        assert all(action.sla for action in playbook.actions)
+        assert all(action.evidence_required for action in playbook.actions)
+        assert {action.status for action in playbook.actions} == {"pending"}
+
+    def test_playbook_includes_timeline_scope_hunting_and_scoring(self, sample_analysis_result):
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+
+        assert playbook.severity_score["score"] > 0
+        assert playbook.severity_score["recommended_severity"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+        assert any(item["stage"] == "Command and Control" for item in playbook.timeline)
+        assert any("IOC" in item["question"] for item in playbook.scope_hunting)
+        assert any("Scope" in action.category for action in playbook.actions)
+
 
 class TestIOCBlocklist:
     def test_ioc_blocklist_contains_unique_analysis_iocs(self, sample_analysis_result):

@@ -168,6 +168,9 @@ class TerminalReporter:
                 lbl, color = _PRIORITY_LABEL.get(action.priority, ("", "white"))
                 console.print(f"\n  [{color}]{lbl}[/{color}] [bold]{escape(action.title)}[/bold]")
                 console.print(f"  [dim]{action.category}[/dim]")
+                console.print(
+                    f"  [dim]Owner: {escape(action.owner or 'N/A')} | SLA: {escape(action.sla or 'N/A')} | Status: {escape(action.status)}[/dim]"
+                )
                 console.print(f"  {escape(action.description)}")
                 if action.commands:
                     console.print("  [bold]Lệnh thực thi:[/bold]")
@@ -180,6 +183,10 @@ class TerminalReporter:
                     console.print("  [bold]Ghi chú:[/bold]")
                     for note in action.notes:
                         console.print(f"  [yellow]  • {escape(note)}[/yellow]")
+                if action.evidence_required:
+                    console.print("  [bold]Bằng chứng cần lưu:[/bold]")
+                    for item in action.evidence_required:
+                        console.print(f"  [cyan]  • {escape(item)}[/cyan]")
 
         # IOC summary table
         console.print()
@@ -384,6 +391,46 @@ def build_malware_analysis(result: MalwareAnalysisResult) -> dict[str, Any]:
     }
 
 
+def build_ir_evaluation(result: MalwareAnalysisResult, playbook: IncidentResponsePlaybook) -> dict[str, Any]:
+    blocklist = playbook.ioc_blocklist
+    ioc_count = sum(len(blocklist.get(key, []) or []) for key in ("ip_addresses", "domains", "urls", "file_hashes", "filenames"))
+    action_count = len(playbook.actions)
+    evidence_ready = sum(1 for action in playbook.actions if action.evidence_required)
+    owner_ready = sum(1 for action in playbook.actions if action.owner and action.sla)
+    coverage_points = [
+        bool(result.threat_info.mitre_techniques),
+        ioc_count > 0,
+        bool(playbook.timeline),
+        bool(playbook.scope_hunting),
+        evidence_ready == action_count if action_count else False,
+        owner_ready == action_count if action_count else False,
+    ]
+    readiness = round((sum(1 for point in coverage_points if point) / len(coverage_points)) * 100)
+    detection_outputs = ["IOC CSV", "Splunk SPL", "Elastic KQL", "Microsoft Sentinel KQL", "Sigma", "Suricata", "STIX 2.1"]
+    gaps = []
+    if not result.threat_info.mitre_techniques:
+        gaps.append("Chưa có MITRE technique để giải thích TTP.")
+    if not ioc_count:
+        gaps.append("Chưa có IOC để block/hunt.")
+    if not playbook.scope_hunting:
+        gaps.append("Chưa có truy vấn hunting để xác định phạm vi.")
+    if readiness < 100:
+        gaps.append("Cần đối chiếu log thật để xác nhận phạm vi ảnh hưởng.")
+
+    return {
+        "readiness_score": readiness,
+        "ioc_count": ioc_count,
+        "mitre_count": len(result.threat_info.mitre_techniques),
+        "action_count": action_count,
+        "timeline_steps": len(playbook.timeline),
+        "hunting_queries": len(playbook.scope_hunting),
+        "actions_with_owner_sla": owner_ready,
+        "actions_with_evidence": evidence_ready,
+        "detection_outputs": detection_outputs,
+        "gaps": gaps or ["Đủ dữ liệu cho demo IR; vẫn cần xác minh trên log thật trước khi kết luận sản xuất."],
+    }
+
+
 def _report_payload(
     result: MalwareAnalysisResult,
     playbook: IncidentResponsePlaybook,
@@ -428,6 +475,7 @@ def _report_payload(
             "mutexes": result.processes.mutexes,
         },
         "malware_analysis": build_malware_analysis(result),
+        "ir_evaluation": build_ir_evaluation(result, playbook),
         "playbook": {
             "malware_name": playbook.malware_name,
             "severity": playbook.severity,
@@ -443,10 +491,17 @@ def _report_payload(
                     "description": a.description,
                     "commands": a.commands,
                     "notes": a.notes,
+                    "owner": a.owner,
+                    "sla": a.sla,
+                    "evidence_required": a.evidence_required,
+                    "status": a.status,
                 }
                 for a in playbook.actions
             ],
             "ioc_blocklist": playbook.ioc_blocklist,
+            "severity_score": playbook.severity_score,
+            "timeline": playbook.timeline,
+            "scope_hunting": playbook.scope_hunting,
         },
     }
 
@@ -473,6 +528,7 @@ def build_html_report(data: dict[str, Any]) -> str:
     playbook = data.get("playbook", {}) or {}
     file_info = data.get("file") or {}
     malware_analysis = data.get("malware_analysis", {}) or {}
+    ir_evaluation = data.get("ir_evaluation", {}) or {}
     blocklist = playbook.get("ioc_blocklist", {}) or {}
     actions = playbook.get("actions", []) or []
     severity = str(playbook.get("severity", "UNKNOWN")).upper()
@@ -495,11 +551,34 @@ def build_html_report(data: dict[str, Any]) -> str:
         "</tr>"
         for item in malware_analysis.get("affected_files", []) or []
     )
+    score = playbook.get("severity_score", {}) or {}
+    timeline_rows = "".join(
+        "<tr>"
+        f"<td>{_html(item.get('step'))}</td>"
+        f"<td>{_html(item.get('stage'))}</td>"
+        f"<td>{_html(item.get('event'))}</td>"
+        f"<td class=\"mono\">{_html(item.get('evidence'))}</td>"
+        f"<td>{_html(item.get('mitre') or 'N/A')}</td>"
+        f"<td>{_html(item.get('ir_action'))}</td>"
+        "</tr>"
+        for item in playbook.get("timeline", []) or []
+    )
+    hunt_rows = "".join(
+        "<tr>"
+        f"<td>{_html(item.get('priority'))}</td>"
+        f"<td>{_html(item.get('data_source'))}</td>"
+        f"<td>{_html(item.get('question'))}</td>"
+        f"<td><pre>{_html(item.get('query'))}</pre></td>"
+        f"<td>{_html(item.get('evidence'))}</td>"
+        "</tr>"
+        for item in playbook.get("scope_hunting", []) or []
+    )
     action_html = "".join(
         '<section class="action">'
         f"<div class=\"priority\">P{_html(action.get('priority'))}</div>"
         f"<h3>{_html(action.get('title'))}</h3>"
         f"<p class=\"muted\">{_html(action.get('phase'))} · {_html(action.get('category'))}</p>"
+        f"<p class=\"muted\"><strong>Owner:</strong> {_html(action.get('owner') or 'N/A')} · <strong>SLA:</strong> {_html(action.get('sla') or 'N/A')} · <strong>Status:</strong> {_html(action.get('status') or 'pending')}</p>"
         f"<p>{_html(action.get('description'))}</p>"
         + (
             "<pre>" + "\n".join(_html(command) for command in action.get("commands", []) or []) + "</pre>"
@@ -507,6 +586,7 @@ def build_html_report(data: dict[str, Any]) -> str:
             else ""
         )
         + _html_list(action.get("notes", []) or [], empty="")
+        + ("<p><strong>Bằng chứng cần lưu:</strong></p>" + _html_list(action.get("evidence_required", []) or [], empty="") if action.get("evidence_required") else "")
         + "</section>"
         for action in actions
     )
@@ -563,6 +643,16 @@ def build_html_report(data: dict[str, Any]) -> str:
     <div class="card"><div class="metric">MITRE Techniques<strong>{len(threat.get("mitre", []) or [])}</strong></div></div>
     <div class="card"><div class="metric">IOC Count<strong>{len(blocklist.get("ip_addresses", []) or []) + len(blocklist.get("domains", []) or []) + len(blocklist.get("file_hashes", []) or [])}</strong></div></div>
   </section>
+  <section class="grid">
+    <div class="card"><div class="metric">Risk Score<strong>{_html(score.get("score", "N/A"))}/100</strong></div></div>
+    <div class="card"><div class="metric">Recommended Severity<strong>{_html(score.get("recommended_severity", "N/A"))}</strong></div></div>
+    <div class="card"><div class="metric">Hunting Queries<strong>{len(playbook.get("scope_hunting", []) or [])}</strong></div></div>
+  </section>
+  <section class="grid">
+    <div class="card"><div class="metric">IR Readiness<strong>{_html(ir_evaluation.get("readiness_score", "N/A"))}%</strong></div></div>
+    <div class="card"><div class="metric">IR Actions<strong>{_html(ir_evaluation.get("action_count", len(actions)))}</strong></div></div>
+    <div class="card"><div class="metric">Detection Outputs<strong>{len(ir_evaluation.get("detection_outputs", []) or [])}</strong></div></div>
+  </section>
 
   <h2>1. Tổng Quan</h2>
   <div class="card">
@@ -598,7 +688,13 @@ def build_html_report(data: dict[str, Any]) -> str:
   <h2>5. Affected Files</h2>
   <table><thead><tr><th>Vai trò</th><th>File</th><th>SHA256</th><th>Loại</th></tr></thead><tbody>{affected_rows}</tbody></table>
 
-  <h2>6. IR Playbook</h2>
+  <h2>6. Timeline Điều Tra</h2>
+  <table><thead><tr><th>Bước</th><th>Giai đoạn</th><th>Sự kiện</th><th>Bằng chứng</th><th>MITRE</th><th>Hành động IR</th></tr></thead><tbody>{timeline_rows}</tbody></table>
+
+  <h2>7. Scope & Threat Hunting</h2>
+  <table><thead><tr><th>Ưu tiên</th><th>Nguồn log</th><th>Câu hỏi</th><th>Query</th><th>Bằng chứng</th></tr></thead><tbody>{hunt_rows}</tbody></table>
+
+  <h2>8. IR Playbook</h2>
   <div class="card"><strong>Biện pháp ưu tiên:</strong> {_html(playbook.get("mitigation", ""))}</div>
   {action_html}
 </main>
@@ -891,6 +987,44 @@ class ReportExporter:
             f"",
             f"> {playbook.summary}",
             f"",
+            f"### Đánh Giá Kết Quả Tự Động Hóa",
+            f"",
+            f"| Chỉ số | Giá trị |",
+            f"|---|---|",
+            f"| Readiness score | {build_ir_evaluation(result, playbook).get('readiness_score')}% |",
+            f"| Tổng IOC | {build_ir_evaluation(result, playbook).get('ioc_count')} |",
+            f"| MITRE techniques | {build_ir_evaluation(result, playbook).get('mitre_count')} |",
+            f"| Hành động IR | {build_ir_evaluation(result, playbook).get('action_count')} |",
+            f"| Hunting queries | {build_ir_evaluation(result, playbook).get('hunting_queries')} |",
+            f"",
+            f"### Ma Trận Đánh Giá Mức Độ",
+            f"",
+            f"| Thuộc tính | Giá trị |",
+            f"|---|---|",
+            f"| Điểm rủi ro nội bộ | {playbook.severity_score.get('score', 'N/A')}/100 |",
+            f"| Mức đề xuất | {playbook.severity_score.get('recommended_severity', 'N/A')} |",
+            f"| Mô hình | {playbook.severity_score.get('model', 'N/A')} |",
+            f"",
+            *[f"- {reason}" for reason in playbook.severity_score.get("reasons", [])],
+            f"",
+            f"### Timeline Điều Tra",
+            f"",
+            f"| Bước | Giai đoạn | Sự kiện | Bằng chứng | MITRE | Hành động IR |",
+            f"|---|---|---|---|---|---|",
+            *[
+                f"| {row.get('step')} | {row.get('stage')} | {row.get('event')} | `{row.get('evidence')}` | {row.get('mitre') or 'N/A'} | {row.get('ir_action')} |"
+                for row in playbook.timeline
+            ],
+            f"",
+            f"### Scope & Threat Hunting",
+            f"",
+            f"| Ưu tiên | Nguồn log | Câu hỏi | Bằng chứng cần thu |",
+            f"|---|---|---|---|",
+            *[
+                f"| {row.get('priority')} | {row.get('data_source')} | {row.get('question')} | {row.get('evidence')} |"
+                for row in playbook.scope_hunting
+            ],
+            f"",
             f"**Biện pháp ưu tiên:** {playbook.mitigation_summary}",
             f"",
         ]
@@ -907,6 +1041,7 @@ class ReportExporter:
                 lines.append(f"#### {pri_labels.get(action.priority,'')} – {action.title}")
                 lines.append(f"")
                 lines.append(f"**Danh mục:** {action.category}")
+                lines.append(f"**Owner/SLA/Status:** {action.owner or 'N/A'} / {action.sla or 'N/A'} / {action.status}")
                 lines.append(f"")
                 lines.append(action.description)
                 lines.append("")
@@ -918,6 +1053,11 @@ class ReportExporter:
                 if action.notes:
                     for note in action.notes:
                         lines.append(f"> 💡 {note}")
+                    lines.append("")
+                if action.evidence_required:
+                    lines.append("**Bằng chứng cần lưu:**")
+                    for item in action.evidence_required:
+                        lines.append(f"- {item}")
                     lines.append("")
 
         lines += [
@@ -956,7 +1096,11 @@ class ReportExporter:
             "malware_name": playbook.malware_name,
             "summary": playbook.summary,
             "malware_analysis": payload["malware_analysis"],
+            "ir_evaluation": payload["ir_evaluation"],
             "ioc_blocklist": playbook.ioc_blocklist,
+            "severity_score": playbook.severity_score,
+            "timeline": playbook.timeline,
+            "scope_hunting": playbook.scope_hunting,
             "mitre_techniques": result.threat_info.mitre_techniques,
             "actions": payload["playbook"]["actions"],
         }

@@ -24,6 +24,10 @@ class IncidentAction:
     description: str
     commands: List[str] = field(default_factory=list)
     notes: List[str]   = field(default_factory=list)
+    owner: str = ""
+    sla: str = ""
+    evidence_required: List[str] = field(default_factory=list)
+    status: str = "pending"
 
 
 @dataclass
@@ -37,6 +41,9 @@ class IncidentResponsePlaybook:
     ioc_blocklist: Dict[str, List[str]]   # {"ips": [...], "domains": [...], ...}
     mitigation_summary: str
     affected_os: str
+    severity_score: Dict = field(default_factory=dict)
+    timeline: List[Dict] = field(default_factory=list)
+    scope_hunting: List[Dict] = field(default_factory=list)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +86,9 @@ class IncidentResponseGenerator:
         )
 
         malware_name = threat.threat_name or ", ".join(threat.tags) or "Unknown Malware"
+        severity_score = self._build_severity_score(result)
+        timeline = self._build_timeline(result)
+        scope_hunting = self._build_scope_hunting(result)
 
         actions: List[IncidentAction] = []
 
@@ -223,6 +233,26 @@ class IncidentResponseGenerator:
         if threat.mitre_techniques:
             self._add_mitre_actions(actions, threat.mitre_techniques)
 
+        if scope_hunting:
+            actions.append(IncidentAction(
+                priority=2,
+                phase=self.PHASES["IDENTIFY"],
+                category="Threat hunting / Scope",
+                title="Xác định phạm vi ảnh hưởng trong log nội bộ",
+                description=(
+                    "Dùng IOC và artifact từ Any.Run để truy vấn DNS/proxy/firewall/EDR, "
+                    "tìm host và user khác có dấu hiệu liên quan trước khi kết luận sự cố đã được khoanh vùng."
+                ),
+                commands=[item["query"] for item in scope_hunting[:6] if item.get("query")],
+                notes=[
+                    "Truy vấn tối thiểu 7 ngày, ưu tiên 30 ngày nếu có dấu hiệu credential theft/C2.",
+                    "Mỗi host match IOC phải được đưa vào danh sách containment hoặc triage riêng.",
+                ],
+                owner="SOC L2 / Threat Hunter",
+                sla="1 giờ",
+                evidence_required=["DNS/proxy/firewall query result", "EDR host list", "Affected user list"],
+            ))
+
         # ── Phase 4: Recovery ────────────────────────────────────────────── #
         actions.append(IncidentAction(
             priority=3,
@@ -278,7 +308,9 @@ class IncidentResponseGenerator:
             f"Phát hiện mã độc '{malware_name}' với mức độ '{severity_vi}'. "
             f"Mã độc thực hiện {len(threat.mitre_techniques)} kỹ thuật MITRE ATT&CK, "
             f"kết nối {len(network.ip_addresses)} IP/{len(network.domains)} domain C2, "
-            f"và tạo {len(procs.dropped_files)} file độc hại trên hệ thống."
+            f"và tạo {len(procs.dropped_files)} file độc hại trên hệ thống. "
+            f"Ma trận rủi ro nội bộ chấm {severity_score['score']}/100 "
+            f"({severity_score['recommended_severity']})."
         )
 
         mitigation = (
@@ -290,6 +322,9 @@ class IncidentResponseGenerator:
             f"(5) Patch lỗ hổng bị khai thác nếu xác định được."
         )
 
+        for action in actions:
+            self._apply_operational_defaults(action)
+
         return IncidentResponsePlaybook(
             malware_name       = malware_name,
             severity           = severity_en,
@@ -299,7 +334,224 @@ class IncidentResponseGenerator:
             ioc_blocklist      = ioc_blocklist,
             mitigation_summary = mitigation,
             affected_os        = result.os_env,
+            severity_score     = severity_score,
+            timeline           = timeline,
+            scope_hunting      = scope_hunting,
         )
+
+    def _build_severity_score(self, result: MalwareAnalysisResult) -> Dict:
+        threat = result.threat_info
+        network = result.network
+        procs = result.processes
+        technique_ids = self._technique_ids(threat.mitre_techniques)
+
+        score = max(0, min(int(threat.threat_level), 4)) * 15
+        reasons = [f"Any.Run threat level {threat.threat_level}/4"]
+
+        if network.ip_addresses or network.domains or network.urls:
+            score += 15
+            reasons.append("Có IOC mạng/C2 cần hunting và block")
+        if procs.injected_processes or any(t.startswith("T1055") for t in technique_ids):
+            score += 15
+            reasons.append("Có process injection/defense evasion")
+        if procs.registry_keys or any(t.startswith("T1547") for t in technique_ids):
+            score += 10
+            reasons.append("Có dấu hiệu persistence")
+        if procs.dropped_files:
+            score += 10
+            reasons.append("Có dropped files cần eradication")
+        if any(t.startswith(("T1555", "T1003", "T1056", "T1041")) for t in technique_ids):
+            score += 20
+            reasons.append("Có khả năng credential theft/exfiltration")
+        if any(t.startswith("T1486") for t in technique_ids):
+            score += 30
+            reasons.append("Có hành vi ransomware/impact")
+
+        score = min(score, 100)
+        if score >= 80:
+            recommended = "CRITICAL"
+        elif score >= 60:
+            recommended = "HIGH"
+        elif score >= 30:
+            recommended = "MEDIUM"
+        else:
+            recommended = "LOW"
+
+        return {
+            "score": score,
+            "recommended_severity": recommended,
+            "model": "Any.Run level + IOC/TTP operational impact",
+            "reasons": reasons,
+        }
+
+    def _build_timeline(self, result: MalwareAnalysisResult) -> List[Dict]:
+        timeline: List[Dict] = []
+        threat = result.threat_info
+        file = result.file_info
+        procs = result.processes
+        network = result.network
+        technique_ids = self._technique_ids(threat.mitre_techniques)
+
+        timeline.append({
+            "step": 1,
+            "stage": "Intake",
+            "event": "Nhận file/URL nghi vấn và chạy phân tích động trên Any.Run",
+            "evidence": result.analysis_url,
+            "mitre": "",
+            "ir_action": "Lưu report, hash, task UUID làm bằng chứng ban đầu",
+        })
+        if file:
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Execution",
+                "event": f"Mẫu chính được thực thi/quan sát: {file.name}",
+                "evidence": file.sha256 or file.md5 or file.name,
+                "mitre": self._join_matching_ids(technique_ids, ("T1204", "T1059")),
+                "ir_action": "Xác định host/user đã khởi chạy file tương tự",
+            })
+        if procs.injected_processes:
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Defense Evasion",
+                "event": "Process injection vào: " + ", ".join(procs.injected_processes[:5]),
+                "evidence": ", ".join(procs.injected_processes[:5]),
+                "mitre": self._join_matching_ids(technique_ids, ("T1055",)),
+                "ir_action": "Dump memory trước khi kill process, sau đó isolate endpoint",
+            })
+        if procs.registry_keys:
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Persistence",
+                "event": f"Phát hiện {len(procs.registry_keys)} registry/autostart artifact",
+                "evidence": "; ".join(procs.registry_keys[:3]),
+                "mitre": self._join_matching_ids(technique_ids, ("T1547",)),
+                "ir_action": "Export registry backup và gỡ persistence sau khi thu thập bằng chứng",
+            })
+        if network.ip_addresses or network.domains or network.urls:
+            ioc_preview = ", ".join((network.ip_addresses + network.domains + network.urls)[:5])
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Command and Control",
+                "event": "Liên lạc hạ tầng C2 hoặc tải payload",
+                "evidence": ioc_preview,
+                "mitre": self._join_matching_ids(technique_ids, ("T1071", "T1105")),
+                "ir_action": "Block IOC và hunt trên DNS/proxy/firewall log",
+            })
+        if procs.dropped_files:
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Payload / Artifact",
+                "event": f"Tạo/drop {len(procs.dropped_files)} file trên hệ thống",
+                "evidence": ", ".join(f.get("name", "") for f in procs.dropped_files[:5]),
+                "mitre": "",
+                "ir_action": "So khớp hash/file path trên EDR và xóa sau containment",
+            })
+        if any(t.startswith("T1486") for t in technique_ids):
+            timeline.append({
+                "step": len(timeline) + 1,
+                "stage": "Impact",
+                "event": "Dấu hiệu mã hóa dữ liệu/ransomware",
+                "evidence": "MITRE T1486",
+                "mitre": self._join_matching_ids(technique_ids, ("T1486",)),
+                "ir_action": "Cô lập khẩn cấp, bảo vệ backup offline, không tắt máy nếu cần memory",
+            })
+        return timeline
+
+    def _build_scope_hunting(self, result: MalwareAnalysisResult) -> List[Dict]:
+        iocs = result.iocs
+        procs = result.processes
+        technique_ids = self._technique_ids(result.threat_info.mitre_techniques)
+        hunts: List[Dict] = []
+
+        if iocs.ips or iocs.domains or iocs.urls:
+            terms = iocs.ips + iocs.domains + iocs.urls
+            quoted = ", ".join(f'"{item}"' for item in terms[:20])
+            hunts.append({
+                "priority": "P1",
+                "data_source": "DNS / Proxy / Firewall",
+                "question": "Host nào đã kết nối tới IOC C2?",
+                "query": f"index=* ({quoted}) | stats earliest(_time) latest(_time) values(user) by host src_ip",
+                "evidence": "Danh sách host, user, thời gian kết nối IOC",
+            })
+        hash_values = [list(item.values())[0] for item in iocs.file_hashes if item]
+        if hash_values or iocs.filenames:
+            values = hash_values + iocs.filenames
+            quoted = ", ".join(f'"{item}"' for item in values[:20])
+            hunts.append({
+                "priority": "P1",
+                "data_source": "EDR / AV telemetry",
+                "question": "Endpoint nào có file hash/tên file trùng IOC?",
+                "query": f"DeviceFileEvents | where SHA256 in ({quoted}) or FileName in ({quoted})",
+                "evidence": "Host, file path, SHA256, action taken của EDR",
+            })
+        process_names = [p.get("name", "") for p in procs.processes if p.get("name")]
+        if process_names or procs.injected_processes:
+            values = list(dict.fromkeys(procs.injected_processes + process_names))[:20]
+            quoted = ", ".join(f'"{item}"' for item in values)
+            hunts.append({
+                "priority": "P2",
+                "data_source": "Process telemetry",
+                "question": "Process tree nào chạy giống sandbox?",
+                "query": f"DeviceProcessEvents | where FileName in ({quoted}) | project Timestamp, DeviceName, AccountName, FileName, ProcessCommandLine, InitiatingProcessFileName",
+                "evidence": "Process command line, parent process, user thực thi",
+            })
+        if procs.registry_keys:
+            quoted = ", ".join(f'"{item}"' for item in procs.registry_keys[:20])
+            hunts.append({
+                "priority": "P2",
+                "data_source": "Registry telemetry",
+                "question": "Máy nào có persistence registry tương tự?",
+                "query": f"DeviceRegistryEvents | where RegistryKey in ({quoted})",
+                "evidence": "Registry key/value, device, user, timestamp",
+            })
+        if any(t.startswith("T1566") for t in technique_ids):
+            hunts.append({
+                "priority": "P2",
+                "data_source": "Email gateway / M365",
+                "question": "Email nào phát tán file/link ban đầu?",
+                "query": "EmailEvents | join EmailAttachmentInfo on NetworkMessageId | where SHA256 has_any (dynamic([\"<sample_sha256>\"]))",
+                "evidence": "Sender, recipient, subject, attachment hash, delivery status",
+            })
+        return hunts
+
+    def _apply_operational_defaults(self, action: IncidentAction) -> None:
+        phase = action.phase.lower()
+        category = action.category.lower()
+
+        if not action.owner:
+            if "containment" in phase or "cô lập" in category or "ransomware" in category:
+                action.owner = "IR Lead / Network Admin"
+            elif "eradication" in phase or "loại" in phase or "persistence" in category:
+                action.owner = "System Admin / SOC L2"
+            elif "recovery" in phase or "phục hồi" in phase:
+                action.owner = "System Admin"
+            elif "lessons" in phase or "rút" in phase:
+                action.owner = "IR Lead"
+            else:
+                action.owner = "SOC L2"
+
+        if not action.sla:
+            action.sla = {1: "15 phút", 2: "1 giờ", 3: "4 giờ", 4: "3 ngày"}.get(action.priority, "4 giờ")
+
+        if not action.evidence_required:
+            if "containment" in phase:
+                action.evidence_required = ["Firewall/EDR block confirmation", "Host isolation timestamp"]
+            elif "eradication" in phase or "loại" in phase:
+                action.evidence_required = ["Deleted artifact list", "AV/EDR scan result"]
+            elif "recovery" in phase or "phục hồi" in phase:
+                action.evidence_required = ["Clean scan result", "Business owner approval"]
+            elif "lessons" in phase or "rút" in phase:
+                action.evidence_required = ["Final incident report", "Updated detection/control record"]
+            else:
+                action.evidence_required = ["Any.Run report", "IOC list", "Relevant log excerpt"]
+
+    @staticmethod
+    def _technique_ids(techniques: List[Dict]) -> set[str]:
+        return {str(t.get("id", "")).upper() for t in techniques if t.get("id")}
+
+    @staticmethod
+    def _join_matching_ids(technique_ids: set[str], prefixes: tuple[str, ...]) -> str:
+        return ", ".join(sorted(t for t in technique_ids if t.startswith(prefixes)))
 
     # ── MITRE ATT&CK specific responses ────────────────────────────────── #
 

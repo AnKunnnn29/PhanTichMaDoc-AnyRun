@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 import reporter
-from reporter import ReportExporter, TerminalReporter, build_html_report, build_malware_analysis
+from reporter import ReportExporter, TerminalReporter, build_html_report, build_ir_evaluation, build_malware_analysis
 
 pytestmark = pytest.mark.unit
 
@@ -109,6 +109,17 @@ class TestReportContent:
         assert "MITRE T1566" in behavior
         assert "process injection" in behavior.lower()
         assert "C2" in behavior
+
+    def test_build_ir_evaluation_scores_report_readiness(self, sample_analysis_result):
+        from incident_response import IncidentResponseGenerator
+
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+        evaluation = build_ir_evaluation(sample_analysis_result, playbook)
+
+        assert evaluation["readiness_score"] > 80
+        assert evaluation["ioc_count"] >= 5
+        assert "STIX 2.1" in evaluation["detection_outputs"]
+        assert evaluation["actions_with_owner_sla"] == evaluation["action_count"]
 
     def test_build_malware_analysis_has_fallback_for_sparse_result(self, sample_analysis_result):
         sample_analysis_result.threat_info.mitre_techniques = []

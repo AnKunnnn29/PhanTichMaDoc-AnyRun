@@ -25,6 +25,9 @@ class TestDemoEndpoints:
         assert payload["ok"] is True
         assert payload["data"]["threat"]["threat_name"] == expected_name
         assert payload["data"]["playbook"]["actions"]
+        assert payload["data"]["playbook"]["timeline"]
+        assert payload["data"]["playbook"]["severity_score"]["score"] >= 0
+        assert payload["data"]["ir_evaluation"]["readiness_score"] >= 0
 
 
 class TestAnalyzeEndpoint:
@@ -171,7 +174,15 @@ class TestExportAndHistoryEndpoints:
 
     @pytest.mark.parametrize(
         ("fmt", "suffix"),
-        [("csv", ".csv"), ("splunk", ".spl"), ("elastic", ".kql"), ("sigma", ".yml")],
+        [
+            ("csv", ".csv"),
+            ("splunk", ".spl"),
+            ("elastic", ".kql"),
+            ("sentinel", ".kql"),
+            ("sigma", ".yml"),
+            ("suricata", ".rules"),
+            ("stix", ".json"),
+        ],
     )
     def test_export_siem_formats_create_report_file(self, flask_test_client, fmt, suffix):
         data = {
