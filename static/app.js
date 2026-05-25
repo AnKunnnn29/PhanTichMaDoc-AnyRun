@@ -16,14 +16,23 @@ window.onload = async () => {
     await restoreLatestFromServer();
   }
   await loadHistory();
+  animateCards(document);
 };
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 function showPage(id, el) {
-  document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
+  const target = document.getElementById('page-' + id);
+  document.querySelectorAll('[id^="page-"]').forEach(p => {
+    p.style.display = p === target ? 'block' : 'none';
+    p.classList.remove('page-enter');
+  });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + id).style.display = 'block';
   if (el) el.classList.add('active');
+  if (target) {
+    void target.offsetWidth;
+    target.classList.add('page-enter');
+    animateCards(target);
+  }
 }
 
 function switchTab(id) {
@@ -36,6 +45,16 @@ function switchTab(id) {
 function openImportJson() {
   showPage('analyze', document.querySelector('[data-page=analyze]'));
   switchTab('tab-import');
+}
+
+function animateCards(scope = document) {
+  const items = scope.querySelectorAll('.card, .stat-box, .welcome-item, .action-card, .mitre-chip');
+  items.forEach((item, idx) => {
+    item.classList.remove('stagger-item');
+    item.style.setProperty('--delay', `${Math.min(idx * 45, 360)}ms`);
+    void item.offsetWidth;
+    item.classList.add('stagger-item');
+  });
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -364,20 +383,40 @@ function severityColor(lvl) {
   return m[severityClass(lvl)] || 'var(--text2)';
 }
 
+function clampScore(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function buildThreatGauge(score, lvl) {
+  const pct = clampScore(score, Math.round((lvl / 4) * 100));
+  return `
+    <div class="threat-gauge" style="--gauge-pct:${pct};--gauge-color:${severityColor(lvl)}">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="gauge-track" cx="60" cy="60" r="50" pathLength="100"></circle>
+        <circle class="gauge-value" cx="60" cy="60" r="50" pathLength="100"></circle>
+      </svg>
+      <div class="gauge-center"><b>${pct}</b><span>/100</span></div>
+    </div>`;
+}
+
 function renderDashboard(d) {
   document.getElementById('welcome-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   const t = d.threat, p = d.playbook, net = d.network, pr = d.processes;
   const lvl = t.threat_level;
+  const riskScore = p?.severity_score?.score;
 
   // Stats
   document.getElementById('stat-row').innerHTML = `
-    <div class="stat-box"><div class="val" style="color:${severityColor(lvl)}">${lvl}/4</div><div class="lbl">Threat Level</div></div>
+    <div class="stat-box stat-gauge">${buildThreatGauge(riskScore, lvl)}<div class="lbl">Threat Score</div></div>
     <div class="stat-box"><div class="val" style="color:var(--accent)">${t.mitre.length}</div><div class="lbl">MITRE Techniques</div></div>
     <div class="stat-box"><div class="val" style="color:var(--red)">${net.ips.length + net.domains.length}</div><div class="lbl">C2 Indicators</div></div>
   `;
 
   // Threat card
+  document.getElementById('card-threat').classList.add('card-glow');
   const bar_w = Math.round((lvl / 4) * 100);
   let ml_html = '';
   if (t.ml && t.ml.status === 'success') {
@@ -467,6 +506,7 @@ function renderDashboard(d) {
     ${pr.dropped.map(f=>`<div class="proc-item malicious">📄 ${f.name}</div>`).join('')}</div>` : ''}
     ${pr.registry.length ? `<div style="margin-top:12px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">REGISTRY KEYS</div>
     ${pr.registry.slice(0,8).map(k=>`<div class="proc-item" style="font-size:11px">${k}</div>`).join('')}</div>` : ''}`;
+  animateCards(document.getElementById('dashboard'));
 }
 
 function netTab(id, el) {
@@ -502,7 +542,7 @@ function renderPlaybook(d) {
     <div class="card" style="margin-bottom:20px">
       <div class="card-title">Ma trận đánh giá mức độ</div>
       <div class="grid-3">
-        <div class="stat-box"><div class="val">${esc(score.score ?? 'N/A')}/100</div><div class="lbl">Risk Score</div></div>
+        <div class="stat-box stat-gauge">${buildThreatGauge(score.score, p.threat_level)}<div class="lbl">Risk Score</div></div>
         <div class="stat-box"><div class="val">${esc(score.recommended_severity || 'N/A')}</div><div class="lbl">Đề xuất</div></div>
         <div class="stat-box"><div class="val">${esc(evalData.readiness_score ?? 'N/A')}%</div><div class="lbl">IR Readiness</div></div>
       </div>
@@ -583,6 +623,7 @@ function renderPlaybook(d) {
     html += `</div></div>`;
   });
   document.getElementById('playbook-content').innerHTML = html;
+  animateCards(document.getElementById('playbook-content'));
 }
 
 function togglePhase(el) {
@@ -625,6 +666,7 @@ function renderIOCs(d) {
           b.domains.map(d=>`<span class="cmd-line">0.0.0.0 ${d}</span>`).join('\n') : '')
       }</div>
     </div>`;
+  animateCards(document.getElementById('ioc-content'));
 }
 
 function renderHistory(tasks) {
@@ -739,7 +781,16 @@ function copyAllIOCs() {
 }
 
 function copyText(txt) {
-  navigator.clipboard.writeText(txt).then(() => toast('Đã copy: ' + txt));
+  const target = window.event?.currentTarget;
+  navigator.clipboard.writeText(txt).then(() => {
+    if (target?.classList) {
+      target.classList.remove('copied');
+      void target.offsetWidth;
+      target.classList.add('copied');
+      setTimeout(() => target.classList.remove('copied'), 900);
+    }
+    toast('Đã copy: ' + txt);
+  });
 }
 
 function esc(s) {
@@ -810,7 +861,7 @@ async function askAI(question = '') {
   const answerEl = document.getElementById('ai-answer');
   let streamedAnswer = '';
   let meta = { mode: 'local_fallback', model: '' };
-  answerEl.innerHTML = '<div class="loading-wrap" style="padding:18px"><div class="spinner"></div><p>AI đang phân tích dữ liệu sự cố...</p></div>';
+  answerEl.innerHTML = '<div class="ai-bubble"><span class="typing-dots"><span></span><span></span><span></span></span>AI đang phân tích dữ liệu sự cố...</div>';
 
   const modeLabel = {
     openai: 'OpenAI',
@@ -827,7 +878,7 @@ async function askAI(question = '') {
     const label = modeLabel[meta.mode] || 'Local assistant';
     const warningHtml = meta.warning ? `<div class="ai-warning">${esc(meta.warning)}</div>` : '';
     const parts = [meta.model, latencyMs !== undefined ? `${latencyMs}ms` : 'streaming...'].filter(Boolean);
-    answerEl.innerHTML = `<div class="ai-mode">${label}${parts.length ? ` · ${esc(parts.join(' · '))}` : ''}</div>${warningHtml}<pre>${esc(answer)}</pre>`;
+    answerEl.innerHTML = `<div class="ai-mode">${label}${parts.length ? ` · ${esc(parts.join(' · '))}` : ''}</div>${warningHtml}<div class="ai-bubble"><pre>${esc(answer || 'Đang nhận dữ liệu...')}</pre></div>`;
   };
 
   const fallbackJson = async () => {
