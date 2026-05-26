@@ -26,8 +26,14 @@ function showPage(id, el) {
     p.style.display = p === target ? 'block' : 'none';
     p.classList.remove('page-enter');
   });
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  if (el) el.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.remove('active');
+    n.removeAttribute('aria-current');
+  });
+  if (el) {
+    el.classList.add('active');
+    el.setAttribute('aria-current', 'page');
+  }
   if (target) {
     void target.offsetWidth;
     target.classList.add('page-enter');
@@ -36,10 +42,17 @@ function showPage(id, el) {
 }
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  document.getElementById('pane-' + id.replace('tab-', '')).classList.add('active');
+  const paneId = 'pane-' + id.replace('tab-', '');
+  document.querySelectorAll('[role="tab"]').forEach(t => {
+    const active = t.id === id;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[role="tabpanel"]').forEach(p => {
+    const active = p.id === paneId;
+    p.classList.toggle('active', active);
+    p.hidden = !active;
+  });
 }
 
 function openImportJson() {
@@ -47,8 +60,12 @@ function openImportJson() {
   switchTab('tab-import');
 }
 
+function showDashboard() {
+  showPage('dashboard', document.querySelector('[data-page=dashboard]'));
+}
+
 function animateCards(scope = document) {
-  const items = scope.querySelectorAll('.card, .stat-box, .welcome-item, .action-card, .mitre-chip');
+  const items = scope.querySelectorAll('.card, .stat-box, .home-card, .home-metric, .flow-step, .action-card, .mitre-chip');
   items.forEach((item, idx) => {
     item.classList.remove('stagger-item');
     item.style.setProperty('--delay', `${Math.min(idx * 45, 360)}ms`);
@@ -79,11 +96,15 @@ function getKey() {
 
 // ── Loading helpers ───────────────────────────────────────────────────────────
 function showLoading(msg = 'Đang phân tích...') {
-  document.getElementById('analyze-loading').style.display = 'block';
+  const loading = document.getElementById('analyze-loading');
+  loading.style.display = 'block';
+  loading.setAttribute('aria-busy', 'true');
   document.getElementById('loading-msg').textContent = msg;
 }
 function hideLoading() {
-  document.getElementById('analyze-loading').style.display = 'none';
+  const loading = document.getElementById('analyze-loading');
+  loading.style.display = 'none';
+  loading.setAttribute('aria-busy', 'false');
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -95,7 +116,7 @@ async function runDemo(malware = 'emotet') {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderAll(j.data);
-    showPage('home', document.querySelector('[data-page=home]'));
+    showDashboard();
     toast(`Demo ${malware.toUpperCase()} đã tải xong!`);
   } catch (e) { toast(e.message, 'err'); }
   finally { hideLoading(); }
@@ -115,7 +136,7 @@ async function analyzeTask() {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderAll(j.data);
-    showPage('home', document.querySelector('[data-page=home]'));
+    showDashboard();
     toast('Phân tích hoàn tất!');
   } catch (e) { toast(e.message, 'err'); }
   finally { hideLoading(); }
@@ -198,7 +219,7 @@ function startPolling(task_id) {
   showPage('analyze', document.querySelector('[data-page=analyze]'));
   document.getElementById('progress-panel').style.display = 'block';
   document.getElementById('progress-task').textContent = task_id;
-  document.getElementById('progress-bar').style.width = '5%';
+  setProgress(5);
   document.getElementById('progress-pct').textContent = '5%';
   document.getElementById('progress-msg').textContent = 'Đã submit lên Any.Run sandbox...';
   if (_pollTimer) clearInterval(_pollTimer);
@@ -207,14 +228,14 @@ function startPolling(task_id) {
       const r = await fetch(`/api/task_status/${task_id}`);
       const j = await r.json();
       if (!j.ok) { clearInterval(_pollTimer); return; }
-      document.getElementById('progress-bar').style.width = j.progress + '%';
+      setProgress(j.progress);
       document.getElementById('progress-pct').textContent = j.progress + '%';
       document.getElementById('progress-msg').textContent = j.message;
       if (j.status === 'done') {
         clearInterval(_pollTimer);
         document.getElementById('progress-panel').style.display = 'none';
         renderAll(j.data);
-        showPage('home', document.querySelector('[data-page=home]'));
+        showDashboard();
         toast('Phân tích hoàn tất!');
       } else if (j.status === 'error') {
         clearInterval(_pollTimer);
@@ -223,6 +244,14 @@ function startPolling(task_id) {
       }
     } catch(e) { /* mạng tạm lỗi, thử lại */ }
   }, 5000);
+}
+
+function setProgress(progress) {
+  const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+  const bar = document.getElementById('progress-bar');
+  const track = bar?.parentElement;
+  if (bar) bar.style.transform = `scaleX(${pct / 100})`;
+  if (track) track.setAttribute('aria-valuenow', String(Math.round(pct)));
 }
 
 // Mở thư mục reports
@@ -257,7 +286,7 @@ async function analyzeJsonImport() {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderAll(j.data);
-    showPage('home', document.querySelector('[data-page=home]'));
+    showDashboard();
     toast('Import report hoàn tất!');
   } catch(e) { toast(e.message, 'err'); }
   finally { hideLoading(); }
@@ -266,6 +295,12 @@ async function analyzeJsonImport() {
 function handleFileSelect(inp) {
   selectedFile = inp.files[0];
   if (selectedFile) document.getElementById('file-name').textContent = '📄 ' + selectedFile.name;
+}
+
+function handleUploadZoneKey(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  document.getElementById('file-input').click();
 }
 function handleDrop(e) {
   e.preventDefault();
@@ -307,14 +342,14 @@ async function loadHistory() {
 }
 
 // ── Render functions ──────────────────────────────────────────────────────────
-function renderAll(data) {
+function renderAll(data, options = {}) {
   G.data = data;
   saveLastAnalysis(data);
   renderDashboard(data);
   renderPlaybook(data);
   renderIOCs(data);
   renderAIProactive(data);
-  if (data.cache?.hit) toast('Dùng lại lịch sử: ' + data.cache.reason);
+  if (!options.silent && data.cache?.hit) toast('Dùng lại lịch sử: ' + data.cache.reason);
 }
 
 function saveLastAnalysis(data) {
@@ -352,7 +387,6 @@ function restoreLastAnalysis() {
     renderPlaybook(data);
     renderIOCs(data);
     renderAIProactive(data);
-    toast('Đã khôi phục phiên phân tích gần nhất');
     return true;
   } catch (e) {
     localStorage.removeItem(LAST_ANALYSIS_KEY);
@@ -365,8 +399,7 @@ async function restoreLatestFromServer() {
     const r = await fetch('/api/history/local/latest');
     const j = await r.json();
     if (!j.ok || !j.data) return;
-    renderAll(j.data);
-    toast('Đã nạp lại phân tích gần nhất từ lịch sử');
+    renderAll(j.data, { silent: true });
   } catch (e) {
     // Không có lịch sử thì giữ màn hình chờ bình thường.
   }
@@ -431,7 +464,7 @@ function formatFileSize(bytes) {
 }
 
 function renderDashboard(d) {
-  document.getElementById('welcome-screen').style.display = 'none';
+  document.getElementById('dashboard-empty').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   const t = d.threat, p = d.playbook, net = d.network, pr = d.processes;
   const lvl = t.threat_level;
@@ -452,7 +485,7 @@ function renderDashboard(d) {
       const mlColor = t.ml.prediction === 'Malicious' ? 'var(--red)' : t.ml.prediction === 'Suspicious' ? 'var(--orange)' : 'var(--green)';
       ml_html = `<div style="margin-top:14px;padding:10px;border-radius:6px;background:var(--bg3);border:1px solid var(--border)">
         <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">🤖 MACHINE LEARNING ASSESSMENT</div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="ml-row">
            <span style="font-size:14px;font-weight:600;color:${mlColor}">${t.ml.prediction}</span>
            <span style="font-size:13px;color:var(--text2)">Độ tin cậy: <b style="color:var(--text)">${t.ml.confidence}%</b></span>
         </div>
@@ -511,10 +544,10 @@ function renderDashboard(d) {
   // Network
   document.getElementById('card-network').innerHTML = `
     <div class="card-title">🌐 Hoạt động mạng</div>
-    <div class="tabs" style="margin-bottom:14px">
-      <div class="tab active" onclick="netTab('ips',this)">IPs (${net.ips.length})</div>
-      <div class="tab" onclick="netTab('domains',this)">Domains (${net.domains.length})</div>
-      <div class="tab" onclick="netTab('http',this)">HTTP (${net.http.length})</div>
+    <div class="tabs" role="tablist" aria-label="Loại chỉ báo mạng" style="margin-bottom:14px">
+      <button type="button" class="tab active" role="tab" aria-selected="true" aria-controls="net-ips" onclick="netTab('ips',this)">IPs (${net.ips.length})</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-domains" onclick="netTab('domains',this)">Domains (${net.domains.length})</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-http" onclick="netTab('http',this)">HTTP (${net.http.length})</button>
     </div>
     <div id="net-ips" class="tag-list">${net.ips.map(ip=>`<span class="tag tag-ip" title="Click để copy" onclick="copyText('${ip}')">${ip}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
     <div id="net-domains" style="display:none" class="tag-list">${net.domains.map(d=>`<span class="tag tag-domain" onclick="copyText('${d}')">${d}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
@@ -544,8 +577,11 @@ function netTab(id, el) {
   ['ips','domains','http'].forEach(t => document.getElementById('net-'+t).style.display = 'none');
   document.getElementById('net-'+id).style.display = id==='http'?'block':'flex';
   document.getElementById('net-'+id).style.flexWrap = 'wrap';
-  el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
+  el.parentElement.querySelectorAll('.tab').forEach(t => {
+    const active = t === el;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+  });
 }
 
 function renderPlaybook(d) {
@@ -773,7 +809,7 @@ async function analyzeLocalHistory(encodedId) {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderAll(j.data);
-    showPage('home', document.querySelector('[data-page=home]'));
+    showDashboard();
     toast('Đã mở lại kết quả trong lịch sử');
   } catch(e) { toast(e.message, 'err'); }
 }

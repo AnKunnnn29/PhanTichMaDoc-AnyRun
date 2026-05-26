@@ -15,27 +15,31 @@
       <h1>🛡️ IR Tool</h1>
       <span>AnyRun Malware Analyzer</span>
     </div>
-    <nav>
-      <div class="nav-item active" data-page="home" onclick="showPage('home',this)">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
-        <span>Tổng quan</span>
-      </div>
-      <div class="nav-item" data-page="analyze" onclick="showPage('analyze',this)">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <nav aria-label="Điều hướng chính">
+      <button type="button" class="nav-item active" data-page="home" aria-current="page" onclick="showPage('home',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
+        <span>Trang chủ</span>
+      </button>
+      <button type="button" class="nav-item" data-page="dashboard" onclick="showPage('dashboard',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
+        <span>Kết quả</span>
+      </button>
+      <button type="button" class="nav-item" data-page="analyze" onclick="showPage('analyze',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <span>Phân tích</span>
-      </div>
-      <div class="nav-item" data-page="playbook" onclick="showPage('playbook',this)">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+      </button>
+      <button type="button" class="nav-item" data-page="playbook" onclick="showPage('playbook',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
         <span>IR Playbook</span>
-      </div>
-      <div class="nav-item" data-page="iocs" onclick="showPage('iocs',this)">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </button>
+      <button type="button" class="nav-item" data-page="iocs" onclick="showPage('iocs',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         <span>IOC Blocklist</span>
-      </div>
-      <div class="nav-item" data-page="history" onclick="showPage('history',this)">
-        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button type="button" class="nav-item" data-page="history" onclick="showPage('history',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>Lịch sử</span>
-      </div>
+      </button>
     </nav>
   </aside>
 
@@ -44,61 +48,74 @@
 
     <!-- HOME PAGE -->
     <div id="page-home">
+      <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-copy">
+          <div class="home-kicker">AnyRun IR Tool</div>
+          <h2 id="home-title">Điều phối phản ứng sự cố mã độc từ một report Any.Run</h2>
+          <p>Import Results .md hoặc JSON, chuẩn hóa IOC, ánh xạ MITRE ATT&CK và sinh playbook xử lý theo NIST 800-61 trong một luồng làm việc rõ ràng.</p>
+          <div class="home-actions">
+            <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
+            <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
+            <button type="button" class="btn btn-outline" onclick="showDashboard()">Xem kết quả gần nhất</button>
+          </div>
+        </div>
+        <div class="home-hero-panel" aria-label="Quy trình xử lý">
+          <div class="flow-step active"><b>01</b><span>Import</span><small>Any.Run report, IOC JSON hoặc nội dung copy thêm</small></div>
+          <div class="flow-step"><b>02</b><span>Analyze</span><small>Threat score, MITRE, network, process và file artifacts</small></div>
+          <div class="flow-step"><b>03</b><span>Respond</span><small>Playbook, blocklist, SIEM exports và hướng dẫn khắc phục</small></div>
+        </div>
+      </section>
+
+      <section class="home-metrics" aria-label="Tính năng chính">
+        <div class="home-metric"><span>MITRE</span><b>ATT&CK mapping</b></div>
+        <div class="home-metric"><span>NIST</span><b>IR playbook</b></div>
+        <div class="home-metric"><span>SIEM</span><b>SPL / KQL / Sigma</b></div>
+      </section>
+
+      <section class="home-grid" aria-label="Bắt đầu nhanh">
+        <button type="button" class="home-card primary" onclick="openImportJson()">
+          <span>Luồng khuyến nghị</span>
+          <h3>Import Any.Run Report</h3>
+          <p>Dành cho tài khoản free: tải Results .md từ Any.Run rồi đưa vào app để tạo dashboard, IOC và playbook.</p>
+        </button>
+        <button type="button" class="home-card" onclick="runDemo('emotet')">
+          <span>Demo</span>
+          <h3>Emotet</h3>
+          <p>Banking Trojan với C2, process injection và IOC phục vụ hunting.</p>
+        </button>
+        <button type="button" class="home-card" onclick="runDemo('wannacry')">
+          <span>Demo</span>
+          <h3>WannaCry</h3>
+          <p>Ransomware scenario có ưu tiên containment và recovery rõ ràng.</p>
+        </button>
+        <button type="button" class="home-card" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')">
+          <span>API</span>
+          <h3>Task UUID</h3>
+          <p>Dùng khi có API key và muốn phân tích lại task đã chạy trên Any.Run.</p>
+        </button>
+      </section>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div id="page-dashboard" style="display:none">
       <div class="topbar">
         <div>
-          <h2>Malware Incident Response</h2>
-          <span>Chuyển kết quả Any.Run thành quy trình phản ứng sự cố theo NIST & MITRE</span>
+          <h2>Kết quả phân tích</h2>
+          <span>Dashboard chỉ hiển thị ở đây; trang chủ luôn giữ vai trò landing page.</span>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="runDemo()">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Demo
-          </button>
-          <button class="btn btn-primary" onclick="openImportJson()">
-            + Import Any.Run Report
-          </button>
+        <div class="topbar-actions">
+          <button type="button" class="btn btn-outline" onclick="showPage('history',document.querySelector('[data-page=history]'))">Lịch sử</button>
+          <button type="button" class="btn btn-primary" onclick="openImportJson()">Phân tích mới</button>
         </div>
       </div>
-
-      <!-- Welcome -->
-      <div id="welcome-screen" class="welcome">
-        <h2>🔍 Xây dựng quy trình phản ứng sự cố từ Any.Run</h2>
-        <p>Phân tích mẫu trên Any.Run, nhập report hoặc IOC vào hệ thống, rồi tự động sinh dashboard, blocklist và IR playbook theo NIST 800-61 & MITRE ATT&CK.</p>
-        <div class="welcome-grid">
-          <div class="welcome-item featured" onclick="openImportJson()">
-            <div class="icon">📥</div>
-            <h4>Import Any.Run Report</h4>
-            <p>Luồng chính cho tài khoản free: nhập file Results .md hoặc JSON</p>
-          </div>
-          <div class="welcome-item" onclick="runDemo('emotet')">
-            <div class="icon">🎭</div>
-            <h4>Demo Emotet</h4>
-            <p>Banking Trojan</p>
-          </div>
-          <div class="welcome-item" onclick="runDemo('wannacry')">
-            <div class="icon">🔒</div>
-            <h4>Demo WannaCry</h4>
-            <p>Ransomware</p>
-          </div>
-          <div class="welcome-item" onclick="runDemo('redline')">
-            <div class="icon">🕵️</div>
-            <h4>Demo RedLine</h4>
-            <p>Info Stealer</p>
-          </div>
-          <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">
-            <div class="icon">🔑</div>
-            <h4>Task UUID</h4>
-            <p>Tùy chọn nâng cao khi tài khoản có API access</p>
-          </div>
-          <div class="welcome-item" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-file')">
-            <div class="icon">📁</div>
-            <h4>Submit File</h4>
-            <p>Tùy chọn API, không khuyến nghị cho dữ liệu nhạy cảm</p>
-          </div>
+      <div id="dashboard-empty" class="dashboard-empty">
+        <h3>Chưa có kết quả đang mở</h3>
+        <p>Import report hoặc chạy demo để tạo dashboard phân tích. Phiên cũ vẫn nằm trong mục Lịch sử và không còn tự đè lên trang chủ.</p>
+        <div class="home-actions compact">
+          <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
+          <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
         </div>
       </div>
-
-      <!-- Result dashboard (hidden until analysis done) -->
       <div id="dashboard" style="display:none">
         <!-- Stat row -->
         <div class="grid-3" style="margin-bottom:20px" id="stat-row"></div>
@@ -140,16 +157,16 @@
 
       <!-- Tabs -->
       <div class="card">
-        <div class="tabs">
-          <div class="tab active" id="tab-uuid" onclick="switchTab('tab-uuid')">🔗 Task UUID</div>
-          <div class="tab" id="tab-import" onclick="switchTab('tab-import')">📥 Import Report</div>
-          <div class="tab" id="tab-url" onclick="switchTab('tab-url')">🌐 Submit URL</div>
-          <div class="tab" id="tab-file" onclick="switchTab('tab-file')">📁 Submit File</div>
-          <div class="tab" id="tab-demo" onclick="switchTab('tab-demo')">🎭 Demo</div>
+        <div class="tabs" role="tablist" aria-label="Chọn kiểu phân tích">
+          <button type="button" class="tab active" id="tab-uuid" role="tab" aria-selected="true" aria-controls="pane-uuid" onclick="switchTab('tab-uuid')">🔗 Task UUID</button>
+          <button type="button" class="tab" id="tab-import" role="tab" aria-selected="false" aria-controls="pane-import" onclick="switchTab('tab-import')">📥 Import Report</button>
+          <button type="button" class="tab" id="tab-url" role="tab" aria-selected="false" aria-controls="pane-url" onclick="switchTab('tab-url')">🌐 Submit URL</button>
+          <button type="button" class="tab" id="tab-file" role="tab" aria-selected="false" aria-controls="pane-file" onclick="switchTab('tab-file')">📁 Submit File</button>
+          <button type="button" class="tab" id="tab-demo" role="tab" aria-selected="false" aria-controls="pane-demo" onclick="switchTab('tab-demo')">🎭 Demo</button>
         </div>
 
         <!-- UUID pane -->
-        <div class="tab-pane active" id="pane-uuid">
+        <div class="tab-pane active" id="pane-uuid" role="tabpanel" aria-labelledby="tab-uuid">
           <div class="form-group">
             <label>Task UUID</label>
             <input type="text" id="task-uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
@@ -161,7 +178,7 @@
         </div>
 
         <!-- Import JSON pane -->
-        <div class="tab-pane" id="pane-import">
+        <div class="tab-pane" id="pane-import" role="tabpanel" aria-labelledby="tab-import" hidden>
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">
             Dành cho tài khoản Any.Run free: tải file Results .md từ Any.Run rồi import vào đây. Nếu có JSON report/IOC thì hệ thống vẫn hỗ trợ.
           </p>
@@ -180,11 +197,11 @@
             <textarea id="supplemental-text" rows="8" placeholder="Dán IOC/hash/process copy từ Any.Run, ví dụ:&#10;Main object - WannaCry.zip&#10;sha256 WannaCry.zip 0ea87b...&#10;Dropped file&#10;sha256 C:\note.txt 8e9f..."></textarea>
           </div>
           <button class="btn btn-primary" onclick="analyzeJsonImport()">Import &amp; tạo IR Playbook</button>
-          <div id="json-import-result" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
+          <div id="json-import-result" aria-live="polite" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
         </div>
 
         <!-- URL pane -->
-        <div class="tab-pane" id="pane-url">
+        <div class="tab-pane" id="pane-url" role="tabpanel" aria-labelledby="tab-url" hidden>
           <div class="form-group">
             <label>URL cần phân tích</label>
             <input type="text" id="submit-url" placeholder="http://suspicious-site.com/malware"/>
@@ -197,12 +214,12 @@
             <b>Submit &amp; Phân tích ngay</b>: tự động chờ sandbox xong rồi hiện kết quả (như <code>main.py --url</code>)<br>
             <b>Submit (lấy UUID)</b>: chỉ lấy Task ID để dùng sau
           </p>
-          <div id="url-result" style="margin-top:14px"></div>
+          <div id="url-result" aria-live="polite" style="margin-top:14px"></div>
         </div>
 
         <!-- File pane -->
-        <div class="tab-pane" id="pane-file">
-          <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+        <div class="tab-pane" id="pane-file" role="tabpanel" aria-labelledby="tab-file" hidden>
+          <div class="upload-zone" id="drop-zone" role="button" tabindex="0" aria-describedby="file-name" onclick="document.getElementById('file-input').click()" onkeydown="handleUploadZoneKey(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
             <input type="file" id="file-input" onchange="handleFileSelect(this)"/>
             <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8-4-4m0 0L8 8m4-4v12"/></svg>
             <p id="file-name">Kéo thả file hoặc nhấn để chọn</p>
@@ -215,11 +232,11 @@
           <p style="font-size:12px;color:var(--text2);margin-top:8px">
             <b>Submit &amp; Phân tích ngay</b>: upload file → sandbox phân tích → tự hiện kết quả (như <code>main.py --file</code>)
           </p>
-          <div id="file-result" style="margin-top:14px"></div>
+          <div id="file-result" aria-live="polite" style="margin-top:14px"></div>
         </div>
 
         <!-- Demo pane -->
-        <div class="tab-pane" id="pane-demo">
+        <div class="tab-pane" id="pane-demo" role="tabpanel" aria-labelledby="tab-demo" hidden>
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">Chạy demo với dữ liệu mẫu mô phỏng mã độc. Không cần API key.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="runDemo('emotet')">▶ Demo Emotet (Trojan)</button>
@@ -230,16 +247,16 @@
       </div>
 
       <!-- Loading -->
-      <div id="analyze-loading" style="display:none" class="card">
-        <div class="loading-wrap"><div class="spinner"></div><p id="loading-msg">Đang phân tích...</p></div>
+      <div id="analyze-loading" style="display:none" class="card" role="status" aria-live="polite" aria-busy="true">
+        <div class="loading-wrap"><div class="spinner" aria-hidden="true"></div><p id="loading-msg">Đang phân tích...</p></div>
       </div>
 
       <!-- Progress panel (submit & wait like main.py) -->
-      <div id="progress-panel" style="display:none" class="card">
+      <div id="progress-panel" style="display:none" class="card" aria-live="polite">
         <div class="card-title">⏳ Đang chờ sandbox phân tích...</div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:14px" id="progress-msg">Đã submit lên Any.Run...</div>
-        <div style="background:var(--bg3);border-radius:6px;height:10px;overflow:hidden;margin-bottom:10px">
-          <div id="progress-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px;transition:width 0.5s ease;width:5%"></div>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="5" aria-labelledby="progress-msg">
+          <div id="progress-bar" class="progress-bar" style="transform:scaleX(0.05)"></div>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
           <span id="progress-pct">5%</span>
@@ -327,7 +344,7 @@
   </main>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>
