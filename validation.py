@@ -25,6 +25,7 @@ SANDBOX_SAMPLE_EXTENSIONS = {
     ".doc",
     ".docm",
     ".docx",
+    ".elf",
     ".exe",
     ".iso",
     ".js",

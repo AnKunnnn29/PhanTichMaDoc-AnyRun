@@ -53,6 +53,10 @@ from validation import (
     validate_uploaded_filename,
     validate_url,
 )
+from ghidra_analyzer import analyze_sample as analyze_sample_with_ghidra
+from ghidra_analyzer import ghidra_status
+from anyrun_client import AnyRunAuthError, AnyRunNotFoundError
+from anyrun_public_report import AnyRunPublicReportError, load_public_report
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
@@ -214,6 +218,18 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
     return payload
 
 
+def _get_optional_anyrun_iocs(client, task_id):
+    try:
+        return client.get_task_iocs(task_id)
+    except (AnyRunAuthError, AnyRunNotFoundError):
+        return {}
+
+
+def _build_public_report_payload(task_id, source_ref="", use_cache=True):
+    report_json = load_public_report(task_id, source_ref=source_ref, reports_dir="reports")
+    return _build_payload(report_json, {}, use_cache=use_cache, source="anyrun:public-report")
+
+
 def _load_json_upload(field_name, required=True):
     upload = request.files.get(field_name)
     if not upload:
@@ -302,20 +318,36 @@ def analyze():
         body = _json_body()
         api_key = validate_api_key(body.get("api_key"))
         task_id = validate_task_uuid(body.get("task_id"))
+        task_ref = body.get("task_ref") or task_id
         force_analyze = bool(body.get("force_analyze", False))
         from anyrun_client import AnyRunClient
 
-        client = AnyRunClient(api_key)
-        report_json = client.get_task_report(task_id)
-        ioc_json = client.get_task_iocs(task_id)
+        try:
+            client = AnyRunClient(api_key)
+            report_json = client.get_task_report(task_id)
+            ioc_json = _get_optional_anyrun_iocs(client, task_id)
+            payload = _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")
+        except AnyRunAuthError:
+            payload = _build_public_report_payload(task_id, source_ref=task_ref, use_cache=not force_analyze)
         return jsonify(
             {
                 "ok": True,
-                "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task"),
+                "data": payload,
             }
         )
     except ValidationError as e:
         return _error_response(str(e))
+    except AnyRunPublicReportError as e:
+        return _error_response(str(e), 403, "anyrun_public_report_unavailable")
+    except AnyRunAuthError as e:
+        return _error_response(
+            (
+                f"{e} API key có thể hợp lệ, nhưng Any.Run đang từ chối report JSON cho task này. "
+                "Nếu task xem được trên web, hãy thử tab Import Report hoặc dùng report export từ Any.Run."
+            ),
+            403,
+            "anyrun_report_forbidden",
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -336,6 +368,36 @@ def analyze_json_upload():
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 500, "internal_error")
+
+
+@app.route("/api/ghidra/status", methods=["GET"])
+def ghidra_status_route():
+    return jsonify({"ok": True, "data": ghidra_status()})
+
+
+@app.route("/api/ghidra/analyze", methods=["POST"])
+@rate_limit(max_requests=8)
+def ghidra_analyze_upload():
+    """Local static malware analysis with optional Ghidra headless enrichment."""
+    tmp_path = ""
+    try:
+        if "sample_file" not in request.files:
+            raise ValidationError("Không có file mẫu để phân tích Ghidra")
+        timeout_raw = request.form.get("timeout") or os.environ.get("GHIDRA_TIMEOUT", "180")
+        try:
+            timeout = max(30, min(600, int(timeout_raw)))
+        except ValueError:
+            timeout = 180
+        tmp_path = _save_temp_upload(request.files["sample_file"])
+        result = analyze_sample_with_ghidra(tmp_path, timeout=timeout)
+        return jsonify({"ok": True, "data": result})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
+    except Exception as e:
+        return _error_response(str(e), 500, "ghidra_error")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 @app.route("/api/submit/url", methods=["POST"])
@@ -445,7 +507,7 @@ def _poll_and_analyze(api_key, task_id, max_wait=300):
             report = client.get_task_report(task_id)
             status = report.get("data", {}).get("analysis", {}).get("status", "")
             if status in ("done", "failed"):
-                ioc_json = client.get_task_iocs(task_id)
+                ioc_json = _get_optional_anyrun_iocs(client, task_id)
                 payload = _build_payload(report, ioc_json, source="anyrun:submit")
                 with _task_lock:
                     _task_jobs[task_id] = {
@@ -565,6 +627,8 @@ def history():
         return jsonify({"ok": True, "tasks": tasks})
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
+    except AnyRunAuthError as e:
+        return _error_response(str(e), 403, "anyrun_history_forbidden")
     except Exception as e:
         return _error_response(str(e), 400)
 

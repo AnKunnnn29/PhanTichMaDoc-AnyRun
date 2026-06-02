@@ -16,6 +16,7 @@ window.onload = async () => {
     await restoreLatestFromServer();
   }
   await loadHistory();
+  await loadGhidraStatus();
   animateCards(document);
 };
 
@@ -65,7 +66,7 @@ function showDashboard() {
 }
 
 function animateCards(scope = document) {
-  const items = scope.querySelectorAll('.card, .stat-box, .home-card, .home-metric, .flow-step, .action-card, .mitre-chip');
+  const items = scope.querySelectorAll('.card, .ghidra-panel, .stat-box, .topic-stage, .home-card, .home-metric, .flow-step, .action-card, .mitre-chip');
   items.forEach((item, idx) => {
     item.classList.remove('stagger-item');
     item.style.setProperty('--delay', `${Math.min(idx * 45, 360)}ms`);
@@ -123,15 +124,19 @@ async function runDemo(malware = 'emotet') {
 }
 
 async function analyzeTask() {
-  const key = getKey(), uuid = document.getElementById('task-uuid').value.trim();
+  const key = getKey();
+  const taskInput = document.getElementById('task-uuid');
+  const taskRef = taskInput.value.trim();
+  const uuid = extractTaskUuid(taskRef);
   if (!key)  return toast('Nhập API key trước', 'err');
   if (!uuid) return toast('Nhập Task UUID', 'err');
+  taskInput.value = uuid;
   showLoading('Đang lấy dữ liệu từ Any.Run...');
   try {
     const r = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key, task_id: uuid })
+      body: JSON.stringify({ api_key: key, task_id: uuid, task_ref: taskRef })
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
@@ -140,6 +145,11 @@ async function analyzeTask() {
     toast('Phân tích hoàn tất!');
   } catch (e) { toast(e.message, 'err'); }
   finally { hideLoading(); }
+}
+
+function extractTaskUuid(value) {
+  const match = String(value || '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : '';
 }
 
 // Submit URL chỉ lấy UUID
@@ -263,6 +273,7 @@ async function openReports() {
 let selectedFile = null;
 let selectedReportJson = null;
 let selectedIocJson = null;
+let selectedGhidraFile = null;
 
 function handleJsonSelect(inp, kind) {
   const file = inp.files[0] || null;
@@ -307,6 +318,208 @@ function handleDrop(e) {
   document.getElementById('drop-zone').classList.remove('dragover');
   selectedFile = e.dataTransfer.files[0];
   if (selectedFile) document.getElementById('file-name').textContent = '📄 ' + selectedFile.name;
+}
+
+function handleGhidraSelect(inp) {
+  selectedGhidraFile = inp.files[0] || null;
+  updateGhidraFilePreview();
+}
+
+function handleGhidraZoneKey(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  document.getElementById('ghidra-file-input').click();
+}
+
+function handleGhidraDrop(e) {
+  e.preventDefault();
+  document.getElementById('ghidra-drop-zone').classList.remove('dragover');
+  selectedGhidraFile = e.dataTransfer.files[0] || null;
+  const input = document.getElementById('ghidra-file-input');
+  try {
+    if (input && e.dataTransfer.files.length) input.files = e.dataTransfer.files;
+  } catch (_err) {
+    // Some browsers keep input.files read-only; selectedGhidraFile is enough for submit.
+  }
+  updateGhidraFilePreview();
+}
+
+function updateGhidraFilePreview() {
+  const nameEl = document.getElementById('ghidra-file-name');
+  const result = document.getElementById('ghidra-result');
+  const zone = document.getElementById('ghidra-drop-zone');
+  if (!selectedGhidraFile) {
+    if (nameEl) nameEl.textContent = 'Kéo thả mẫu local hoặc nhấn để chọn';
+    zone?.classList.remove('has-file');
+    return;
+  }
+  if (nameEl) nameEl.textContent = selectedGhidraFile.name;
+  zone?.classList.add('has-file');
+  if (result) {
+    result.innerHTML = `
+      <div class="ghidra-selection inline-note">
+        <b>${esc(selectedGhidraFile.name)}</b>
+        <span>${formatFileSize(selectedGhidraFile.size)} • sẵn sàng phân tích local</span>
+      </div>`;
+  }
+}
+
+function setGhidraTimeout(seconds) {
+  const input = document.getElementById('ghidra-timeout');
+  if (input) input.value = seconds;
+  document.querySelectorAll('.timeout-presets .chip-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.includes(String(seconds)));
+  });
+}
+
+async function loadGhidraStatus() {
+  const statusEl = document.getElementById('ghidra-status');
+  if (!statusEl) return;
+  statusEl.className = 'ghidra-status checking';
+  statusEl.innerHTML = '<span class="status-dot"></span><b>Đang kiểm tra Ghidra</b><small>Đọc cấu hình GHIDRA_HOME/GHIDRA_HEADLESS/PATH...</small>';
+  try {
+    const r = await fetch('/api/ghidra/status');
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Không kiểm tra được Ghidra');
+    const s = j.data;
+    statusEl.className = 'ghidra-status ' + (s.available ? 'ok' : 'warn');
+    statusEl.innerHTML = s.available
+      ? `<span class="status-dot"></span><b>Ghidra đã sẵn sàng</b><code>${esc(s.analyze_headless)}</code>`
+      : `<span class="status-dot"></span><b>Chưa cấu hình Ghidra</b><small>${esc(s.setup_hint)}</small>`;
+  } catch (e) {
+    statusEl.className = 'ghidra-status warn';
+    statusEl.innerHTML = `<span class="status-dot"></span><b>Lỗi kiểm tra</b><small>${esc(e.message)}</small>`;
+  }
+}
+
+async function analyzeGhidraFile() {
+  if (!selectedGhidraFile) return toast('Chọn file mẫu để phân tích Ghidra trước', 'err');
+  const fd = new FormData();
+  fd.append('sample_file', selectedGhidraFile);
+  fd.append('timeout', document.getElementById('ghidra-timeout')?.value || '180');
+  document.getElementById('ghidra-result').innerHTML = `
+    <div class="ghidra-loading loading-wrap compact">
+      <div class="spinner"></div>
+      <p>Đang phân tích tĩnh local...</p>
+      <div class="ghidra-loading-steps">
+        <span>Hash</span><span>Entropy</span><span>Strings</span><span>Ghidra headless</span>
+      </div>
+    </div>`;
+  try {
+    const r = await fetch('/api/ghidra/analyze', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    renderGhidraResult(j.data);
+    toast('Phân tích tĩnh hoàn tất!');
+  } catch (e) {
+    document.getElementById('ghidra-result').innerHTML = `<div class="inline-note danger">${esc(e.message)}</div>`;
+    toast(e.message, 'err');
+  }
+}
+
+function renderGhidraResult(data) {
+  const triage = data.triage || {};
+  const ghidra = data.ghidra || {};
+  const summary = ghidra.summary || {};
+  const enrich = data.ir_enrichment || {};
+  const entropy = Number(triage.entropy || 0);
+  const iocTotal = ['urls', 'domains', 'ips', 'registry'].reduce((n, key) => n + ((triage[key] || []).length), 0);
+  const suspiciousApis = [...(triage.suspicious_apis || []), ...(summary.suspicious_imports || [])];
+  const uniqueApis = [...new Set(suspiciousApis)];
+  const isGhidraOk = ghidra.status === 'ok';
+  const riskLabel = entropy >= 7.2 ? 'Cao' : entropy >= 6.4 ? 'Trung bình' : 'Thấp';
+  const riskClass = entropy >= 7.2 ? 'critical' : entropy >= 6.4 ? 'medium' : 'clean';
+  const list = (items = [], cls = '') => {
+    if (!items.length) return '<span class="empty-inline">Không có</span>';
+    const visible = items.slice(0, 14).map(x => {
+      const encoded = encodeURIComponent(String(x));
+      return `<span class="tag ${cls}" onclick="copyText(decodeURIComponent('${encoded}'))">${esc(x)}</span>`;
+    }).join('');
+    const more = items.length > 14 ? `<span class="tag tag-more">+${items.length - 14}</span>` : '';
+    return visible + more;
+  };
+  const kv = (label, value, mono = false) => `
+    <div class="static-kv">
+      <span>${label}</span>
+      ${mono ? `<code>${esc(value || 'N/A')}</code>` : `<b>${esc(value || 'N/A')}</b>`}
+    </div>`;
+  const miniList = (items = [], limit = 8) => {
+    if (!items.length) return '<li>Chưa có dữ liệu.</li>';
+    return items.slice(0, limit).map(x => `<li>${esc(x)}</li>`).join('');
+  };
+  const ghidraState = isGhidraOk
+    ? `<span class="badge clean">Ghidra OK</span>`
+    : `<span class="badge medium">${esc(ghidra.status || 'not_configured')}</span>`;
+  document.getElementById('ghidra-result').innerHTML = `
+    <div class="ghidra-summary-grid">
+      <div class="stat-box">
+        <div class="val">${esc(entropy ? entropy.toFixed(2) : 'N/A')}</div>
+        <div class="lbl">Entropy</div>
+        <span class="badge ${riskClass}">${riskLabel}</span>
+      </div>
+      <div class="stat-box">
+        <div class="val">${iocTotal}</div>
+        <div class="lbl">IOC tĩnh</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">${uniqueApis.length}</div>
+        <div class="lbl">API đáng ngờ</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">${esc(summary.function_count ?? 'N/A')}</div>
+        <div class="lbl">Functions</div>
+        ${ghidra.duration_seconds ? `<span class="mini-metric">${esc(ghidra.duration_seconds)}s</span>` : ''}
+      </div>
+    </div>
+
+    <div class="ghidra-detail-grid">
+      <div class="ghidra-panel">
+        <div class="card-title">Static triage</div>
+        ${kv('File', triage.filename)}
+        ${kv('Size', formatFileSize(triage.size))}
+        ${kv('Type', triage.file_type)}
+        ${kv('MD5', triage.md5, true)}
+        ${kv('SHA1', triage.sha1, true)}
+        ${kv('SHA256', triage.sha256, true)}
+      </div>
+
+      <div class="ghidra-panel">
+        <div class="card-title">Ghidra headless</div>
+        <div class="ghidra-state-row">${ghidraState}</div>
+        ${kv('Format', summary.executable_format)}
+        ${kv('Language', summary.language)}
+        ${kv('Compiler', summary.compiler)}
+        ${kv('Image base', summary.image_base, true)}
+        ${kv('Entry point', summary.entry_point, true)}
+        ${ghidra.error ? `<div class="inline-note danger">${esc(ghidra.error)}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="ghidra-panel">
+      <div class="card-title">IOC tĩnh để đối chiếu Any.Run</div>
+      <div class="ioc-grid">
+        <div class="static-section"><b>URLs</b><div class="tag-list">${list(triage.urls, 'tag-url')}</div></div>
+        <div class="static-section"><b>Domains</b><div class="tag-list">${list(triage.domains, 'tag-domain')}</div></div>
+        <div class="static-section"><b>IPs</b><div class="tag-list">${list(triage.ips, 'tag-ip')}</div></div>
+        <div class="static-section"><b>Registry</b><div class="tag-list">${list(triage.registry, 'tag-file')}</div></div>
+      </div>
+    </div>
+
+    <div class="ghidra-detail-grid">
+      <div class="ghidra-panel">
+        <div class="card-title">Reverse engineering leads</div>
+        <div class="static-section"><b>Suspicious APIs</b><div class="tag-list">${list(uniqueApis, 'tag-hash')}</div></div>
+        <div class="static-section"><b>Imports</b><ul class="compact-list">${miniList(summary.imports, 10)}</ul></div>
+        <div class="static-section"><b>Functions</b><ul class="compact-list">${miniList(summary.functions, 10)}</ul></div>
+      </div>
+
+      <div class="ghidra-panel">
+        <div class="card-title">IR next steps</div>
+        <ul class="ai-list">${(enrich.recommended_ir_actions || []).map(x => `<li>${esc(x)}</li>`).join('') || '<li>Đối chiếu hash, IOC và API với telemetry Any.Run/SIEM.</li>'}</ul>
+        <div class="inline-note">${esc(enrich.evidence_note || 'Static analysis là bằng chứng bổ sung cho điều tra runtime.')}</div>
+      </div>
+    </div>`;
+  animateCards(document.getElementById('ghidra-result'));
 }
 
 
@@ -760,26 +973,54 @@ function renderHistory(tasks) {
 
 function renderCombinedHistory(localItems, anyrunTasks, anyrunError = '') {
   let html = renderLocalHistory(localItems);
-  if (anyrunTasks.length || anyrunError) {
+  const hasKey = !!(document.getElementById('hist-key')?.value.trim() || getKey());
+  if (hasKey || anyrunTasks.length || anyrunError) {
     html += `<div class="card"><div class="card-title">Any.Run task history</div>`;
-    if (anyrunError) html += `<p style="color:var(--yellow);font-size:13px;margin-bottom:10px">Không tải được Any.Run history: ${esc(anyrunError)}</p>`;
+    if (anyrunError) {
+      const forbidden = /403|quyền truy cập|permission|forbidden/i.test(anyrunError);
+      html += forbidden
+        ? `<div class="history-api-status">
+            <b>API key đang hoạt động nhưng không có quyền đọc lịch sử Any.Run.</b>
+            <span>Endpoint <code>GET /analysis</code> trả 403. Một số gói/API key chỉ cho lấy report theo Task UUID hoặc submit phân tích, nhưng không cho liệt kê toàn bộ history.</span>
+            <button type="button" class="btn btn-outline" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')">Nhập Task UUID để phân tích</button>
+          </div>`
+        : `<div class="history-api-status"><b>Không tải được Any.Run history.</b><span>${esc(anyrunError)}</span></div>`;
+    } else if (!anyrunTasks.length) {
+      html += `<p style="color:var(--text2);font-size:13px;margin-bottom:10px">API key hợp lệ nhưng Any.Run không trả task nào trong history hiện tại.</p>`;
+    }
     if (anyrunTasks.length) {
-      const rows = anyrunTasks.map(t => {
-        const verdict = (t.verdict?.threatLevelText || 'unknown').toLowerCase();
-        const cls = verdict.includes('malicious') ? 'verdict-malicious' : verdict.includes('suspicious') ? 'verdict-suspicious' : 'verdict-clean';
-        return `<tr>
-          <td class="mono" style="font-size:11px">${t.uuid||''}</td>
-          <td>${esc(t.name||'N/A')}</td>
-          <td class="${cls}">${esc(t.verdict?.threatLevelText||'unknown')}</td>
-          <td style="color:var(--text2)">${(t.date||'').slice(0,10)}</td>
-          <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeFromHistory('${t.uuid}')">Phân tích</button></td>
-        </tr>`;
-      }).join('');
-      html += `<div class="table-wrap"><table><thead><tr><th>UUID</th><th>Tên</th><th>Verdict</th><th>Ngày</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      html += renderAnyRunHistoryTable(anyrunTasks);
     }
     html += `</div>`;
   }
   document.getElementById('history-content').innerHTML = html;
+}
+
+function renderAnyRunHistoryTable(tasks) {
+  const rows = tasks.map(t => {
+    const verdictText = t.verdict?.threatLevelText || t.threatLevelText || t.verdict || 'unknown';
+    const verdict = String(verdictText).toLowerCase();
+    const cls = verdict.includes('malicious') ? 'verdict-malicious' : verdict.includes('suspicious') ? 'verdict-suspicious' : 'verdict-clean';
+    const uuid = extractAnyRunTaskUuid(t);
+    const name = t.name || t.filename || t.fileName || t.obj_name || 'N/A';
+    const date = t.date || t.created || t.created_at || t.createTime || '';
+    return `<tr>
+      <td class="mono" style="font-size:11px">${esc(uuid)}</td>
+      <td>${esc(name)}</td>
+      <td class="${cls}">${esc(verdictText)}</td>
+      <td style="color:var(--text2)">${esc(String(date).slice(0,10))}</td>
+      <td>${uuid ? `<button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeFromHistory('${escAttr(uuid)}')">Phân tích</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table><thead><tr><th>UUID</th><th>Tên</th><th>Verdict</th><th>Ngày</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function extractAnyRunTaskUuid(task = {}) {
+  const direct = task.uuid || task.task_uuid || task.taskUuid || task.id || task.analysis_id || '';
+  if (direct) return String(direct);
+  const haystack = [task.related, task.json, task.misp, task.html, task.url, task.analysis_url].filter(Boolean).join(' ');
+  const match = haystack.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : '';
 }
 
 function renderLocalHistory(items) {
@@ -862,6 +1103,10 @@ function copyText(txt) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(s) {
+  return esc(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
 function renderAIProactive(d) {

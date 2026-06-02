@@ -45,6 +45,7 @@ class AnyRunClient:
     """
 
     BASE_URL = "https://api.any.run/v1"
+    REPORT_BASE_URL = "https://api.any.run"
 
     def __init__(self, api_key: str, timeout: int = 30):
         if timeout <= 0:
@@ -67,8 +68,8 @@ class AnyRunClient:
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> dict:
-        url = f"{self.BASE_URL}/{endpoint.lstrip('/')}"
+    def _request(self, method: str, endpoint: str, base_url: str | None = None, **kwargs) -> dict:
+        url = f"{base_url or self.BASE_URL}/{endpoint.lstrip('/')}"
         try:
             resp = self.session.request(method, url, timeout=self.timeout, **kwargs)
         except requests.ConnectionError as exc:
@@ -99,7 +100,10 @@ class AnyRunClient:
         GET /report/{taskUuid}/summary/json
         """
         task_uuid = validate_task_uuid(task_uuid)
-        return self._request("GET", f"/report/{task_uuid}/summary/json")
+        try:
+            return self._request("GET", f"/report/{task_uuid}/summary/json", base_url=self.REPORT_BASE_URL)
+        except (AnyRunAuthError, AnyRunNotFoundError):
+            return self._request("GET", f"/analysis/{task_uuid}")
 
     def get_task_iocs(self, task_uuid: str) -> dict:
         """
@@ -107,7 +111,7 @@ class AnyRunClient:
         GET /report/{taskUuid}/ioc/json
         """
         task_uuid = validate_task_uuid(task_uuid)
-        return self._request("GET", f"/report/{task_uuid}/ioc/json")
+        return self._request("GET", f"/report/{task_uuid}/ioc/json", base_url=self.REPORT_BASE_URL)
 
     def get_history(self, team: bool = False, skip: int = 0, limit: int = 25) -> dict:
         """

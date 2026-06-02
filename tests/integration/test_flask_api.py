@@ -4,6 +4,7 @@ import io
 import json
 
 import pytest
+import requests
 
 pytestmark = pytest.mark.integration
 
@@ -83,6 +84,127 @@ class TestAnalyzeEndpoint:
         assert response.status_code == 400
         assert "UUID" in response.get_json()["error"]
 
+    def test_anyrun_report_endpoints_do_not_use_v1_prefix(self, monkeypatch):
+        from anyrun_client import AnyRunClient
+
+        seen_urls = []
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {"ok": True}
+
+        def fake_request(self, method, url, **kwargs):
+            seen_urls.append(url)
+            return FakeResponse()
+
+        monkeypatch.setattr(requests.Session, "request", fake_request)
+        client = AnyRunClient("test-api-key")
+        task_uuid = "9268e832-505c-4895-b172-797b9c1ea370"
+
+        client.get_task_report(task_uuid)
+        client.get_task_iocs(task_uuid)
+
+        assert seen_urls == [
+            f"https://api.any.run/report/{task_uuid}/summary/json",
+            f"https://api.any.run/report/{task_uuid}/ioc/json",
+        ]
+
+    def test_anyrun_report_falls_back_to_v1_analysis_detail(self, monkeypatch):
+        from anyrun_client import AnyRunClient
+
+        seen_urls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.text = json.dumps(body)
+
+            def json(self):
+                return self._body
+
+        def fake_request(self, method, url, **kwargs):
+            seen_urls.append(url)
+            if url.endswith("/summary/json"):
+                return FakeResponse(403, {"error": "forbidden"})
+            return FakeResponse(200, {"data": {"analysis": {"uuid": task_uuid}, "content": {}}})
+
+        monkeypatch.setattr(requests.Session, "request", fake_request)
+        client = AnyRunClient("test-api-key")
+        task_uuid = "9268e832-505c-4895-b172-797b9c1ea370"
+
+        payload = client.get_task_report(task_uuid)
+
+        assert payload["data"]["analysis"]["uuid"] == task_uuid
+        assert seen_urls == [
+            f"https://api.any.run/report/{task_uuid}/summary/json",
+            f"https://api.any.run/v1/analysis/{task_uuid}",
+        ]
+
+    def test_analyze_endpoint_allows_ioc_endpoint_forbidden(self, flask_test_client, monkeypatch):
+        import anyrun_client
+        import app as app_module
+        from anyrun_client import AnyRunAuthError
+
+        class FakeAnyRunClient:
+            def __init__(self, api_key):
+                self.api_key = api_key
+
+            def get_task_report(self, task_id):
+                return {"data": {"analysis": {"uuid": task_id}, "content": {}}}
+
+            def get_task_iocs(self, task_id):
+                raise AnyRunAuthError("Không có quyền truy cập IOC")
+
+        def fake_build_payload(report_json, ioc_json, use_cache=True, source="manual"):
+            return {"task_uuid": report_json["data"]["analysis"]["uuid"], "ioc_json": ioc_json}
+
+        monkeypatch.setattr(anyrun_client, "AnyRunClient", FakeAnyRunClient)
+        monkeypatch.setattr(app_module, "_build_payload", fake_build_payload)
+
+        task_uuid = "9268e832-505c-4895-b172-797b9c1ea370"
+        response = flask_test_client.post(
+            "/api/analyze",
+            json={"api_key": "test-api-key", "task_id": task_uuid, "force_analyze": True},
+        )
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert payload["data"] == {"task_uuid": task_uuid, "ioc_json": {}}
+
+    def test_analyze_endpoint_falls_back_to_public_report_on_api_forbidden(self, flask_test_client, monkeypatch):
+        import anyrun_client
+        import app as app_module
+        from anyrun_client import AnyRunAuthError
+
+        class FakeAnyRunClient:
+            def __init__(self, api_key):
+                self.api_key = api_key
+
+            def get_task_report(self, task_id):
+                raise AnyRunAuthError("Không có quyền truy cập tài nguyên này (403).")
+
+        def fake_public_payload(task_id, source_ref="", use_cache=True):
+            return {"task_uuid": task_id, "source_ref": source_ref, "source": "public"}
+
+        monkeypatch.setattr(anyrun_client, "AnyRunClient", FakeAnyRunClient)
+        monkeypatch.setattr(app_module, "_build_public_report_payload", fake_public_payload)
+
+        task_uuid = "9268e832-505c-4895-b172-797b9c1ea370"
+        public_url = f"https://any.run/report/dummysha256/{task_uuid}"
+        response = flask_test_client.post(
+            "/api/analyze",
+            json={"api_key": "test-api-key", "task_id": task_uuid, "task_ref": public_url},
+        )
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["ok"] is True
+        assert payload["data"] == {"task_uuid": task_uuid, "source_ref": public_url, "source": "public"}
+
     def test_submit_url_rejects_non_http_url(self, flask_test_client):
         response = flask_test_client.post(
             "/api/submit/url",
@@ -101,6 +223,43 @@ class TestAnalyzeEndpoint:
 
         assert response.status_code == 400
         assert "không được hỗ trợ" in response.get_json()["error"]
+
+    def test_ghidra_status_returns_configuration(self, flask_test_client):
+        response = flask_test_client.get("/api/ghidra/status")
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert "available" in payload["data"]
+        assert "setup_hint" in payload["data"]
+
+    def test_ghidra_analyze_upload_returns_static_summary(self, flask_test_client, monkeypatch):
+        import app as app_module
+
+        def fake_analyze(path, timeout=180):
+            return {
+                "triage": {
+                    "filename": "sample.exe",
+                    "sha256": "abc",
+                    "entropy": 6.1,
+                    "urls": ["http://evil.example/a"],
+                    "suspicious_apis": ["VirtualAlloc"],
+                },
+                "ghidra": {"available": False, "status": "not_configured"},
+                "ir_enrichment": {"recommended_ir_actions": ["Compare with Any.Run IOC"]},
+            }
+
+        monkeypatch.setattr(app_module, "analyze_sample_with_ghidra", fake_analyze)
+        response = flask_test_client.post(
+            "/api/ghidra/analyze",
+            data={"sample_file": (io.BytesIO(b"MZVirtualAlloc http://evil.example/a"), "sample.exe")},
+            content_type="multipart/form-data",
+        )
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert payload["data"]["triage"]["suspicious_apis"] == ["VirtualAlloc"]
 
     def test_rate_limit_returns_429(self, flask_test_client):
         for _ in range(30):

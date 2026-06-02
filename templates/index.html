@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AnyRun IR Tool – Malware Incident Response</title>
+<title>Xây dựng quy trình phản ứng sự cố dựa trên việc phân tích mã độc thực tế bằng Any.Run</title>
 <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
@@ -12,8 +12,8 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <h1>🛡️ IR Tool</h1>
-      <span>AnyRun Malware Analyzer</span>
+      <h1>Any.Run IR Workflow</h1>
+      <span>Malware-driven incident response</span>
     </div>
     <nav aria-label="Điều hướng chính">
       <button type="button" class="nav-item active" data-page="home" aria-current="page" onclick="showPage('home',this)">
@@ -22,19 +22,19 @@
       </button>
       <button type="button" class="nav-item" data-page="dashboard" onclick="showPage('dashboard',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
-        <span>Kết quả</span>
+        <span>Đánh giá sự cố</span>
       </button>
       <button type="button" class="nav-item" data-page="analyze" onclick="showPage('analyze',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <span>Phân tích</span>
+        <span>Dữ liệu Any.Run</span>
       </button>
       <button type="button" class="nav-item" data-page="playbook" onclick="showPage('playbook',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
-        <span>IR Playbook</span>
+        <span>Quy trình IR</span>
       </button>
       <button type="button" class="nav-item" data-page="iocs" onclick="showPage('iocs',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>IOC Blocklist</span>
+        <span>IOC & SIEM</span>
       </button>
       <button type="button" class="nav-item" data-page="history" onclick="showPage('history',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -50,33 +50,41 @@
     <div id="page-home">
       <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
-          <div class="home-kicker">AnyRun IR Tool</div>
-          <h2 id="home-title">Điều phối phản ứng sự cố mã độc từ một report Any.Run</h2>
-          <p>Import Results .md hoặc JSON, chuẩn hóa IOC, ánh xạ MITRE ATT&CK và sinh playbook xử lý theo NIST 800-61 trong một luồng làm việc rõ ràng.</p>
+          <div class="home-kicker">Đề tài phân tích mã độc thực tế</div>
+          <h2 id="home-title">Xây dựng quy trình phản ứng sự cố dựa trên việc phân tích mã độc thực tế bằng Any.Run</h2>
+          <p>Luồng làm việc bắt đầu từ bằng chứng sandbox Any.Run, chuyển thành IOC, hành vi, MITRE ATT&CK, mức độ rủi ro và kế hoạch phản ứng sự cố có thể xuất báo cáo.</p>
           <div class="home-actions">
-            <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
-            <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
-            <button type="button" class="btn btn-outline" onclick="showDashboard()">Xem kết quả gần nhất</button>
+            <button type="button" class="btn btn-primary" onclick="openImportJson()">Bắt đầu từ Any.Run report</button>
+            <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy tình huống demo</button>
+            <button type="button" class="btn btn-outline" onclick="showDashboard()">Xem đánh giá gần nhất</button>
           </div>
         </div>
-        <div class="home-hero-panel" aria-label="Quy trình xử lý">
-          <div class="flow-step active"><b>01</b><span>Import</span><small>Any.Run report, IOC JSON hoặc nội dung copy thêm</small></div>
-          <div class="flow-step"><b>02</b><span>Analyze</span><small>Threat score, MITRE, network, process và file artifacts</small></div>
-          <div class="flow-step"><b>03</b><span>Respond</span><small>Playbook, blocklist, SIEM exports và hướng dẫn khắc phục</small></div>
+        <div class="home-hero-panel" aria-label="Luồng nghiên cứu phản ứng sự cố">
+          <div class="flow-step active"><b>01</b><span>Thu thập bằng chứng</span><small>Report Any.Run, IOC JSON, kết quả runtime và ghi chú phân tích</small></div>
+          <div class="flow-step"><b>02</b><span>Phân tích mã độc</span><small>File, process, network, registry, behavior và MITRE ATT&CK</small></div>
+          <div class="flow-step"><b>03</b><span>Phản ứng sự cố</span><small>Containment, eradication, recovery, hunting và báo cáo sau sự cố</small></div>
         </div>
       </section>
 
-      <section class="home-metrics" aria-label="Tính năng chính">
-        <div class="home-metric"><span>MITRE</span><b>ATT&CK mapping</b></div>
-        <div class="home-metric"><span>NIST</span><b>IR playbook</b></div>
-        <div class="home-metric"><span>SIEM</span><b>SPL / KQL / Sigma</b></div>
+      <section class="topic-flow" aria-label="Mạch xử lý phù hợp với đề tài">
+        <div class="topic-stage"><span>Any.Run</span><b>Sandbox evidence</b><p>Lấy dữ liệu thực nghiệm từ task, Results .md hoặc JSON report.</p></div>
+        <div class="topic-stage"><span>Malware analysis</span><b>Hành vi & IOC</b><p>Chuẩn hóa hash, domain, IP, URL, registry, process và file artifacts.</p></div>
+        <div class="topic-stage"><span>Assessment</span><b>Đánh giá sự cố</b><p>Chấm mức độ rủi ro, mapping MITRE và xác định phạm vi ảnh hưởng.</p></div>
+        <div class="topic-stage"><span>Response</span><b>Quy trình IR</b><p>Sinh playbook theo các pha xử lý, bằng chứng cần thu và SLA ưu tiên.</p></div>
+        <div class="topic-stage"><span>Output</span><b>Báo cáo & SIEM</b><p>Xuất IOC blocklist, truy vấn hunt và báo cáo phục vụ nghiệm thu.</p></div>
+      </section>
+
+      <section class="home-metrics" aria-label="Trục đánh giá chính">
+        <div class="home-metric"><span>01 Evidence</span><b>Any.Run runtime artifacts</b></div>
+        <div class="home-metric"><span>02 Analysis</span><b>Malware behavior + MITRE</b></div>
+        <div class="home-metric"><span>03 Response</span><b>NIST-style IR playbook</b></div>
       </section>
 
       <section class="home-grid" aria-label="Bắt đầu nhanh">
         <button type="button" class="home-card primary" onclick="openImportJson()">
-          <span>Luồng khuyến nghị</span>
-          <h3>Import Any.Run Report</h3>
-          <p>Dành cho tài khoản free: tải Results .md từ Any.Run rồi đưa vào app để tạo dashboard, IOC và playbook.</p>
+          <span>Luồng chính của đề tài</span>
+          <h3>Phân tích từ Any.Run Report</h3>
+          <p>Dùng Results .md hoặc JSON để tái dựng hành vi mã độc, tạo đánh giá sự cố và sinh quy trình phản ứng.</p>
         </button>
         <button type="button" class="home-card" onclick="runDemo('emotet')">
           <span>Demo</span>
@@ -90,8 +98,8 @@
         </button>
         <button type="button" class="home-card" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')">
           <span>API</span>
-          <h3>Task UUID</h3>
-          <p>Dùng khi có API key và muốn phân tích lại task đã chạy trên Any.Run.</p>
+          <h3>Any.Run Task UUID</h3>
+          <p>Dùng khi cần lấy lại dữ liệu task thực tế đã chạy trên Any.Run bằng API key.</p>
         </button>
       </section>
     </div>
@@ -101,7 +109,7 @@
       <div class="topbar">
         <div>
           <h2>Kết quả phân tích</h2>
-          <span>Dashboard chỉ hiển thị ở đây; trang chủ luôn giữ vai trò landing page.</span>
+          <span>Kiểm tra kết quả phân tích mã độc, IOC, MITRE và mức độ ưu tiên phản ứng sự cố.</span>
         </div>
         <div class="topbar-actions">
           <button type="button" class="btn btn-outline" onclick="showPage('history',document.querySelector('[data-page=history]'))">Lịch sử</button>
@@ -110,7 +118,7 @@
       </div>
       <div id="dashboard-empty" class="dashboard-empty">
         <h3>Chưa có kết quả đang mở</h3>
-        <p>Import report hoặc chạy demo để tạo dashboard phân tích. Phiên cũ vẫn nằm trong mục Lịch sử và không còn tự đè lên trang chủ.</p>
+        <p>Import report Any.Run hoặc chạy demo để tạo dashboard đánh giá. Luồng này dùng làm cầu nối giữa bằng chứng phân tích mã độc và quy trình phản ứng sự cố.</p>
         <div class="home-actions compact">
           <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
           <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
@@ -135,7 +143,7 @@
 
     <!-- ANALYZE PAGE -->
     <div id="page-analyze" style="display:none">
-      <div class="topbar"><h2>Phân tích mẫu mã độc</h2></div>
+      <div class="topbar"><h2>Dữ liệu Any.Run và phân tích mã độc</h2></div>
 
       <!-- API Key -->
       <div class="card" style="margin-bottom:20px">
@@ -162,6 +170,7 @@
           <button type="button" class="tab" id="tab-import" role="tab" aria-selected="false" aria-controls="pane-import" onclick="switchTab('tab-import')">📥 Import Report</button>
           <button type="button" class="tab" id="tab-url" role="tab" aria-selected="false" aria-controls="pane-url" onclick="switchTab('tab-url')">🌐 Submit URL</button>
           <button type="button" class="tab" id="tab-file" role="tab" aria-selected="false" aria-controls="pane-file" onclick="switchTab('tab-file')">📁 Submit File</button>
+          <button type="button" class="tab" id="tab-ghidra" role="tab" aria-selected="false" aria-controls="pane-ghidra" onclick="switchTab('tab-ghidra');loadGhidraStatus()">🧩 Ghidra Local</button>
           <button type="button" class="tab" id="tab-demo" role="tab" aria-selected="false" aria-controls="pane-demo" onclick="switchTab('tab-demo')">🎭 Demo</button>
         </div>
 
@@ -235,6 +244,54 @@
           <div id="file-result" aria-live="polite" style="margin-top:14px"></div>
         </div>
 
+        <!-- Ghidra pane -->
+        <div class="tab-pane" id="pane-ghidra" role="tabpanel" aria-labelledby="tab-ghidra" hidden>
+          <div class="ghidra-console">
+            <div class="ghidra-intro">
+              <div>
+                <div class="card-title">🧩 Phân tích tĩnh local bằng Ghidra</div>
+                <h3>Static triage + reverse engineering leads</h3>
+                <p>Upload mẫu mã độc để trích hash, entropy, strings, IOC tĩnh và API đáng ngờ. Khi Ghidra sẵn sàng, app chạy headless analysis để bổ sung format, function/import summary và hướng xử lý IR.</p>
+              </div>
+              <div id="ghidra-status" class="ghidra-status" aria-live="polite">Đang kiểm tra Ghidra...</div>
+            </div>
+
+            <div class="ghidra-control-grid">
+              <div class="ghidra-upload upload-zone" id="ghidra-drop-zone" role="button" tabindex="0" aria-describedby="ghidra-file-name" onclick="document.getElementById('ghidra-file-input').click()" onkeydown="handleGhidraZoneKey(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleGhidraDrop(event)">
+                <input type="file" id="ghidra-file-input" accept=".exe,.dll,.bin,.scr,.msi,.elf,.zip,.doc,.docm,.xls,.xlsm,.pdf" onchange="handleGhidraSelect(this)"/>
+                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10m0 0 4-4m-4 4-4-4"/><path d="M4 15v2a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-2"/></svg>
+                <p id="ghidra-file-name">Kéo thả mẫu local hoặc nhấn để chọn</p>
+                <span>PE, DLL, ELF, Office/PDF container, script hoặc binary blob</span>
+              </div>
+
+              <div class="ghidra-options">
+                <div class="form-group">
+                  <label>Timeout Ghidra headless (giây)</label>
+                  <input type="number" id="ghidra-timeout" min="30" max="600" value="180"/>
+                </div>
+                <div class="timeout-presets" aria-label="Preset timeout Ghidra">
+                  <button type="button" class="chip-btn" onclick="setGhidraTimeout(90)">Nhanh 90s</button>
+                  <button type="button" class="chip-btn active" onclick="setGhidraTimeout(180)">Chuẩn 180s</button>
+                  <button type="button" class="chip-btn" onclick="setGhidraTimeout(300)">Sâu 300s</button>
+                </div>
+                <div class="ghidra-profile">
+                  <div><span>Pipeline</span><b>Hash • IOC • Strings • APIs • Imports</b></div>
+                  <div><span>Output</span><b>IR enrichment + RE leads</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ghidra-actions">
+              <button class="btn btn-primary" onclick="analyzeGhidraFile()">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9V3Z"/></svg>
+                Chạy phân tích tĩnh
+              </button>
+              <button class="btn btn-outline" onclick="loadGhidraStatus()">Kiểm tra Ghidra</button>
+            </div>
+          </div>
+          <div id="ghidra-result" aria-live="polite" class="ghidra-result"></div>
+        </div>
+
         <!-- Demo pane -->
         <div class="tab-pane" id="pane-demo" role="tabpanel" aria-labelledby="tab-demo" hidden>
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">Chạy demo với dữ liệu mẫu mô phỏng mã độc. Không cần API key.</p>
@@ -268,7 +325,7 @@
     <!-- PLAYBOOK PAGE -->
     <div id="page-playbook" style="display:none">
       <div class="topbar">
-        <div><h2>IR Playbook</h2><span>Quy trình phản ứng sự cố – NIST 800-61</span></div>
+        <div><h2>Quy trình phản ứng sự cố</h2><span>Từ hành vi mã độc thực tế đến containment, hunting, recovery và báo cáo</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
           <button class="btn btn-outline" onclick="exportReport('html')">⬇ HTML</button>
@@ -304,7 +361,7 @@
     <!-- IOC PAGE -->
     <div id="page-iocs" style="display:none">
       <div class="topbar">
-        <div><h2>IOC Blocklist</h2><span>Indicators of Compromise để chặn &amp; săn mối đe dọa</span></div>
+        <div><h2>IOC & SIEM</h2><span>Indicators of Compromise, blocklist và truy vấn hunt cho phản ứng sự cố</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="copyAllIOCs()">📋 Copy tất cả</button>
           <button class="btn btn-outline" onclick="exportReport('json')">⬇ Export JSON</button>

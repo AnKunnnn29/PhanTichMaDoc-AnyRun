@@ -24,11 +24,13 @@ Phan Tich Ma Doc/
 ├── anyrun_client.py         # Kết nối Any.Run API
 ├── analyzer.py              # Phân tích & chuẩn hóa dữ liệu
 ├── incident_response.py     # Sinh IR Playbook
+├── ghidra_analyzer.py       # Tích hợp Ghidra headless + static triage local
 ├── reporter.py              # Xuất báo cáo terminal + file
 ├── demo_data.py             # Dữ liệu mẫu Emotet (demo)
 ├── templates/index.html     # Giao diện web
 ├── static/style.css         # CSS dark theme
 ├── static/app.js            # JavaScript frontend
+├── scripts/ghidra/          # Ghidra postScript export summary
 ├── requirements.txt
 ├── .env.example
 └── reports/                 # Thư mục báo cáo đầu ra
@@ -122,7 +124,29 @@ Chịu trách nhiệm **trình bày kết quả** theo 2 hình thức:
 
 ---
 
-### 5. `app.py` – Web GUI (Flask Server)
+### 5. `ghidra_analyzer.py` – Phân tích tĩnh bằng Ghidra
+
+Module này bổ sung lớp **static analysis / reverse engineering** cho kết quả dynamic analysis từ Any.Run:
+
+| Thành phần | Vai trò |
+|------------|---------|
+| Local static triage | Hash, entropy, file type, printable strings, URL/IP/domain/registry, API đáng ngờ |
+| Ghidra headless | Chạy `support/analyzeHeadless` để lấy executable format, language, function/import summary |
+| IR enrichment | Gợi ý bằng chứng và bước reverse engineering cần bổ sung vào playbook |
+
+Luồng khuyến nghị trong đồ án:
+
+```text
+Any.Run dynamic behavior  -> IOC/runtime TTP/process/network
+Ghidra static analysis    -> functions/imports/strings/entropy/static IOC
+IR Playbook               -> containment + hunting + eradication có bằng chứng sâu hơn
+```
+
+Nếu chưa cài Ghidra, endpoint vẫn trả kết quả static triage cơ bản và báo trạng thái `not_configured`.
+
+---
+
+### 6. `app.py` – Web GUI (Flask Server)
 
 Backend phục vụ giao diện web. Expose các REST API endpoint:
 
@@ -133,12 +157,14 @@ Backend phục vụ giao diện web. Expose các REST API endpoint:
 | `/api/analyze` | POST | Phân tích task UUID với API key |
 | `/api/submit/url` | POST | Submit URL lên Any.Run |
 | `/api/submit/file` | POST | Upload và submit file lên Any.Run |
+| `/api/ghidra/status` | GET | Kiểm tra cấu hình Ghidra headless |
+| `/api/ghidra/analyze` | POST | Phân tích tĩnh local bằng Ghidra/static triage |
 | `/api/history` | POST | Lấy lịch sử task của tài khoản |
 | `/api/export` | POST | Xuất báo cáo Markdown hoặc JSON ra file |
 
 ---
 
-### 6. `main.py` – CLI (Command Line Interface)
+### 7. `main.py` – CLI (Command Line Interface)
 
 Giao diện dòng lệnh với 2 chế độ: **interactive menu** và **tham số trực tiếp**.
 
@@ -154,7 +180,7 @@ python -X utf8 main.py --no-export          # Chỉ in terminal, không lưu fil
 
 ---
 
-### 7. `demo_data.py` – Dữ liệu Demo
+### 8. `demo_data.py` – Dữ liệu Demo
 
 Chứa dữ liệu JSON mô phỏng phân tích mã độc **Emotet** thực tế, bao gồm:
 - 12 MITRE ATT&CK techniques (T1566, T1055, T1547, T1486…)
@@ -174,8 +200,9 @@ Truy cập tại `http://localhost:5000` sau khi chạy `python app.py`.
 
 | Trang | Chức năng |
 |-------|-----------|
-| **Tổng quan** | Dashboard hiển thị threat level, MITRE techniques, thông tin file, network activity, process tree |
-| **Phân tích** | Form nhập API key, chọn chế độ: Task UUID / Submit URL / Submit File / Demo |
+| **Trang chủ** | Landing page giới thiệu luồng Any.Run + Ghidra + IR |
+| **Kết quả** | Dashboard hiển thị threat level, MITRE techniques, thông tin file, network activity, process tree |
+| **Phân tích** | Form nhập API key, chọn chế độ: Task UUID / Import Report / Submit URL / Submit File / Ghidra Local / Demo |
 | **IR Playbook** | Hiển thị toàn bộ quy trình IR theo phase, có lệnh thực thi copy-paste, nút export |
 | **IOC Blocklist** | Hiển thị tất cả IOC theo loại (IP/domain/hash/URL), có firewall block rules tự sinh |
 | **Lịch sử** | Xem danh sách các task đã phân tích trên tài khoản Any.Run |
@@ -248,7 +275,26 @@ OLLAMA_NUM_PREDICT=500
 
 Không commit file `.env` lên GitHub.
 
-### 3. Cài Ollama model cho AI Agent
+### 3. Cài Ghidra để phân tích tĩnh local (tùy chọn)
+
+Tải Ghidra từ GitHub chính thức của NSA: https://github.com/NationalSecurityAgency/ghidra/releases
+
+Giải nén Ghidra, sau đó cấu hình `.env`:
+
+```env
+GHIDRA_HOME=C:\Tools\ghidra_<version>_PUBLIC
+GHIDRA_TIMEOUT=180
+```
+
+Hoặc trỏ trực tiếp tới headless launcher:
+
+```env
+GHIDRA_HEADLESS=C:\Tools\ghidra_<version>_PUBLIC\support\analyzeHeadless.bat
+```
+
+Trong Web GUI, vào **Phân tích → Ghidra Local**, upload mẫu cần reverse. Nếu Ghidra chưa cấu hình, hệ thống vẫn chạy static triage cơ bản để lấy hash, entropy, strings, URL/domain/IP/registry và API đáng ngờ.
+
+### 4. Cài Ollama model cho AI Agent
 
 Cài Ollama từ: https://ollama.com/download
 
@@ -276,7 +322,7 @@ và đổi `.env`:
 OLLAMA_MODEL=llama3.2:3b
 ```
 
-### 4. Train hoặc dùng sẵn model ML
+### 5. Train hoặc dùng sẵn model ML
 
 Repo có thể chứa sẵn `models/rf_threat_model.pkl`. Nếu chưa có, train lại:
 
@@ -284,7 +330,7 @@ Repo có thể chứa sẵn `models/rf_threat_model.pkl`. Nếu chưa có, train
 python -X utf8 train_ml.py --synthetic 60
 ```
 
-### 5. Chạy app
+### 6. Chạy app
 
 ```bash
 python app.py
