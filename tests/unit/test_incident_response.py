@@ -63,6 +63,64 @@ class TestMITREActions:
         assert ransomware_actions
         assert ransomware_actions[0].priority == 1
 
+    def test_wannacry_recovery_requires_reimage_and_clean_backup(self, sample_analysis_result):
+        sample_analysis_result.threat_info.threat_name = "WannaCry"
+        sample_analysis_result.threat_info.tags = ["wannacry", "ransomware"]
+        sample_analysis_result.threat_info.mitre_techniques.append(
+            {"id": "T1486", "name": "Data Encrypted for Impact", "tactic": "Impact"}
+        )
+
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+        combined = "\n".join(
+            [playbook.mitigation_summary]
+            + [action.title for action in playbook.actions]
+            + [action.description for action in playbook.actions]
+            + [note for action in playbook.actions for note in action.notes]
+            + [command for action in playbook.actions for command in action.commands]
+        ).lower()
+
+        assert "reimage" in combined
+        assert "backup" in combined
+        assert "không tin cậy" in combined
+        assert "smb1protocol" in combined
+
+    def test_stealer_playbook_prioritizes_session_revocation(self, sample_analysis_result):
+        sample_analysis_result.threat_info.threat_name = "RedLine Stealer"
+        sample_analysis_result.threat_info.tags = ["redline", "stealer"]
+        sample_analysis_result.threat_info.mitre_techniques.append(
+            {"id": "T1555.003", "name": "Credentials from Web Browsers", "tactic": "Credential Access"}
+        )
+
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+        combined = "\n".join(
+            [playbook.mitigation_summary]
+            + [action.title for action in playbook.actions]
+            + [action.description for action in playbook.actions]
+            + [note for action in playbook.actions for note in action.notes]
+            + [command for action in playbook.actions for command in action.commands]
+        ).lower()
+
+        assert "revoke" in combined
+        assert "token" in combined
+        assert "reset mật khẩu" in combined
+        assert "browser cache" in combined
+
+    def test_botnet_with_persistence_recommends_rebuild_not_only_cleanup(self, sample_analysis_result):
+        sample_analysis_result.threat_info.threat_name = "Emotet"
+        sample_analysis_result.threat_info.tags = ["emotet", "botnet"]
+
+        playbook = IncidentResponseGenerator().generate(sample_analysis_result)
+        combined = "\n".join(
+            [playbook.mitigation_summary]
+            + [action.title for action in playbook.actions]
+            + [action.description for action in playbook.actions]
+            + [note for action in playbook.actions for note in action.notes]
+        ).lower()
+
+        assert "rebuild" in combined or "reimage" in combined
+        assert "không chỉ xóa artifact" in combined
+        assert "edr" in combined
+
     def test_t1566_creates_email_quarantine_action(self, sample_analysis_result):
         playbook = IncidentResponseGenerator().generate(sample_analysis_result)
 

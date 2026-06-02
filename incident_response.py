@@ -89,6 +89,10 @@ class IncidentResponseGenerator:
         severity_score = self._build_severity_score(result)
         timeline = self._build_timeline(result)
         scope_hunting = self._build_scope_hunting(result)
+        malware_kind = self._malware_kind(result)
+        is_ransomware = malware_kind == "ransomware"
+        is_stealer = malware_kind == "stealer"
+        requires_reimage = self._requires_reimage(result, malware_kind)
 
         actions: List[IncidentAction] = []
 
@@ -192,6 +196,82 @@ class IncidentResponseGenerator:
                     notes=["Export registry backup trước khi xóa: reg export HKLM\\SOFTWARE backup.reg"],
                 ))
 
+        if is_stealer:
+            actions.append(IncidentAction(
+                priority=1,
+                phase=self.PHASES["CONTAIN"],
+                category="Credential containment",
+                title="Thu hồi phiên đăng nhập và xoay vòng credential bị rủi ro",
+                description=(
+                    "Malware có dấu hiệu stealer/credential theft. Cần coi mật khẩu, cookie trình duyệt, token VPN, "
+                    "email session và API key trên host là đã lộ cho đến khi chứng minh ngược lại."
+                ),
+                commands=[
+                    "# Microsoft 365 / Entra ID:",
+                    "Revoke-AzureADUserAllRefreshToken -ObjectId <user_id>",
+                    "Get-MgUserAuthenticationMethod -UserId <user_id>",
+                    "",
+                    "# Active Directory:",
+                    "Set-ADAccountPassword -Identity <user> -Reset",
+                    "Set-ADUser -Identity <user> -ChangePasswordAtLogon $true",
+                    "",
+                    "# Ưu tiên xoay vòng: email, VPN, SSO, browser password vault, API keys, SSH keys",
+                ],
+                notes=[
+                    "Không chỉ diệt mã độc rồi cho user dùng lại credential cũ.",
+                    "Tìm dấu hiệu đăng nhập bất thường sau thời điểm nhiễm trên IdP/VPN/email/cloud.",
+                    "Nếu có password manager hoặc browser sync trên host, bắt buộc reset tài khoản liên quan.",
+                ],
+            ))
+
+        if malware_kind == "worm":
+            actions.append(IncidentAction(
+                priority=1,
+                phase=self.PHASES["CONTAIN"],
+                category="Worm containment",
+                title="Khoanh vùng subnet và vá lỗ hổng lây lan",
+                description=(
+                    "Malware có dấu hiệu worm/lateral spread. Cần containment theo vùng mạng, không chỉ xử lý một endpoint đơn lẻ."
+                ),
+                commands=[
+                    "# Tạm chặn SMB/RPC/RDP ngang hàng giữa workstation nếu chính sách cho phép:",
+                    "# Block TCP 445/135/139/3389 giữa các subnet người dùng",
+                    "",
+                    "# Kiểm tra SMBv1:",
+                    "Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol",
+                    "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart",
+                ],
+                notes=[
+                    "Ưu tiên vá lỗ hổng bị khai thác trước khi reconnect host.",
+                    "Hunt host có cùng process/hash/network pattern trong toàn subnet.",
+                ],
+            ))
+
+        if requires_reimage and not is_ransomware:
+            actions.append(IncidentAction(
+                priority=1,
+                phase=self.PHASES["ERADICATE"],
+                category="High-confidence rebuild",
+                title="Đánh giá rebuild host thay vì chỉ xóa artifact",
+                description=(
+                    "Mẫu có persistence, defense evasion, credential theft hoặc C2. Với mức độ này, cách thực tế là "
+                    "reimage/cài mới host khi không thể chứng minh hệ thống đã sạch bằng EDR/forensic triage."
+                ),
+                commands=[
+                    "# Điều kiện cho phép giữ lại host phải có bằng chứng sạch:",
+                    "# - Không còn persistence/service/task/run key lạ",
+                    "# - Không còn process/network IOC",
+                    "# - EDR full scan sạch",
+                    "# - Timeline không có credential theft/lateral movement",
+                    "",
+                    "# Nếu thiếu bằng chứng: reimage từ golden image/cài mới OS",
+                ],
+                notes=[
+                    "Trojan/botnet/downloader có persistence thường không nên chỉ xóa file rồi đưa host về production.",
+                    "Ưu tiên rebuild nếu host chứa tài khoản đặc quyền, máy kế toán, máy quản trị hoặc server.",
+                ],
+            ))
+
         # ── Phase 3: Eradication ─────────────────────────────────────────── #
         eradicate_cmds = [
             "# Quét toàn bộ hệ thống với Windows Defender (đã cập nhật):",
@@ -212,22 +292,74 @@ class IncidentResponseGenerator:
                   for f in procs.dropped_files[:5]],
             ]
 
-        actions.append(IncidentAction(
-            priority=2,
-            phase=self.PHASES["ERADICATE"],
-            category="Dọn dẹp hệ thống",
-            title="Loại bỏ toàn bộ thành phần mã độc",
-            description=(
-                f"Xóa {len(procs.dropped_files)} file đã drop, "
-                f"dọn dẹp registry và scheduled tasks. "
-                "Chạy antivirus quét toàn bộ sau khi xử lý thủ công."
-            ),
-            commands=eradicate_cmds,
-            notes=[
-                "Nếu có file được bảo vệ, restart vào Safe Mode để xóa.",
-                "Kiểm tra Recycle Bin và %TEMP% folder.",
-            ],
-        ))
+        if is_ransomware:
+            actions.append(IncidentAction(
+                priority=1,
+                phase=self.PHASES["ERADICATE"],
+                category="Ransomware / Rebuild",
+                title="Không tin cậy host đã mã hóa - chuẩn bị wipe/reimage",
+                description=(
+                    "Với ransomware/WannaCry, mục tiêu thực tế không phải là xóa vài file độc rồi dùng lại máy. "
+                    "Sau khi thu thập bằng chứng cần coi endpoint là không còn tin cậy, wipe/reimage từ golden image "
+                    "hoặc khôi phục toàn bộ system state từ bản backup sạch."
+                ),
+                commands=[
+                    "# 1) Giữ nguyên disk/image để điều tra trước khi rebuild:",
+                    "manage-bde -status",
+                    "# Dùng EDR/forensic tool để image disk nếu chính sách yêu cầu",
+                    "",
+                    "# 2) Thu hồi host khỏi domain/network cho đến khi rebuild xong:",
+                    "Disable-ADAccount -Identity <computer_account>",
+                    "",
+                    "# 3) Reimage từ golden image hoặc cài mới OS, không reuse OS đã nhiễm:",
+                    "# PXE/SCCM/Intune/MDT: deploy clean image + baseline hardening",
+                ],
+                notes=[
+                    "Không khuyến nghị dọn registry/file thủ công rồi đưa máy nhiễm ransomware trở lại production.",
+                    "Chỉ thử decryptor nếu xác định đúng biến thể và có nguồn tin cậy; không coi decrypt là biện pháp làm sạch hệ thống.",
+                    "Giữ bằng chứng ransom note, encrypted sample, timeline, memory/disk image theo yêu cầu điều tra.",
+                ],
+            ))
+        elif requires_reimage:
+            actions.append(IncidentAction(
+                priority=2,
+                phase=self.PHASES["ERADICATE"],
+                category="Rebuild / clean host",
+                title="Reimage host khi không chứng minh được đã sạch",
+                description=(
+                    "Với stealer/trojan/botnet/downloader có persistence, C2 hoặc defense evasion, xóa artifact chỉ là biện pháp tạm. "
+                    "Cách xử lý thực tế là rebuild host nếu không có bằng chứng forensic/EDR đủ mạnh để xác nhận sạch."
+                ),
+                commands=[
+                    "# Trước khi rebuild: thu thập bằng chứng cần thiết",
+                    "# - EDR triage package",
+                    "# - volatile process/network snapshot",
+                    "# - suspicious file hashes",
+                    "",
+                    "# Sau đó deploy clean image và baseline hardening",
+                ],
+                notes=[
+                    "Không giữ lại OS cũ nếu malware có quyền admin, persistence, hoặc đã đánh cắp credential.",
+                    "Chỉ cho phép ngoại lệ khi IR lead phê duyệt dựa trên bằng chứng sạch.",
+                ],
+            ))
+        else:
+            actions.append(IncidentAction(
+                priority=2,
+                phase=self.PHASES["ERADICATE"],
+                category="Dọn dẹp hệ thống",
+                title="Loại bỏ toàn bộ thành phần mã độc",
+                description=(
+                    f"Xóa {len(procs.dropped_files)} file đã drop, "
+                    f"dọn dẹp registry và scheduled tasks. "
+                    "Chạy antivirus quét toàn bộ sau khi xử lý thủ công."
+                ),
+                commands=eradicate_cmds,
+                notes=[
+                    "Nếu có file được bảo vệ, restart vào Safe Mode để xóa.",
+                    "Kiểm tra Recycle Bin và %TEMP% folder.",
+                ],
+            ))
 
         # ── MITRE ATT&CK specific actions ───────────────────────────────── #
         if threat.mitre_techniques:
@@ -254,29 +386,84 @@ class IncidentResponseGenerator:
             ))
 
         # ── Phase 4: Recovery ────────────────────────────────────────────── #
-        actions.append(IncidentAction(
-            priority=3,
-            phase=self.PHASES["RECOVER"],
-            category="Phục hồi hệ thống",
-            title="Khôi phục hệ thống về trạng thái an toàn",
-            description="Sau khi đã loại bỏ mã độc, tiến hành khôi phục và hardening hệ thống.",
-            commands=[
-                "# Cập nhật Windows:",
-                "Install-WindowsUpdate -AcceptAll -AutoReboot",
-                "",
-                "# Reset mật khẩu tất cả tài khoản (phòng credential theft):",
-                "# Thực hiện qua Active Directory hoặc Local Users and Groups",
-                "",
-                "# Bật lại các dịch vụ bảo mật:",
-                'Set-MpPreference -DisableRealtimeMonitoring $false',
-                "netsh advfirewall set allprofiles state on",
-            ],
-            notes=[
-                "Không kết nối lại mạng cho đến khi xác nhận hệ thống sạch.",
-                "Thực hiện vulnerability scan sau khi phục hồi.",
-                "Cân nhắc reinstall OS nếu phát hiện rootkit.",
-            ],
-        ))
+        if is_ransomware:
+            actions.append(IncidentAction(
+                priority=1,
+                phase=self.PHASES["RECOVER"],
+                category="Ransomware recovery",
+                title="Khôi phục từ backup sạch sau khi reimage hệ thống",
+                description=(
+                    "Khôi phục dịch vụ bằng máy sạch/golden image và backup đã xác minh trước thời điểm nhiễm. "
+                    "Không mount backup vào host đang nhiễm, không đưa máy cũ trở lại mạng nếu chỉ mới xóa file độc."
+                ),
+                commands=[
+                    "# Kiểm tra backup trước khi restore:",
+                    "# - Backup timestamp trước thời điểm nhiễm",
+                    "# - Scan malware trên bản restore thử nghiệm",
+                    "# - Không thấy IOC/hash/process/path liên quan",
+                    "",
+                    "# Sau khi reimage/cài mới:",
+                    "Install-WindowsUpdate -AcceptAll -AutoReboot",
+                    "Set-MpPreference -DisableRealtimeMonitoring $false",
+                    "netsh advfirewall set allprofiles state on",
+                    "",
+                    "# Với WannaCry: vá SMBv1/EternalBlue và tắt SMBv1 nếu không cần:",
+                    "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart",
+                ],
+                notes=[
+                    "Ưu tiên khôi phục dữ liệu từ backup offline/immutable đã kiểm tra sạch.",
+                    "Reset credential của user/host bị ảnh hưởng trước khi cho truy cập lại tài nguyên chia sẻ.",
+                    "Chỉ reconnect theo từng đợt nhỏ và giám sát EDR/SIEM ít nhất 24-48 giờ.",
+                ],
+            ))
+        elif requires_reimage:
+            actions.append(IncidentAction(
+                priority=2,
+                phase=self.PHASES["RECOVER"],
+                category="Clean recovery",
+                title="Đưa host sạch trở lại production theo từng bước",
+                description=(
+                    "Sau khi rebuild hoặc chứng minh host sạch, đưa endpoint trở lại mạng theo từng bước và giám sát chặt. "
+                    "Với stealer, chỉ recover sau khi đã reset credential và revoke session liên quan."
+                ),
+                commands=[
+                    "Install-WindowsUpdate -AcceptAll -AutoReboot",
+                    "Set-MpPreference -DisableRealtimeMonitoring $false",
+                    "netsh advfirewall set allprofiles state on",
+                    "",
+                    "# Kiểm tra lại EDR/AV trước khi reconnect:",
+                    "Start-MpScan -ScanType FullScan",
+                ],
+                notes=[
+                    "Không restore profile/browser cache cũ nếu có dấu hiệu stealer.",
+                    "Giám sát DNS/proxy/EDR ít nhất 24-48 giờ sau khi reconnect.",
+                    "Chỉ khôi phục dữ liệu người dùng đã scan sạch, không khôi phục executable/script lạ.",
+                ],
+            ))
+        else:
+            actions.append(IncidentAction(
+                priority=3,
+                phase=self.PHASES["RECOVER"],
+                category="Phục hồi hệ thống",
+                title="Khôi phục hệ thống về trạng thái an toàn",
+                description="Sau khi đã loại bỏ mã độc, tiến hành khôi phục và hardening hệ thống.",
+                commands=[
+                    "# Cập nhật Windows:",
+                    "Install-WindowsUpdate -AcceptAll -AutoReboot",
+                    "",
+                    "# Reset mật khẩu tất cả tài khoản (phòng credential theft):",
+                    "# Thực hiện qua Active Directory hoặc Local Users and Groups",
+                    "",
+                    "# Bật lại các dịch vụ bảo mật:",
+                    "Set-MpPreference -DisableRealtimeMonitoring $false",
+                    "netsh advfirewall set allprofiles state on",
+                ],
+                notes=[
+                    "Không kết nối lại mạng cho đến khi xác nhận hệ thống sạch.",
+                    "Thực hiện vulnerability scan sau khi phục hồi.",
+                    "Cân nhắc reinstall OS nếu phát hiện rootkit.",
+                ],
+            ))
 
         # ── Phase 5: Lessons Learned ─────────────────────────────────────── #
         actions.append(IncidentAction(
@@ -313,14 +500,39 @@ class IncidentResponseGenerator:
             f"({severity_score['recommended_severity']})."
         )
 
-        mitigation = (
-            f"Ưu tiên: (1) Cô lập máy bị nhiễm ngay lập tức. "
-            f"(2) Chặn {len(ioc_blocklist['ip_addresses'])} IP và "
-            f"{len(ioc_blocklist['domains'])} domain tại firewall/DNS. "
-            f"(3) Xóa {len(procs.dropped_files)} file độc hại. "
-            f"(4) Reset credential toàn bộ user bị ảnh hưởng. "
-            f"(5) Patch lỗ hổng bị khai thác nếu xác định được."
-        )
+        if is_ransomware:
+            mitigation = (
+                "Ưu tiên thực tế cho ransomware/WannaCry: (1) Cô lập host và vùng mạng bị ảnh hưởng ngay. "
+                "(2) Bảo toàn bằng chứng, xác định thời điểm nhiễm và phạm vi lây lan. "
+                "(3) Không tin cậy OS đã nhiễm; wipe/reimage hoặc dựng máy sạch từ golden image. "
+                "(4) Khôi phục dữ liệu từ backup offline/immutable đã xác minh sạch, trước thời điểm nhiễm. "
+                "(5) Vá SMB/EternalBlue, tắt SMBv1 nếu không cần, reset credential và giám sát tái nhiễm."
+            )
+        elif is_stealer:
+            mitigation = (
+                "Ưu tiên thực tế cho stealer: (1) Cô lập host và thu thập bằng chứng trình duyệt/process/network. "
+                "(2) Revoke toàn bộ session/token liên quan, reset mật khẩu, xoay vòng VPN/API/SSH key. "
+                "(3) Hunt đăng nhập bất thường sau thời điểm nhiễm trên IdP, email, VPN và cloud. "
+                "(4) Reimage host nếu có persistence/quyền admin hoặc không chứng minh được đã sạch. "
+                "(5) Chỉ khôi phục profile/dữ liệu người dùng sau khi scan sạch, không restore browser cache/token cũ."
+            )
+        elif requires_reimage:
+            mitigation = (
+                f"Ưu tiên thực tế cho {malware_kind}/malware có C2 hoặc persistence: (1) Cô lập host và block IOC. "
+                "(2) Scope toàn mạng bằng hash, process, registry, DNS/proxy/firewall log. "
+                "(3) Không chỉ xóa artifact nếu có persistence/defense evasion; rebuild host khi thiếu bằng chứng sạch. "
+                "(4) Vá lỗ hổng/vector ban đầu, reset credential liên quan. "
+                "(5) Reconnect từng bước và giám sát EDR/SIEM ít nhất 24-48 giờ."
+            )
+        else:
+            mitigation = (
+                f"Ưu tiên: (1) Cô lập máy bị nhiễm ngay lập tức. "
+                f"(2) Chặn {len(ioc_blocklist['ip_addresses'])} IP và "
+                f"{len(ioc_blocklist['domains'])} domain tại firewall/DNS. "
+                f"(3) Xóa {len(procs.dropped_files)} file độc hại. "
+                f"(4) Reset credential toàn bộ user bị ảnh hưởng. "
+                f"(5) Patch lỗ hổng bị khai thác nếu xác định được."
+            )
 
         for action in actions:
             self._apply_operational_defaults(action)
@@ -338,6 +550,42 @@ class IncidentResponseGenerator:
             timeline           = timeline,
             scope_hunting      = scope_hunting,
         )
+
+    def _is_ransomware_case(self, result: MalwareAnalysisResult) -> bool:
+        return self._malware_kind(result) == "ransomware"
+
+    def _malware_kind(self, result: MalwareAnalysisResult) -> str:
+        threat = result.threat_info
+        technique_ids = self._technique_ids(threat.mitre_techniques)
+        text = " ".join([threat.threat_name or "", *(threat.tags or [])]).lower()
+        if any(t.startswith("T1486") for t in technique_ids) or any(
+            term in text for term in ("ransomware", "wannacry", "wanna cry", "cryptolocker", "lockbit", "conti")
+        ):
+            return "ransomware"
+        if any(t.startswith(("T1555", "T1003", "T1056")) for t in technique_ids) or any(
+            term in text for term in ("stealer", "redline", "lumma", "agenttesla", "formbook", "xloader", "credential")
+        ):
+            return "stealer"
+        if any(term in text for term in ("worm", "conficker")) or any(t.startswith(("T1210", "T1021")) for t in technique_ids):
+            return "worm"
+        if any(term in text for term in ("botnet", "emotet", "qakbot", "qbot", "trickbot", "bot")):
+            return "botnet"
+        if any(term in text for term in ("downloader", "loader", "dropper")) or any(t.startswith("T1105") for t in technique_ids):
+            return "downloader"
+        if any(term in text for term in ("trojan", "rat", "backdoor", "remcos", "asyncrat")):
+            return "trojan"
+        return "generic"
+
+    def _requires_reimage(self, result: MalwareAnalysisResult, malware_kind: str) -> bool:
+        threat = result.threat_info
+        procs = result.processes
+        technique_ids = self._technique_ids(threat.mitre_techniques)
+        high_risk_kind = malware_kind in {"stealer", "botnet", "downloader", "trojan", "worm"}
+        has_persistence = bool(procs.registry_keys) or any(t.startswith(("T1547", "T1053")) for t in technique_ids)
+        has_evasion = bool(procs.injected_processes) or any(t.startswith(("T1055", "T1562", "T1027")) for t in technique_ids)
+        has_credential_risk = any(t.startswith(("T1555", "T1003", "T1056")) for t in technique_ids)
+        has_c2 = bool(result.network.ip_addresses or result.network.domains or result.network.urls)
+        return high_risk_kind and (has_persistence or has_evasion or has_credential_risk or (has_c2 and threat.threat_level >= 2))
 
     def _build_severity_score(self, result: MalwareAnalysisResult) -> Dict:
         threat = result.threat_info
