@@ -231,6 +231,7 @@ _CATEGORY_INTEL: dict[str, dict[str, Any]] = {
 _IR_SCOPE_KEYWORDS = {
     "ai",
     "agent",
+    "anh huong",
     "attack",
     "av",
     "backdoor",
@@ -253,11 +254,13 @@ _IR_SCOPE_KEYWORDS = {
     "file",
     "firewall",
     "hash",
+    "hau qua",
     "host",
     "hunt",
     "ioc",
     "ip",
     "ir",
+    "impact",
     "lay lan",
     "log",
     "ma doc",
@@ -281,6 +284,8 @@ _IR_SCOPE_KEYWORDS = {
     "sach",
     "su co",
     "threat",
+    "thiet hai",
+    "tac dong",
     "tien trinh",
     "triage",
     "trojan",
@@ -293,6 +298,8 @@ _IR_SCOPE_KEYWORDS = {
     "zombie",
     "rootkit",
     "rootkin",
+    "damage",
+    "consequence",
 }
 
 
@@ -601,6 +608,12 @@ def _should_use_fast_local(question: str) -> bool:
         "brief",
         "triage",
         "danh gia nhanh",
+        "anh huong",
+        "thiet hai",
+        "tac dong",
+        "hau qua",
+        "impact",
+        "damage",
         "nguon lay",
         "lay lan",
         "vector",
@@ -733,6 +746,19 @@ def _answer_locally(question: str, payload: dict[str, Any]) -> str:
     ):
         return _similar_malware_response(payload, question)
     if any(
+        word in qn
+        for word in [
+            "anh huong",
+            "thiet hai",
+            "tac dong",
+            "hau qua",
+            "impact",
+            "damage",
+            "consequence",
+        ]
+    ):
+        return _impact_response(payload)
+    if any(
         word in q
         for word in [
             "chi tiết",
@@ -791,6 +817,59 @@ def _answer_locally(question: str, payload: dict[str, Any]) -> str:
     lines.append(
         "Điều kiện dừng: chỉ đưa máy trở lại mạng khi không còn process/dropped file/registry persistence liên quan và log DNS/proxy không còn kết nối IOC."
     )
+    return "\n".join(lines)
+
+
+def _impact_response(payload: dict[str, Any]) -> str:
+    playbook = payload.get("playbook", {}) or {}
+    threat = payload.get("threat", {}) or {}
+    network = payload.get("network", {}) or {}
+    processes = payload.get("processes", {}) or {}
+    malware_analysis = payload.get("malware_analysis", {}) or {}
+
+    malware_name = playbook.get("malware_name") or threat.get("threat_name") or "Unknown malware"
+    severity = playbook.get("severity", "UNKNOWN")
+    verdict = threat.get("verdict", "Unknown")
+    level = threat.get("threat_level", "?")
+    dropped = processes.get("dropped", []) or []
+    registry = processes.get("registry", []) or []
+    injected = processes.get("injected", []) or []
+    ips = network.get("ips", []) or []
+    domains = network.get("domains", []) or []
+    behavior = malware_analysis.get("behavior", []) or []
+
+    observed = []
+    if injected:
+        observed.append(f"Có {len(injected)} tiến trình nghi bị inject, làm tăng nguy cơ chạy mã trái phép.")
+    if dropped:
+        observed.append(f"Mẫu đã tạo/drop {len(dropped)} file, có thể để lại payload hoặc thành phần duy trì hoạt động.")
+    if registry:
+        observed.append(f"Phát hiện {len(registry)} registry artifact, cho thấy nguy cơ persistence hoặc thay đổi cấu hình máy.")
+    if ips or domains:
+        observed.append(
+            f"Có liên lạc mạng tới {len(ips)} IP và {len(domains)} domain liên quan, tạo rủi ro C2, tải thêm payload hoặc rò rỉ dữ liệu."
+        )
+    observed.extend(str(item) for item in behavior[:3] if item)
+    if not observed:
+        observed.append("Báo cáo hiện tại chưa có đủ artifact để xác nhận thiệt hại kỹ thuật cụ thể.")
+
+    lines = [
+        f"Đánh giá tác động: {malware_name} đang có verdict {verdict}, mức {severity} (threat level {level}/4).",
+        "",
+        "Thiệt hại hoặc ảnh hưởng có bằng chứng trong báo cáo:",
+    ]
+    lines.extend(f"- {item}" for item in observed)
+    lines += [
+        "",
+        "Rủi ro cần xác minh thêm, chưa nên coi là thiệt hại đã xảy ra:",
+        "- Mất hoặc mã hóa dữ liệu, đánh cắp thông tin đăng nhập và lây sang máy khác.",
+        "- Gián đoạn dịch vụ, chiếm dụng tài nguyên hoặc tạo cửa hậu duy trì truy cập.",
+        "",
+        "Cách xác định thiệt hại thực tế:",
+        "1. Hunt cùng IOC trên DNS/proxy/EDR để đếm số máy và tài khoản bị ảnh hưởng.",
+        "2. Kiểm tra file bị sửa/mã hóa, đăng nhập bất thường, dữ liệu outbound và persistence.",
+        "3. Đối chiếu thời gian hoạt động của malware với log hệ thống và các dịch vụ quan trọng.",
+    ]
     return "\n".join(lines)
 
 

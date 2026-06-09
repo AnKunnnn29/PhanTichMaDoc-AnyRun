@@ -785,6 +785,52 @@ def _export_simple_pdf(data: dict[str, Any], filename: str | Path) -> Path:
     return path
 
 
+def _register_pdf_fonts() -> dict[str, str]:
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font_sets = [
+        {
+            "normal": Path(r"C:\Windows\Fonts\arial.ttf"),
+            "bold": Path(r"C:\Windows\Fonts\arialbd.ttf"),
+            "italic": Path(r"C:\Windows\Fonts\ariali.ttf"),
+            "bold_italic": Path(r"C:\Windows\Fonts\arialbi.ttf"),
+        },
+        {
+            "normal": Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            "bold": Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            "italic": Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"),
+            "bold_italic": Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"),
+        },
+    ]
+    selected = next((font_set for font_set in font_sets if all(path.is_file() for path in font_set.values())), None)
+    if not selected:
+        return {
+            "normal": "Helvetica",
+            "bold": "Helvetica-Bold",
+            "italic": "Helvetica-Oblique",
+            "bold_italic": "Helvetica-BoldOblique",
+        }
+
+    names = {
+        "normal": "IRUnicode",
+        "bold": "IRUnicode-Bold",
+        "italic": "IRUnicode-Italic",
+        "bold_italic": "IRUnicode-BoldItalic",
+    }
+    for key, name in names.items():
+        if name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(name, str(selected[key])))
+    pdfmetrics.registerFontFamily(
+        "IRUnicode",
+        normal=names["normal"],
+        bold=names["bold"],
+        italic=names["italic"],
+        boldItalic=names["bold_italic"],
+    )
+    return names
+
+
 def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
     """Export a compact PDF report from an app payload."""
     path = Path(filename)
@@ -796,7 +842,20 @@ def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
     except ModuleNotFoundError:
         return _export_simple_pdf(data, path)
 
+    font_names = _register_pdf_fonts()
     styles = getSampleStyleSheet()
+    for style in styles.byName.values():
+        if not hasattr(style, "fontName"):
+            continue
+        default_name = style.fontName.lower()
+        if "bold" in default_name and ("oblique" in default_name or "italic" in default_name):
+            style.fontName = font_names["bold_italic"]
+        elif "bold" in default_name:
+            style.fontName = font_names["bold"]
+        elif "oblique" in default_name or "italic" in default_name:
+            style.fontName = font_names["italic"]
+        else:
+            style.fontName = font_names["normal"]
     story = []
     threat = data.get("threat", {}) or {}
     playbook = data.get("playbook", {}) or {}
@@ -822,17 +881,30 @@ def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
     ]
     table = PdfTable(meta_rows, colWidths=[100, 370])
     table.setStyle(
-        TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey)])
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, -1), font_names["normal"]),
+            ]
+        )
     )
     story.extend([table, Spacer(1, 12)])
 
-    story.append(Paragraph("MITRE ATT&CK", styles["Heading2"]))
+    story.append(Paragraph("MITRE ATT&amp;CK", styles["Heading2"]))
     mitre_rows = [["ID", "Technique", "Tactic"]] + [
         [item.get("id", ""), item.get("name", ""), item.get("tactic", "")] for item in threat.get("mitre", [])[:20]
     ]
     mitre_table = PdfTable(mitre_rows, colWidths=[70, 250, 150])
     mitre_table.setStyle(
-        TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey)])
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTNAME", (0, 0), (-1, -1), font_names["normal"]),
+                ("FONTNAME", (0, 0), (-1, 0), font_names["bold"]),
+            ]
+        )
     )
     story.extend([mitre_table, Spacer(1, 12)])
 

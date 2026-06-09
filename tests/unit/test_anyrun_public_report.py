@@ -26,6 +26,13 @@ def test_uuid_only_error_explains_stale_frontend(tmp_path):
         load_public_report(TASK_UUID, source_ref=TASK_UUID, reports_dir=tmp_path)
 
 
+def test_private_task_url_error_explains_public_report_requirement(tmp_path):
+    task_url = f"https://app.any.run/tasks/{TASK_UUID}"
+
+    with pytest.raises(AnyRunPublicReportError, match="trang task cần đăng nhập"):
+        load_public_report(TASK_UUID, source_ref=task_url, reports_dir=tmp_path)
+
+
 def test_download_public_report_wraps_network_error(monkeypatch):
     def fail_request(*_args, **_kwargs):
         raise requests.ConnectionError("blocked")

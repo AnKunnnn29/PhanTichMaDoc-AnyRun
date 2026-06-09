@@ -46,6 +46,13 @@ def load_public_report(task_uuid: str, source_ref: str = "", reports_dir: str | 
     if cached:
         return _public_vue_data_to_anyrun_report(cached, task_uuid)
 
+    if re.search(r"https?://app\.any\.run/tasks/", source_ref, re.IGNORECASE):
+        raise AnyRunPublicReportError(
+            "Link app.any.run/tasks/<uuid> là trang task cần đăng nhập, không phải public report URL. "
+            "Hãy mở task trên Any.Run, chọn Public report/Share rồi dán link dạng "
+            "https://any.run/report/<sha256>/<uuid>."
+        )
+
     if source_ref.strip().lower() == task_uuid:
         raise AnyRunPublicReportError(
             "Backend chỉ nhận được Task UUID, không nhận được public report URL đầy đủ. "

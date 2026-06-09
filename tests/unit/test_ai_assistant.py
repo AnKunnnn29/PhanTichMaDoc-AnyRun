@@ -83,6 +83,34 @@ def test_guardrail_blocks_out_of_scope_question(ai_payload):
     assert result["model"] == "scope-guardrail"
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "thiệt hại gây ra như thế nào",
+        "mức độ ảnh hưởng của mã độc này",
+        "what is the impact?",
+    ],
+)
+def test_guardrail_allows_impact_questions(monkeypatch, ai_payload, question):
+    monkeypatch.setenv("AI_PROVIDER", "local")
+
+    result = answer_remediation(question, ai_payload)
+
+    assert result["mode"] == "local"
+    assert "Đánh giá tác động" in result["answer"]
+    assert "Rủi ro cần xác minh thêm" in result["answer"]
+
+
+def test_stream_allows_impact_question(monkeypatch, ai_payload):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    events = list(answer_remediation_stream("thiệt hại gây ra như thế nào", ai_payload))
+
+    assert events[0]["mode"] == "fast_local"
+    assert "Đánh giá tác động" in events[1]["text"]
+
+
 def test_local_provider_returns_metadata(monkeypatch, ai_payload):
     monkeypatch.setenv("AI_PROVIDER", "local")
 

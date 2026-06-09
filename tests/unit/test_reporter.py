@@ -7,7 +7,14 @@ import pytest
 from rich.console import Console
 
 import reporter
-from reporter import ReportExporter, TerminalReporter, build_html_report, build_ir_evaluation, build_malware_analysis
+from reporter import (
+    ReportExporter,
+    TerminalReporter,
+    build_html_report,
+    build_ir_evaluation,
+    build_malware_analysis,
+    export_payload_pdf,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -78,6 +85,26 @@ class TestHTMLPDFExport:
         assert path.exists()
         assert path.suffix == ".pdf"
         assert path.read_bytes().startswith(b"%PDF")
+
+    def test_payload_pdf_embeds_unicode_font(self, temp_output_dir):
+        path = export_payload_pdf(
+            {
+                "task_uuid": "task-1",
+                "threat": {"verdict": "Malicious", "threat_level": 3, "mitre": []},
+                "playbook": {
+                    "malware_name": "Mã độc thử nghiệm",
+                    "severity": "CRITICAL",
+                    "summary": "Phát hiện mã độc và cần cô lập máy.",
+                    "ioc_blocklist": {},
+                    "actions": [],
+                },
+            },
+            temp_output_dir / "unicode.pdf",
+        )
+
+        pdf_bytes = path.read_bytes()
+        assert b"/FontFile2" in pdf_bytes
+        assert b"/Subtype /TrueType" in pdf_bytes
         assert path.stat().st_size > 1000
 
     def test_build_html_report_escapes_untrusted_content(self):
