@@ -46,6 +46,13 @@ def load_public_report(task_uuid: str, source_ref: str = "", reports_dir: str | 
     if cached:
         return _public_vue_data_to_anyrun_report(cached, task_uuid)
 
+    if source_ref.strip().lower() == task_uuid:
+        raise AnyRunPublicReportError(
+            "Backend chỉ nhận được Task UUID, không nhận được public report URL đầy đủ. "
+            "Hãy restart Flask, nhấn Ctrl+F5 trên trình duyệt rồi dán lại link dạng "
+            "https://any.run/report/<sha256>/<uuid>."
+        )
+
     raise AnyRunPublicReportError(
         "Không tìm thấy public report HTML/JSON cho UUID này. Hãy paste link dạng "
         "https://any.run/report/<sha256>/<uuid> hoặc import report từ Any.Run."
@@ -60,7 +67,12 @@ def _extract_public_url(value: str) -> str:
 
 
 def _download_public_vue_data(url: str) -> dict:
-    response = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        response = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    except requests.RequestException as exc:
+        raise AnyRunPublicReportError(
+            f"Không kết nối được tới public report Any.Run. Kiểm tra mạng, proxy hoặc firewall: {exc}"
+        ) from exc
     if response.status_code != 200:
         raise AnyRunPublicReportError(f"Không tải được public report HTML ({response.status_code}).")
     return _extract_vue_data(response.text)

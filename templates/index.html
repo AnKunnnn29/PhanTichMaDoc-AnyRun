@@ -177,8 +177,8 @@
         <!-- UUID pane -->
         <div class="tab-pane active" id="pane-uuid" role="tabpanel" aria-labelledby="tab-uuid">
           <div class="form-group">
-            <label>Task UUID</label>
-            <input type="text" id="task-uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+            <label>Task UUID hoặc public report URL</label>
+            <input type="text" id="task-uuid" placeholder="https://any.run/report/&lt;sha256&gt;/&lt;uuid&gt;"/>
           </div>
           <button class="btn btn-primary" onclick="analyzeTask()">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -402,6 +402,6 @@
 </div>
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=20260609-public-report"></script>
 </body>
 </html>

@@ -130,7 +130,6 @@ async function analyzeTask() {
   const uuid = extractTaskUuid(taskRef);
   if (!key)  return toast('Nhập API key trước', 'err');
   if (!uuid) return toast('Nhập Task UUID', 'err');
-  taskInput.value = uuid;
   showLoading('Đang lấy dữ liệu từ Any.Run...');
   try {
     const r = await fetch('/api/analyze', {

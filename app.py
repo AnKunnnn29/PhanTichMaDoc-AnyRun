@@ -60,6 +60,7 @@ from anyrun_public_report import AnyRunPublicReportError, load_public_report
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 analyzer = MalwareAnalyzer()
 ir_gen = IncidentResponseGenerator()
