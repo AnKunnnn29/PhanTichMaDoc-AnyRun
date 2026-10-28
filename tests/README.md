@@ -7,7 +7,7 @@ This project uses pytest for unit tests, integration tests, coverage reporting, 
 - `tests/unit/`: isolated tests for core modules such as `analyzer.py`, `anyrun_client.py`, `incident_response.py`, `reporter.py`, and `ml_engine.py`.
 - `tests/integration/`: Flask API, CLI, and full workflow tests.
 - `tests/performance/`: `pytest-benchmark` checks for parser, playbook, and export speed.
-- `tests/fixtures/`: static fixture placeholders. Shared fixtures in `tests/conftest.py` load the canonical demo data from the project modules.
+- Shared fixtures in `tests/conftest.py` load demo reports and IOC data directly from the project modules; no duplicate JSON fixture files are required.
 
 ## Run Tests
 

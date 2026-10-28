@@ -1,6 +1,7 @@
 # Local secrets and machine-specific config
 .env
-.env.local
+.env.*
+!.env.example
 
 # Python cache / virtual environments
 __pycache__/
@@ -14,13 +15,19 @@ env/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
+.benchmarks/
+.review_tmp*/
+*.log
 
-# Runtime-generated local history and exports
-reports/analysis_history.json
-reports/IR_Report_*.md
-reports/IR_Report_*.json
+# Runtime-generated local history, reports, and temporary sample uploads
+reports/
+tmp_upload_*
+
+# Local agent planning files
+.kiro/
 
 # OS/editor files
 .DS_Store
