@@ -164,7 +164,7 @@ async function submitURLOnly() {
     document.getElementById('url-result').innerHTML =
       `<div style="color:var(--green);font-size:13px">✅ Đã submit!<br>
        <span style="color:var(--text2)">Task UUID (dán vào tab Task UUID sau 1-3 phút):</span><br>
-       <code style="color:var(--accent);cursor:pointer" onclick="copyText('${j.task_id}')">${j.task_id}</code></div>`;
+       <code style="color:var(--accent);cursor:pointer" onclick="copyEncoded('${encodeURIComponent(String(j.task_id)).replace(/'/g, '%27')}')">${j.task_id}</code></div>`;
     toast('Đã submit URL!');
   } catch(e) { toast(e.message, 'err'); }
 }
@@ -199,7 +199,7 @@ async function submitFileOnly() {
     if (!j.ok) throw new Error(j.error);
     document.getElementById('file-result').innerHTML =
       `<div style="color:var(--green);font-size:13px">✅ Đã submit!<br>
-       <code style="color:var(--accent);cursor:pointer" onclick="copyText('${j.task_id}')">${j.task_id}</code></div>`;
+       <code style="color:var(--accent);cursor:pointer" onclick="copyEncoded('${encodeURIComponent(String(j.task_id)).replace(/'/g, '%27')}')">${j.task_id}</code></div>`;
     toast('Đã submit file!');
   } catch(e) { toast(e.message, 'err'); }
 }
@@ -375,7 +375,7 @@ async function loadGhidraStatus() {
   const statusEl = document.getElementById('ghidra-status');
   if (!statusEl) return;
   statusEl.className = 'ghidra-status checking';
-  statusEl.innerHTML = '<span class="status-dot"></span><b>Đang kiểm tra Ghidra</b><small>Đọc cấu hình GHIDRA_HOME/GHIDRA_HEADLESS/PATH...</small>';
+  statusEl.innerHTML = '<span class="status-dot"></span><b>Đang kiểm tra công cụ phân tích</b>';
   try {
     const r = await fetch('/api/ghidra/status');
     const j = await r.json();
@@ -383,8 +383,8 @@ async function loadGhidraStatus() {
     const s = j.data;
     statusEl.className = 'ghidra-status ' + (s.available ? 'ok' : 'warn');
     statusEl.innerHTML = s.available
-      ? `<span class="status-dot"></span><b>Ghidra đã sẵn sàng</b><code>${esc(s.analyze_headless)}</code>`
-      : `<span class="status-dot"></span><b>Chưa cấu hình Ghidra</b><small>${esc(s.setup_hint)}</small>`;
+      ? `<span class="status-dot"></span><b>Ghidra đã sẵn sàng</b><small>${s.configured_by === 'project' ? 'Đang dùng bộ công cụ trong dự án' : 'Đã kết nối công cụ phân tích'}</small>`
+      : `<span class="status-dot"></span><b>${s.installed ? 'Cần chuẩn bị Java' : 'Chưa có bộ công cụ'}</b><small>${esc(s.setup_hint)}</small>`;
   } catch (e) {
     statusEl.className = 'ghidra-status warn';
     statusEl.innerHTML = `<span class="status-dot"></span><b>Lỗi kiểm tra</b><small>${esc(e.message)}</small>`;
@@ -548,7 +548,7 @@ async function loadHistory() {
     }
     renderCombinedHistory(localJson.items || [], anyrunTasks, anyrunError);
   } catch (e) {
-    document.getElementById('history-content').innerHTML = `<div class="card"><span style="color:var(--red)">${e.message}</span></div>`;
+    document.getElementById('history-content').innerHTML = `<div class="card"><span style="color:var(--red)">${esc(e.message)}</span></div>`;
     toast(e.message, 'err');
   }
 }
@@ -561,6 +561,7 @@ function renderAll(data, options = {}) {
   renderPlaybook(data);
   renderIOCs(data);
   renderAIProactive(data);
+  renderEvidencePanel(data);
   if (!options.silent && data.cache?.hit) toast('Dùng lại lịch sử: ' + data.cache.reason);
 }
 
@@ -599,6 +600,7 @@ function restoreLastAnalysis() {
     renderPlaybook(data);
     renderIOCs(data);
     renderAIProactive(data);
+    renderEvidencePanel(data);
     return true;
   } catch (e) {
     localStorage.removeItem(LAST_ANALYSIS_KEY);
@@ -676,6 +678,8 @@ function formatFileSize(bytes) {
 }
 
 function renderDashboard(d) {
+  const currentCase = document.getElementById('home-current-case');
+  if (currentCase) currentCase.textContent = `${d.file?.name || 'Báo cáo'} · ${d.playbook?.malware_name || 'Chưa phân loại'}`;
   document.getElementById('dashboard-empty').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   const t = d.threat, p = d.playbook, net = d.network, pr = d.processes;
@@ -686,7 +690,7 @@ function renderDashboard(d) {
   document.getElementById('stat-row').innerHTML = `
     <div class="stat-box stat-gauge">${buildThreatGauge(riskScore, lvl)}<div class="lbl">Threat Score</div></div>
     <div class="stat-box"><div class="val" style="color:var(--accent)">${t.mitre.length}</div><div class="lbl">MITRE Techniques</div></div>
-    <div class="stat-box"><div class="val" style="color:var(--red)">${net.ips.length + net.domains.length}</div><div class="lbl">C2 Indicators</div></div>
+    <div class="stat-box"><div class="val" style="color:var(--red)">${net.ips.length + net.domains.length}</div><div class="lbl">Network Observables</div></div>
   `;
 
   // Threat card
@@ -710,11 +714,11 @@ function renderDashboard(d) {
   document.getElementById('card-threat').innerHTML = `
     <div class="card-title">⚠️ Threat Assessment</div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <span class="badge ${severityClass(lvl)}">${p.severity}</span>
-      <span style="font-size:22px;font-weight:700;color:${severityColor(lvl)}">${t.verdict}</span>
+      <span class="badge ${severityClass(lvl)}">${esc(p.severity)}</span>
+      <span style="font-size:22px;font-weight:700;color:${severityColor(lvl)}">${esc(t.verdict)}</span>
     </div>
-    <div style="font-size:15px;font-weight:600;margin-bottom:4px">${t.threat_name || 'Unknown Malware'}</div>
-    <div style="margin-bottom:12px">${t.tags.map(g=>`<span style="background:rgba(0,212,255,0.1);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:4px;margin-right:4px">${g}</span>`).join('')}</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(t.threat_name || 'Unknown Malware')}</div>
+    <div style="margin-bottom:12px">${t.tags.map(g=>`<span style="background:rgba(0,212,255,0.1);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:4px;margin-right:4px">${esc(g)}</span>`).join('')}</div>
     <div class="threat-bar-wrap">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px"><span>Mức độ nguy hiểm</span><span>${lvl}/4</span></div>
       <div class="threat-bar"><div class="threat-bar-fill" style="width:${bar_w}%;background:${severityColor(lvl)}"></div></div>
@@ -722,8 +726,8 @@ function renderDashboard(d) {
     ${ml_html}
     ${cache_html}
     <div style="margin-top:14px;font-size:13px;color:var(--text2)">
-      🖥️ ${d.os_env} &nbsp;|&nbsp; ⏱️ ${d.duration}s &nbsp;|&nbsp;
-      <a href="${d.analysis_url}" target="_blank" style="color:var(--accent)">Xem trên Any.Run ↗</a>
+      🖥️ ${esc(d.os_env)} &nbsp;|&nbsp; ⏱️ ${esc(d.duration)}s &nbsp;|&nbsp;
+      <a href="${safeLink(d.analysis_url)}" target="_blank" style="color:var(--accent)">Xem trên Any.Run ↗</a>
     </div>`;
 
   // File card
@@ -748,9 +752,9 @@ function renderDashboard(d) {
     <div class="card-title">🎯 MITRE ATT&CK Techniques (${t.mitre.length})</div>
     <div class="mitre-grid">${t.mitre.map(m=>`
       <div class="mitre-chip">
-        <div class="mid">${m.id}</div>
-        <div class="mname">${m.name}</div>
-        <div class="mtac">${m.tactic}</div>
+        <div class="mid">${esc(m.id)}</div>
+        <div class="mname">${esc(m.name)}</div>
+        <div class="mtac">${esc(m.tactic)}</div>
       </div>`).join('')}</div>`;
 
   // Network
@@ -761,11 +765,11 @@ function renderDashboard(d) {
       <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-domains" onclick="netTab('domains',this)">Domains (${net.domains.length})</button>
       <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-http" onclick="netTab('http',this)">HTTP (${net.http.length})</button>
     </div>
-    <div id="net-ips" class="tag-list">${net.ips.map(ip=>`<span class="tag tag-ip" title="Click để copy" onclick="copyText('${ip}')">${ip}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
-    <div id="net-domains" style="display:none" class="tag-list">${net.domains.map(d=>`<span class="tag tag-domain" onclick="copyText('${d}')">${d}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
+    <div id="net-ips" class="tag-list">${net.ips.map(ip=>`<span class="tag tag-ip" title="Click để copy" onclick="copyEncoded('${encodeURIComponent(String(ip)).replace(/'/g, '%27')}')">${esc(ip)}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
+    <div id="net-domains" style="display:none" class="tag-list">${net.domains.map(d=>`<span class="tag tag-domain" onclick="copyEncoded('${encodeURIComponent(String(d)).replace(/'/g, '%27')}')">${esc(d)}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
     <div id="net-http" style="display:none">
       ${net.http.length ? `<div class="table-wrap"><table><thead><tr><th>Method</th><th>URL</th><th>Status</th></tr></thead><tbody>
-      ${net.http.map(h=>`<tr><td><span style="color:var(--accent);font-weight:600">${h.method}</span></td><td class="mono" style="word-break:break-all;max-width:400px">${h.url}</td><td>${h.status}</td></tr>`).join('')}
+      ${net.http.map(h=>`<tr><td><span style="color:var(--accent);font-weight:600">${esc(h.method)}</span></td><td class="mono" style="word-break:break-all;max-width:400px">${esc(h.url)}</td><td>${esc(h.status)}</td></tr>`).join('')}
       </tbody></table></div>` : '<span style="color:var(--text2);font-size:13px">Không có HTTP</span>'}
     </div>`;
 
@@ -779,9 +783,9 @@ function renderDashboard(d) {
       <div class="stat-box"><div class="val" style="font-size:22px;color:var(--yellow)">${pr.registry.length}</div><div class="lbl">Registry keys</div></div>
     </div>
     ${pr.dropped.length ? `<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">FILES DROPPED</div>
-    ${pr.dropped.map(f=>`<div class="proc-item malicious">📄 ${f.name}</div>`).join('')}</div>` : ''}
+    ${pr.dropped.map(f=>`<div class="proc-item malicious">📄 ${esc(f.name)}</div>`).join('')}</div>` : ''}
     ${pr.registry.length ? `<div style="margin-top:12px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">REGISTRY KEYS</div>
-    ${pr.registry.slice(0,8).map(k=>`<div class="proc-item" style="font-size:11px">${k}</div>`).join('')}</div>` : ''}`;
+    ${pr.registry.slice(0,8).map(k=>`<div class="proc-item" style="font-size:11px">${esc(k)}</div>`).join('')}</div>` : ''}`;
   animateCards(document.getElementById('dashboard'));
 }
 
@@ -810,11 +814,11 @@ function renderPlaybook(d) {
   let html = `
     <div class="card" style="margin-bottom:20px">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
-        <span class="badge ${severityClass(p.threat_level)}">${p.severity}</span>
-        <span style="font-size:18px;font-weight:700">${p.malware_name}</span>
+        <span class="badge ${severityClass(p.threat_level)}">${esc(p.severity)}</span>
+        <span style="font-size:18px;font-weight:700">${esc(p.malware_name)}</span>
       </div>
-      <p style="color:var(--text2);font-size:13.5px;line-height:1.7;margin-bottom:10px">${p.summary}</p>
-      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--accent);font-size:13px;line-height:1.7">${p.mitigation}</div>
+      <p style="color:var(--text2);font-size:13.5px;line-height:1.7;margin-bottom:10px">${esc(p.summary)}</p>
+      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--accent);font-size:13px;line-height:1.7">${esc(p.mitigation)}</div>
     </div>`;
 
   html += `
@@ -823,7 +827,7 @@ function renderPlaybook(d) {
       <div class="grid-3">
         <div class="stat-box stat-gauge">${buildThreatGauge(score.score, p.threat_level)}<div class="lbl">Risk Score</div></div>
         <div class="stat-box"><div class="val">${esc(score.recommended_severity || 'N/A')}</div><div class="lbl">Đề xuất</div></div>
-        <div class="stat-box"><div class="val">${esc(evalData.readiness_score ?? 'N/A')}%</div><div class="lbl">IR Readiness</div></div>
+        <div class="stat-box"><div class="val">${esc(evalData.readiness_score ?? 'N/A')}%</div><div class="lbl">Độ đầy đủ cấu trúc</div></div>
       </div>
       <div style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
         ${(score.reasons || []).map(r => `<div>• ${esc(r)}</div>`).join('') || 'Chưa có lý do scoring.'}
@@ -835,7 +839,7 @@ function renderPlaybook(d) {
 
   if (timeline.length) {
     html += `<div class="card" style="margin-bottom:20px">
-      <div class="card-title">Timeline điều tra</div>
+      <details><summary class="card-title">Sự kiện nguồn (${timeline.length})</summary>
       <div class="table-wrap"><table><thead><tr><th>Bước</th><th>Giai đoạn</th><th>Sự kiện</th><th>Bằng chứng</th><th>Hành động IR</th></tr></thead><tbody>
       ${timeline.map(row => `<tr>
         <td>${esc(row.step)}</td>
@@ -844,13 +848,13 @@ function renderPlaybook(d) {
         <td><code>${esc(row.evidence || 'N/A')}</code></td>
         <td>${esc(row.ir_action || '')}</td>
       </tr>`).join('')}
-      </tbody></table></div>
+      </tbody></table></div></details>
     </div>`;
   }
 
   if (hunts.length) {
     html += `<div class="card" style="margin-bottom:20px">
-      <div class="card-title">Scope & Threat Hunting</div>
+      <details><summary class="card-title">Truy vấn điều tra (${hunts.length})</summary>
       ${hunts.map(h => `<div class="action-card p2">
         <div class="action-header">
           <span>${esc(h.priority || 'P2')}</span>
@@ -859,26 +863,26 @@ function renderPlaybook(d) {
         </div>
         <div class="action-desc">${esc(h.evidence || '')}</div>
         <div class="code-block"><span class="cmd-line">${esc(h.query || '')}</span></div>
-      </div>`).join('')}
+      </div>`).join('')}</details>
     </div>`;
   }
 
   Object.entries(phaseMap).forEach(([phase, acts]) => {
     html += `<div class="phase-group">
       <div class="phase-header" onclick="togglePhase(this)">
-        📌 ${phase}
+        📌 ${esc(phase)}
         <span class="count">${acts.length} hành động</span>
         <svg style="width:16px;height:16px;margin-left:8px;transition:transform 0.2s" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div class="phase-body open">`;
+      <div class="phase-body">`;
     acts.forEach(a => {
       html += `<div class="action-card ${pColors[a.priority]||''}">
         <div class="action-header">
           <span>${pIcons[a.priority]||''}</span>
-          <span class="action-title">${a.title}</span>
-          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${a.category}</span>
+          <span class="action-title">${esc(a.title)}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${esc(a.category)}</span>
         </div>
-        <div class="action-desc">${a.description}</div>`;
+        <div class="action-desc">${esc(productDescription(a.description))}</div>`;
       html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:11px;color:var(--text2)">
         <span class="tag">Owner: ${esc(a.owner || 'N/A')}</span>
         <span class="tag">SLA: ${esc(a.sla || 'N/A')}</span>
@@ -914,35 +918,37 @@ function togglePhase(el) {
 
 function renderIOCs(d) {
   const b = d.playbook.ioc_blocklist;
+  const exclusions = d.response_exclusions || [];
   document.getElementById('ioc-content').innerHTML = `
+    ${exclusions.length ? `<div class="card"><details><summary>Đích loại trừ (${exclusions.length})</summary>${exclusions.map(row => `<p style="margin-top:12px"><b>${esc(row.value)}</b><br>${esc(row.reason)}</p>`).join('')}</details></div>` : ''}
     <div class="grid-2">
       <div class="card">
         <div class="card-title">🔴 IP Addresses (${b.ip_addresses.length})</div>
-        <div class="tag-list">${b.ip_addresses.map(v=>`<span class="tag tag-ip" onclick="copyText('${v}')" title="Click để copy">${v}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        <div class="tag-list">${b.ip_addresses.map(v=>`<span class="tag tag-ip" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
         <div class="card-title">🟠 Domains (${b.domains.length})</div>
-        <div class="tag-list">${b.domains.map(v=>`<span class="tag tag-domain" onclick="copyText('${v}')" title="Click để copy">${v}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        <div class="tag-list">${b.domains.map(v=>`<span class="tag tag-domain" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
         <div class="card-title">🟢 URLs (${b.urls.length})</div>
-        <div class="tag-list">${b.urls.map(v=>`<span class="tag tag-url" onclick="copyText('${v}')" title="Click để copy" style="word-break:break-all">${v}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        <div class="tag-list">${b.urls.map(v=>`<span class="tag tag-url" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
         <div class="card-title">🟣 File Hashes (${b.file_hashes.length})</div>
-        <div class="tag-list">${b.file_hashes.map(v=>`<span class="tag tag-hash" onclick="copyText('${v}')" title="Click để copy" style="word-break:break-all;font-size:10px">${v}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        <div class="tag-list">${b.file_hashes.map(v=>`<span class="tag tag-hash" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all;font-size:10px">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
     </div>
     <div class="card">
       <div class="card-title">🟡 Filenames (${b.filenames.length})</div>
-      <div class="tag-list">${b.filenames.map(v=>`<span class="tag tag-file" onclick="copyText('${v}')">${v}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+      <div class="tag-list">${b.filenames.map(v=>`<span class="tag tag-file" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
     </div>
     <div class="card">
       <div class="card-title">📋 Firewall Block Rules (PowerShell)</div>
       <div class="code-block">${
-        b.ip_addresses.map(ip=>`<span class="cmd-line">netsh advfirewall firewall add rule name="Block_${ip}" dir=out action=block remoteip=${ip}</span>`).join('\n')
+        b.ip_addresses.map(ip=>`<span class="cmd-line">netsh advfirewall firewall add rule name="Block_${esc(ip)}" dir=out action=block remoteip=${esc(ip)}</span>`).join('\n')
         + (b.domains.length ? '\n\n<span class="cmd-comment"># Thêm vào C:\\Windows\\System32\\drivers\\etc\\hosts:</span>\n' +
-          b.domains.map(d=>`<span class="cmd-line">0.0.0.0 ${d}</span>`).join('\n') : '')
+          b.domains.map(d=>`<span class="cmd-line">0.0.0.0 ${esc(d)}</span>`).join('\n') : '')
       }</div>
     </div>`;
   animateCards(document.getElementById('ioc-content'));
@@ -957,11 +963,11 @@ function renderHistory(tasks) {
     const verdict = (t.verdict?.threatLevelText || 'unknown').toLowerCase();
     const cls = verdict.includes('malicious') ? 'verdict-malicious' : verdict.includes('suspicious') ? 'verdict-suspicious' : 'verdict-clean';
     return `<tr>
-      <td class="mono" style="font-size:11px">${t.uuid||''}</td>
-      <td>${t.name||'N/A'}</td>
-      <td class="${cls}">${t.verdict?.threatLevelText||'unknown'}</td>
-      <td style="color:var(--text2)">${(t.date||'').slice(0,10)}</td>
-      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeFromHistory('${t.uuid}')">Phân tích</button></td>
+      <td class="mono" style="font-size:11px">${esc(t.uuid||'')}</td>
+      <td>${esc(t.name||'N/A')}</td>
+      <td class="${cls}">${esc(t.verdict?.threatLevelText||'unknown')}</td>
+      <td style="color:var(--text2)">${esc((t.date||'').slice(0,10))}</td>
+      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeFromHistory('${extractTaskUuid(t.uuid)}')">Phân tích</button></td>
     </tr>`;
   }).join('');
   document.getElementById('history-content').innerHTML = `
@@ -1016,7 +1022,7 @@ function renderAnyRunHistoryTable(tasks) {
 
 function extractAnyRunTaskUuid(task = {}) {
   const direct = task.uuid || task.task_uuid || task.taskUuid || task.id || task.analysis_id || '';
-  if (direct) return String(direct);
+  if (direct) return extractTaskUuid(direct);
   const haystack = [task.related, task.json, task.misp, task.html, task.url, task.analysis_url].filter(Boolean).join(' ');
   const match = haystack.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   return match ? match[0] : '';
@@ -1033,12 +1039,12 @@ function renderLocalHistory(items) {
       <td>${esc(t.file_name || 'N/A')}</td>
       <td class="${cls}">${esc(t.verdict || 'unknown')}</td>
       <td style="color:var(--text2)">${esc((t.created_at || '').replace('T', ' '))}</td>
-      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeLocalHistory('${encodeURIComponent(t.id)}')">Mở lại</button></td>
+      <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="analyzeLocalHistory('${encodeURIComponent(t.id).replace(/'/g, '%27')}')">Mở lại</button></td>
     </tr>`;
   }).join('');
   return `<div class="card">
     <div class="card-title">Lịch sử cục bộ (${items.length})</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Các malware family đã có ở đây sẽ được ưu tiên dùng lại thay vì tạo playbook mới.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Chỉ dùng lại kết quả khi toàn bộ dữ liệu đầu vào và cấu hình phân tích trùng khớp.</div>
     <div class="table-wrap"><table><thead><tr><th>Malware</th><th>File</th><th>Verdict</th><th>Thời gian</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
@@ -1072,7 +1078,12 @@ async function exportReport(fmt) {
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    toast(`Đã xuất: ${j.path}`);
+    if (j.download_url?.startsWith('/api/exports/')) {
+      const link = document.createElement('a');
+      link.href = j.download_url; link.download = ''; link.hidden = true;
+      document.body.appendChild(link); link.click(); link.remove();
+    }
+    toast('Báo cáo đã sẵn sàng tải xuống');
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -1104,6 +1115,125 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function renderEvidencePanel(data) {
+  const root = document.getElementById('evidence-content');
+  if (!root) return;
+  root.replaceChildren();
+  const add = (parent, tag, text, cls = '') => {
+    const el = document.createElement(tag);
+    if (text !== undefined) el.textContent = String(text);
+    if (cls) el.className = cls;
+    parent.appendChild(el);
+    return el;
+  };
+  const card = add(root, 'section', undefined, 'card');
+  add(card, 'h3', 'Chỉ báo & bằng chứng');
+  const agent = data.agent_analysis;
+  if (!agent) { add(card, 'p', 'Phân tích lại để cập nhật bằng chứng.'); return; }
+  add(card, 'span', agent.mode === 'llm' ? 'AI đã phân tích' : agent.mode === 'fallback' ? 'AI chưa hoàn tất · Cần xem xét' : 'Phân tích cơ bản', 'analysis-badge');
+  const bundle = data.evidence_bundle;
+  const evidence = new Map(bundle.evidence.map(e => [e.id, e]));
+  const values = new Map(bundle.observables.map(o => [o.id, o]));
+  const filter = add(card, 'input');
+  filter.type = 'search'; filter.placeholder = 'Tìm theo IOC, loại hoặc vai trò';
+  filter.setAttribute('aria-label', filter.placeholder);
+  const count = add(card, 'p', '');
+  const list = add(card, 'div');
+  let visibleCount = 8;
+  const more = add(card, 'button', 'Xem thêm chỉ báo', 'btn btn-outline');
+  more.type = 'button';
+  more.addEventListener('click', () => { visibleCount += 8; renderFindings(); });
+  const roleLabels = {network_destination:'Đích mạng',sample_fingerprint:'Dấu vân tay file',file_artifact:'Tệp tin',process_artifact:'Tiến trình',registry_artifact:'Registry',autorun_candidate:'Vị trí tự khởi động',synchronization_artifact:'Đối tượng đồng bộ',protective_service:'Kill-switch · Không chặn',unclassified:'Chưa phân loại'};
+  function renderFindings() {
+    list.replaceChildren();
+    const term = filter.value.toLocaleLowerCase();
+    const rows = agent.findings.filter(f => JSON.stringify([values.get(f.ioc_id), f.role, roleLabels[f.role]]).toLocaleLowerCase().includes(term));
+    count.textContent = `${rows.length} chỉ báo${rows.length > visibleCount ? ` · Đang hiện ${visibleCount}` : ''}`;
+    more.hidden = rows.length <= visibleCount;
+    for (const f of rows.slice(0, visibleCount)) {
+      const item = values.get(f.ioc_id) || {};
+      const details = add(list, 'details', undefined, 'action-card');
+      add(details, 'summary', `${item.value} · ${roleLabels[f.role] || 'Chưa phân loại'}`);
+      add(details, 'p', f.explanation);
+      add(details, 'p', `Mức nguy cơ: ${{unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'}[f.severity] || 'Chưa xác định'}`);
+      add(details, 'p', `Ảnh hưởng: ${f.potential_impact}`);
+      add(details, 'p', `Cần xác minh: ${f.verification_needed}`);
+      for (const id of f.evidence_ids) {
+        const e = evidence.get(id);
+        if (!e) continue;
+        const source = add(details, 'details', undefined, 'evidence-source');
+        add(source, 'summary', `Bằng chứng ${id.slice(3, 11)}`);
+        add(source, 'p', `${e.source_id}${e.source_path}`);
+        add(source, 'pre', e.value);
+        add(source, 'p', `SHA256: ${e.source_sha256}`);
+        if (e.source_lines) add(source, 'p', `Dòng: ${e.source_lines.join(', ')}`);
+      }
+    }
+  }
+  filter.addEventListener('input', () => { visibleCount = 8; renderFindings(); });
+  renderFindings();
+  const chain = add(card, 'details');
+  add(chain, 'summary', `Quan hệ hành vi (${data.behavior_chain.relations.length}) và MITRE (${data.mitre_mappings.length})`);
+  add(chain, 'p', data.behavior_chain.limitations.join(' '));
+  for (const edge of data.behavior_chain.relations) add(chain, 'p', `${edge.source} → ${edge.target}: ${edge.relation}`);
+  for (const mapping of data.mitre_mappings) add(chain, 'p', `${mapping.technique_id}: ${mapping.reason} [${mapping.evidence_ids.join(', ')}]`);
+  const review = add(root, 'section', undefined, 'card');
+  add(review, 'h3', 'Xem xét khuyến nghị');
+  const select = add(review, 'select'); select.setAttribute('aria-label', 'Chọn khuyến nghị');
+  for (const action of data.playbook.actions) {
+    const statusLabel = {pending:'Chờ xem xét',approved:'Đã duyệt',rejected:'Từ chối',changes_requested:'Cần bổ sung'}[action.status] || action.status;
+    const option = add(select, 'option', `${action.title} — ${statusLabel}${action.blocked ? ' (thiếu bằng chứng)' : ''}`);
+    option.value = action.id;
+  }
+  const info = add(review, 'details');
+  const showAction = () => {
+    const a = data.playbook.actions.find(x => x.id === select.value);
+    info.replaceChildren();
+    if (a) { add(info, 'summary', `Bằng chứng & điều kiện (${(a.evidence_ids || []).length})`); add(info, 'p', `${(a.preconditions || []).join(' ')} ${(a.risks || []).join(' ')}`); add(info, 'p', (a.evidence_ids || []).join(', ')); }
+  };
+  select.addEventListener('change', showAction); showAction();
+  const reviewer = add(review, 'input'); reviewer.placeholder = 'Tên người xem xét'; reviewer.maxLength = 120;
+  reviewer.setAttribute('aria-label', reviewer.placeholder);
+  const reason = add(review, 'textarea'); reason.placeholder = 'Lý do quyết định và điều kiện cần bổ sung'; reason.maxLength = 2000;
+  reason.setAttribute('aria-label', reason.placeholder);
+  const status = add(review, 'p', ''); status.setAttribute('role', 'status');
+  const buttons = [];
+  for (const [decision, label] of [['approved', 'Duyệt khuyến nghị'], ['rejected', 'Từ chối'], ['changes_requested', 'Yêu cầu bổ sung']]) {
+    const button = add(review, 'button', label, 'btn btn-outline'); button.type = 'button'; buttons.push(button);
+    button.addEventListener('click', async () => {
+      if (!reviewer.value.trim() || !reason.value.trim()) { status.textContent = 'Nhập tên và lý do trước khi gửi.'; return; }
+      buttons.forEach(b => b.disabled = true);
+      try {
+        const r = await fetch(`/api/cases/${encodeURIComponent(data.case_id)}/review`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+            action_id: select.value, decision, reviewer: reviewer.value, reason: reason.value,
+            expected_revision: data.review_revision || 0
+          })
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) {
+          if (r.status === 409) {
+            const fresh = await fetch(`/api/cases/${encodeURIComponent(data.case_id)}`).then(x => x.json());
+            if (fresh.ok) renderAll(fresh.data, {silent: true});
+          }
+          throw new Error(j.error || 'Không lưu được quyết định');
+        }
+        renderAll(j.data, {silent: true}); toast('Đã lưu quyết định xem xét');
+      } catch (e) { status.textContent = e.message; toast(e.message, 'err'); }
+      finally { buttons.forEach(b => b.disabled = false); }
+    });
+  }
+  const history = add(review, 'details'); add(history, 'summary', `Lịch sử xem xét (${(data.review_history || []).length})`);
+  for (const e of data.review_history || []) add(history, 'p', `${e.created_at} · ${e.reviewer} · ${e.action_id}: ${e.decision} — ${e.reason}`);
+}
+
+function copyEncoded(value) { copyText(decodeURIComponent(value)); }
+function productDescription(value) { return String(value || '').replace(/^Khuyến nghị có điều kiện, cần analyst đối chiếu evidence trước khi áp dụng\.\s*/, ''); }
+function safeLink(value) {
+  try { const u = new URL(String(value)); return ['http:', 'https:'].includes(u.protocol) ? escAttr(u.href) : '#'; }
+  catch (_) { return '#'; }
+}
+
 function escAttr(s) {
   return esc(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
@@ -1123,19 +1253,17 @@ function renderAIProactive(d) {
     'Tài khoản nào đăng nhập trước thời điểm malware chạy?'
   ];
   answerEl.innerHTML = `
-    <div class="ai-mode">AI briefing chủ động</div>
+    <div class="ai-mode">Tổng quan hồ sơ</div>
     <div class="ai-brief-grid">
       <div class="ai-brief-item"><span>Mức khẩn cấp</span><b>${esc(p.severity || 'UNKNOWN')}</b></div>
       <div class="ai-brief-item"><span>Malware</span><b>${esc(p.malware_name || t.threat_name || 'Unknown')}</b></div>
-      <div class="ai-brief-item"><span>C2</span><b>${(net.ips || []).length + (net.domains || []).length} IOC</b></div>
+      <div class="ai-brief-item"><span>Đích mạng</span><b>${(net.ips || []).length + (net.domains || []).length} IOC</b></div>
       <div class="ai-brief-item"><span>Artifact</span><b>${(pr.dropped || []).length} file / ${(pr.registry || []).length} registry</b></div>
     </div>
     <div class="ai-section-title">Nhận định ban đầu</div>
-    <ul class="ai-list">${(ma.behavior || []).slice(0, 3).map(v => `<li>${esc(v)}</li>`).join('') || '<li>Chưa đủ dữ liệu để dựng chuỗi hành vi, cần bổ sung log endpoint/DNS/proxy.</li>'}</ul>
+    <ul class="ai-list">${(ma.behavior || []).slice(0, 2).map(v => `<li>${esc(String(v).replace(/^ioc-[a-f0-9]+:\s*/, '').replace(/\s*Evidence:.*$/, ''))}</li>`).join('') || '<li>Cần bổ sung dữ liệu phân tích.</li>'}</ul>
     <div class="ai-section-title">Việc nên làm ngay</div>
-    <ol class="ai-list">${p0.map(a => `<li><b>${esc(a.title || 'Hành động')}</b>: ${esc(a.description || '')}</li>`).join('') || '<li>Cô lập endpoint, thu thập bằng chứng và chặn IOC trước khi phục hồi.</li>'}</ol>
-    <div class="ai-section-title">AI muốn xác minh tiếp</div>
-    <ul class="ai-list">${nextQuestions.map(q => `<li>${q}</li>`).join('')}</ul>
+    <ol class="ai-list">${p0.map(a => `<li>${esc(a.title || 'Hành động')}</li>`).join('') || '<li>Xác minh hồ sơ trước khi lập kế hoạch xử lý.</li>'}</ol>
     <div class="ai-suggestion-row">
       <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Tạo briefing đầy đủ</button>
       <button class="btn btn-outline" onclick="askAI('Phân tích nguồn lây, cách lan truyền và phạm vi cần hunt')">Hunt phạm vi</button>
@@ -1144,6 +1272,22 @@ function renderAIProactive(d) {
 
 async function askAILegacy(question = '') {
   return askAI(question);
+}
+
+function formatAssistantAnswer(value) {
+  const inline = text => esc(text).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const result = []; let code = null;
+  for (const line of String(value).split('\n')) {
+    if (line.trim().startsWith('```')) {
+      if (code !== null) { result.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`); code = null; }
+      else code = [];
+    } else if (code !== null) code.push(line);
+    else if (/^#{1,4}\s/.test(line)) result.push(`<h4>${inline(line.replace(/^#{1,4}\s+/, ''))}</h4>`);
+    else if (/^\s*[-*]\s/.test(line)) result.push(`<div class="ai-list-row">• ${inline(line.replace(/^\s*[-*]\s+/, ''))}</div>`);
+    else if (line.trim()) result.push(`<p>${inline(line)}</p>`);
+  }
+  if (code !== null) result.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+  return result.join('');
 }
 
 function setAIControlsRunning(isRunning) {
@@ -1175,6 +1319,7 @@ async function askAI(question = '') {
   answerEl.innerHTML = '<div class="ai-bubble"><span class="typing-dots"><span></span><span></span><span></span></span>AI đang phân tích dữ liệu sự cố...</div>';
 
   const modeLabel = {
+    deepseek: 'DeepSeek',
     openai: 'OpenAI',
     ollama: 'Ollama local LLM',
     local: 'Local assistant',
@@ -1188,8 +1333,7 @@ async function askAI(question = '') {
     if (G.aiRequestId !== requestId) return;
     const label = modeLabel[meta.mode] || 'Local assistant';
     const warningHtml = meta.warning ? `<div class="ai-warning">${esc(meta.warning)}</div>` : '';
-    const parts = [meta.model, latencyMs !== undefined ? `${latencyMs}ms` : 'streaming...'].filter(Boolean);
-    answerEl.innerHTML = `<div class="ai-mode">${label}${parts.length ? ` · ${esc(parts.join(' · '))}` : ''}</div>${warningHtml}<div class="ai-bubble"><pre>${esc(answer || 'Đang nhận dữ liệu...')}</pre></div>`;
+    answerEl.innerHTML = `<div class="ai-mode">${label}${latencyMs === undefined ? ' · Đang trả lời' : ''}</div>${warningHtml}<div class="ai-bubble ai-prose">${formatAssistantAnswer(answer || 'Đang chuẩn bị câu trả lời...')}</div>`;
   };
 
   const fallbackJson = async () => {

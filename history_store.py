@@ -41,35 +41,6 @@ def record_analysis(payload: dict[str, Any], source: str = "") -> dict[str, Any]
     return entry
 
 
-def find_exact_cached_payload(task_uuid: str = "", hashes: list[str] | None = None) -> dict[str, Any] | None:
-    hashes = {h.lower() for h in hashes or [] if h}
-    with _LOCK:
-        for item in _read_history():
-            if task_uuid and item.get("task_uuid") == task_uuid:
-                return _cached_payload(item, "Trung Task UUID da phan tich")
-            if hashes and hashes.intersection({h.lower() for h in item.get("hashes", [])}):
-                return _cached_payload(item, "Trung hash file da phan tich")
-    return None
-
-
-def find_family_cached_payload(family_name: str, current_task_uuid: str = "", hashes: list[str] | None = None) -> dict[str, Any] | None:
-    family_key = malware_family_key(family_name)
-    if family_key in _GENERIC_FAMILIES:
-        return None
-
-    hashes = {h.lower() for h in hashes or [] if h}
-    with _LOCK:
-        for item in _read_history():
-            if item.get("family_key") != family_key:
-                continue
-            if current_task_uuid and item.get("task_uuid") == current_task_uuid:
-                continue
-            if hashes and hashes.intersection({h.lower() for h in item.get("hashes", [])}):
-                continue
-            return _cached_payload(item, f"Loai malware '{family_name}' da co trong lich su")
-    return None
-
-
 def extract_hashes_from_report(report_json: dict[str, Any], ioc_json: dict[str, Any] | None = None) -> list[str]:
     hashes: list[str] = []
     data = (report_json or {}).get("data", {})
@@ -121,7 +92,7 @@ def _entry_from_payload(payload: dict[str, Any], source: str) -> dict[str, Any]:
         ]
     )
     task_uuid = payload.get("task_uuid", "")
-    entry_id = file_info.get("sha256") or task_uuid or f"{malware_family_key(malware_name)}:{_now_iso()}"
+    entry_id = payload.get("case_id") or file_info.get("sha256") or task_uuid or f"{malware_family_key(malware_name)}:{_now_iso()}"
     return {
         "id": entry_id,
         "created_at": _now_iso(),

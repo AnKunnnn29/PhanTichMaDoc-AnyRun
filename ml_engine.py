@@ -1,6 +1,8 @@
 import os
 import joblib
 import numpy as np
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
 
 class MLThreatPredictor:
     """
@@ -11,14 +13,19 @@ class MLThreatPredictor:
         self.model_path = model_path
         self.model = None
         self.is_loaded = False
+        self.load_error = "Chưa có model ML"
         self._load_model()
 
     def _load_model(self):
         if os.path.exists(self.model_path):
             try:
-                self.model = joblib.load(self.model_path)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", InconsistentVersionWarning)
+                    self.model = joblib.load(self.model_path)
                 self.is_loaded = True
             except Exception as e:
+                self.model = None
+                self.load_error = f"Model ML không tương thích hoặc không tải được: {type(e).__name__}; cần huấn luyện lại trong môi trường hiện tại."
                 print(f"[ML] Không thể tải mô hình: {e}")
         else:
             print("[ML] Chưa có mô hình. Cần chạy train_ml.py trước.")
@@ -69,7 +76,7 @@ class MLThreatPredictor:
         if not self.is_loaded or self.model is None:
             return {
                 "status": "disabled",
-                "message": "Chưa có model ML"
+                "message": self.load_error
             }
             
         try:

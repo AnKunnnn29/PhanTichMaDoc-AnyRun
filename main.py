@@ -45,6 +45,7 @@ from analyzer import MalwareAnalyzer
 from incident_response import IncidentResponseGenerator
 from reporter import TerminalReporter, ReportExporter
 from markdown_importer import markdown_to_anyrun_report
+from analysis_pipeline import run_pipeline
 
 console = Console(highlight=False)
 
@@ -70,16 +71,13 @@ def run_analysis_pipeline(
     export: bool = True,
 ) -> None:
     """Pipeline chính: phân tích → tạo playbook → in + xuất file."""
-    analyzer   = MalwareAnalyzer()
-    ir_gen     = IncidentResponseGenerator()
     terminal   = TerminalReporter()
     exporter   = ReportExporter(output_dir)
 
     console.print("[bold green]▶ Đang phân tích dữ liệu...[/bold green]")
-    result   = analyzer.parse_report(report_json, ioc_json)
+    result, playbook = run_pipeline(report_json, ioc_json, source="cli")
 
     console.print("[bold green]▶ Đang tạo quy trình phản ứng sự cố...[/bold green]")
-    playbook = ir_gen.generate(result)
 
     # In ra terminal
     terminal.print_analysis(result)
@@ -131,10 +129,7 @@ def run_report_import(report_path: str, ioc_path: str, notes_path: str, output_d
         if report_path.lower().endswith((".md", ".txt")):
             report_json = markdown_to_anyrun_report(report_text, Path(report_path).name)
         else:
-            try:
-                report_json = json.loads(report_text)
-            except json.JSONDecodeError:
-                report_json = markdown_to_anyrun_report(report_text, Path(report_path).name)
+            report_json = json.loads(report_text)
         if ioc_path:
             with open(ioc_path, "r", encoding="utf-8") as fh:
                 ioc_json = json.load(fh)

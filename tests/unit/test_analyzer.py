@@ -34,7 +34,9 @@ class TestMalwareAnalyzerParsing:
         assert result.threat_info.verdict == "Malicious"
 
     def test_missing_fields_parse_with_defaults(self):
-        result = MalwareAnalyzer().parse_report({}, {})
+        with pytest.raises(ValueError):
+            MalwareAnalyzer().parse_report({}, {})
+        result = MalwareAnalyzer().parse_report({"data": {"content": {}}}, {})
 
         assert result.task_uuid == "unknown"
         assert result.file_info is None
@@ -143,7 +145,7 @@ class TestFamilyDetection:
         result = MalwareAnalyzer().parse_report(report, {})
 
         assert result.threat_info.threat_name == "WannaCry"
-        assert result.threat_info.threat_level == 3
+        assert result.threat_info.threat_level == 1  # Preserve the source verdict.
 
     @pytest.mark.parametrize(
         ("filename", "expected"),
@@ -161,7 +163,7 @@ class TestFamilyDetection:
 
         result = MalwareAnalyzer().parse_report(report, {})
 
-        assert result.threat_info.threat_name == expected
+        assert result.threat_info.threat_name == "malware"  # A filename alone is not attribution.
 
     def test_file_info_is_parsed(self, emotet_report, emotet_ioc):
         result = MalwareAnalyzer().parse_report(emotet_report, emotet_ioc)

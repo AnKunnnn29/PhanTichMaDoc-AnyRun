@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Xây dựng quy trình phản ứng sự cố dựa trên việc phân tích mã độc thực tế bằng Any.Run</title>
+<title>IR Workspace · Phân tích mã độc</title>
 <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
@@ -12,31 +12,31 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <h1>Any.Run IR Workflow</h1>
-      <span>Malware-driven incident response</span>
+      <h1>IR Workspace</h1>
+      <span>Malware analysis</span>
     </div>
     <nav aria-label="Điều hướng chính">
-      <button type="button" class="nav-item active" data-page="home" aria-current="page" onclick="showPage('home',this)">
+      <button type="button" class="nav-item active" data-page="home" aria-label="Trang chủ" aria-current="page" onclick="showPage('home',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
         <span>Trang chủ</span>
       </button>
-      <button type="button" class="nav-item" data-page="dashboard" onclick="showPage('dashboard',this)">
+      <button type="button" class="nav-item" data-page="dashboard" aria-label="Đánh giá sự cố" onclick="showPage('dashboard',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
         <span>Đánh giá sự cố</span>
       </button>
-      <button type="button" class="nav-item" data-page="analyze" onclick="showPage('analyze',this)">
+      <button type="button" class="nav-item" data-page="analyze" aria-label="Dữ liệu Any.Run" onclick="showPage('analyze',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <span>Dữ liệu Any.Run</span>
       </button>
-      <button type="button" class="nav-item" data-page="playbook" onclick="showPage('playbook',this)">
+      <button type="button" class="nav-item" data-page="playbook" aria-label="Quy trình IR" onclick="showPage('playbook',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
         <span>Quy trình IR</span>
       </button>
-      <button type="button" class="nav-item" data-page="iocs" onclick="showPage('iocs',this)">
+      <button type="button" class="nav-item" data-page="iocs" aria-label="IOC & SIEM" onclick="showPage('iocs',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         <span>IOC & SIEM</span>
       </button>
-      <button type="button" class="nav-item" data-page="history" onclick="showPage('history',this)">
+      <button type="button" class="nav-item" data-page="history" aria-label="Lịch sử" onclick="showPage('history',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>Lịch sử</span>
       </button>
@@ -48,60 +48,24 @@
 
     <!-- HOME PAGE -->
     <div id="page-home">
-      <section class="home-hero" aria-labelledby="home-title">
-        <div class="home-hero-copy">
-          <div class="home-kicker">Đề tài phân tích mã độc thực tế</div>
-          <h2 id="home-title">Xây dựng quy trình phản ứng sự cố dựa trên việc phân tích mã độc thực tế bằng Any.Run</h2>
-          <p>Luồng làm việc bắt đầu từ bằng chứng sandbox Any.Run, chuyển thành IOC, hành vi, MITRE ATT&CK, mức độ rủi ro và kế hoạch phản ứng sự cố có thể xuất báo cáo.</p>
-          <div class="home-actions">
-            <button type="button" class="btn btn-primary" onclick="openImportJson()">Bắt đầu từ Any.Run report</button>
-            <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy tình huống demo</button>
-            <button type="button" class="btn btn-outline" onclick="showDashboard()">Xem đánh giá gần nhất</button>
-          </div>
-        </div>
-        <div class="home-hero-panel" aria-label="Luồng nghiên cứu phản ứng sự cố">
-          <div class="flow-step active"><b>01</b><span>Thu thập bằng chứng</span><small>Report Any.Run, IOC JSON, kết quả runtime và ghi chú phân tích</small></div>
-          <div class="flow-step"><b>02</b><span>Phân tích mã độc</span><small>File, process, network, registry, behavior và MITRE ATT&CK</small></div>
-          <div class="flow-step"><b>03</b><span>Phản ứng sự cố</span><small>Containment, eradication, recovery, hunting và báo cáo sau sự cố</small></div>
-        </div>
+      <section class="workspace-header">
+        <div><div class="home-kicker">KHÔNG GIAN ĐIỀU TRA</div>
+          <h2 id="home-title">Tổng quan phân tích</h2>
+          <p>Hồ sơ mã độc, bằng chứng và kế hoạch ứng cứu.</p></div>
+        <button type="button" class="btn btn-primary" onclick="openImportJson()">+ Phân tích mới</button>
       </section>
-
-      <section class="topic-flow" aria-label="Mạch xử lý phù hợp với đề tài">
-        <div class="topic-stage"><span>Any.Run</span><b>Sandbox evidence</b><p>Lấy dữ liệu thực nghiệm từ task, Results .md hoặc JSON report.</p></div>
-        <div class="topic-stage"><span>Malware analysis</span><b>Hành vi & IOC</b><p>Chuẩn hóa hash, domain, IP, URL, registry, process và file artifacts.</p></div>
-        <div class="topic-stage"><span>Assessment</span><b>Đánh giá sự cố</b><p>Chấm mức độ rủi ro, mapping MITRE và xác định phạm vi ảnh hưởng.</p></div>
-        <div class="topic-stage"><span>Response</span><b>Quy trình IR</b><p>Sinh playbook theo các pha xử lý, bằng chứng cần thu và SLA ưu tiên.</p></div>
-        <div class="topic-stage"><span>Output</span><b>Báo cáo & SIEM</b><p>Xuất IOC blocklist, truy vấn hunt và báo cáo phục vụ nghiệm thu.</p></div>
+      <section class="workspace-grid" aria-label="Bắt đầu phân tích">
+        <button class="workspace-tile" onclick="openImportJson()"><span class="tile-index">01</span><h3>Nhập báo cáo</h3><p>Results, Markdown hoặc JSON</p><span class="tile-link">Chọn báo cáo ↗</span></button>
+        <button class="workspace-tile" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')"><span class="tile-index">02</span><h3>Mở task Any.Run</h3><p>Task UUID hoặc liên kết báo cáo</p><span class="tile-link">Mở task ↗</span></button>
+        <button class="workspace-tile" onclick="showPage('history',document.querySelector('[data-page=history]'))"><span class="tile-index">03</span><h3>Hồ sơ điều tra</h3><p>Tiếp tục xem xét kết quả đã lưu</p><span class="tile-link">Xem lịch sử ↗</span></button>
       </section>
-
-      <section class="home-metrics" aria-label="Trục đánh giá chính">
-        <div class="home-metric"><span>01 Evidence</span><b>Any.Run runtime artifacts</b></div>
-        <div class="home-metric"><span>02 Analysis</span><b>Malware behavior + MITRE</b></div>
-        <div class="home-metric"><span>03 Response</span><b>NIST-style IR playbook</b></div>
+      <section class="card workspace-current"><div class="card-title">Hồ sơ đang mở</div>
+        <p id="home-current-case">Chưa có hồ sơ được chọn.</p>
+        <button class="btn btn-outline" onclick="showDashboard()">Mở kết quả</button>
       </section>
-
-      <section class="home-grid" aria-label="Bắt đầu nhanh">
-        <button type="button" class="home-card primary" onclick="openImportJson()">
-          <span>Luồng chính của đề tài</span>
-          <h3>Phân tích từ Any.Run Report</h3>
-          <p>Dùng Results .md hoặc JSON để tái dựng hành vi mã độc, tạo đánh giá sự cố và sinh quy trình phản ứng.</p>
-        </button>
-        <button type="button" class="home-card" onclick="runDemo('emotet')">
-          <span>Demo</span>
-          <h3>Emotet</h3>
-          <p>Banking Trojan với C2, process injection và IOC phục vụ hunting.</p>
-        </button>
-        <button type="button" class="home-card" onclick="runDemo('wannacry')">
-          <span>Demo</span>
-          <h3>WannaCry</h3>
-          <p>Ransomware scenario có ưu tiên containment và recovery rõ ràng.</p>
-        </button>
-        <button type="button" class="home-card" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')">
-          <span>API</span>
-          <h3>Any.Run Task UUID</h3>
-          <p>Dùng khi cần lấy lại dữ liệu task thực tế đã chạy trên Any.Run bằng API key.</p>
-        </button>
-      </section>
+      <details class="card sample-library"><summary>Dữ liệu mẫu</summary><p>Ba tình huống mô phỏng để trải nghiệm quy trình.</p>
+        <div class="home-actions compact"><button class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div>
+      </details>
     </div>
 
     <!-- DASHBOARD PAGE -->
@@ -109,7 +73,7 @@
       <div class="topbar">
         <div>
           <h2>Kết quả phân tích</h2>
-          <span>Kiểm tra kết quả phân tích mã độc, IOC, MITRE và mức độ ưu tiên phản ứng sự cố.</span>
+          <span>Chỉ báo, hành vi và mức ưu tiên xử lý.</span>
         </div>
         <div class="topbar-actions">
           <button type="button" class="btn btn-outline" onclick="showPage('history',document.querySelector('[data-page=history]'))">Lịch sử</button>
@@ -118,7 +82,7 @@
       </div>
       <div id="dashboard-empty" class="dashboard-empty">
         <h3>Chưa có kết quả đang mở</h3>
-        <p>Import report Any.Run hoặc chạy demo để tạo dashboard đánh giá. Luồng này dùng làm cầu nối giữa bằng chứng phân tích mã độc và quy trình phản ứng sự cố.</p>
+        <p>Nhập báo cáo để bắt đầu phân tích.</p>
         <div class="home-actions compact">
           <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
           <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
@@ -143,13 +107,13 @@
 
     <!-- ANALYZE PAGE -->
     <div id="page-analyze" style="display:none">
-      <div class="topbar"><h2>Dữ liệu Any.Run và phân tích mã độc</h2></div>
+      <div class="topbar"><h2>Phân tích mới</h2></div>
 
       <!-- API Key -->
       <div class="card" style="margin-bottom:20px">
-        <div class="card-title">🔑 Cấu hình API Key</div>
+        <div class="card-title">Kết nối Any.Run</div>
         <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
-          Tài khoản free nên dùng tab <b>Import Report</b> hoặc <b>Demo</b>. API key chỉ cần cho luồng submit/tải task tự động.
+          Quản lý quyền truy cập task và gửi mẫu phân tích.
         </p>
         <div class="grid-2">
           <div class="form-group">
@@ -189,7 +153,7 @@
         <!-- Import JSON pane -->
         <div class="tab-pane" id="pane-import" role="tabpanel" aria-labelledby="tab-import" hidden>
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">
-            Dành cho tài khoản Any.Run free: tải file Results .md từ Any.Run rồi import vào đây. Nếu có JSON report/IOC thì hệ thống vẫn hỗ trợ.
+            Chọn báo cáo và bổ sung IOC nếu có.
           </p>
           <div class="grid-2">
             <div class="form-group">
@@ -325,7 +289,7 @@
     <!-- PLAYBOOK PAGE -->
     <div id="page-playbook" style="display:none">
       <div class="topbar">
-        <div><h2>Quy trình phản ứng sự cố</h2><span>Từ hành vi mã độc thực tế đến containment, hunting, recovery và báo cáo</span></div>
+        <div><h2>Quy trình phản ứng sự cố</h2><span>Theo dõi và xem xét các bước xử lý.</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
           <button class="btn btn-outline" onclick="exportReport('html')">⬇ HTML</button>
@@ -335,7 +299,7 @@
         </div>
       </div>
       <div class="card ai-card">
-        <div class="card-title">AI điều phối khắc phục sự cố</div>
+        <div class="card-title">Trợ lý điều tra</div>
         <div class="ai-quick">
           <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Briefing chủ động</button>
           <button class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button>
@@ -348,8 +312,9 @@
           <button class="btn btn-primary" onclick="askAI()">Phân tích</button>
           <button id="ai-stop-btn" class="btn btn-danger" onclick="stopAI()" disabled>Dừng</button>
         </div>
-        <div id="ai-answer" class="ai-answer">Chạy phân tích xong, AI sẽ tự tạo briefing ban đầu và đề xuất bước tiếp theo.</div>
+        <div id="ai-answer" class="ai-answer">Chọn hồ sơ để bắt đầu trao đổi.</div>
       </div>
+      <div id="evidence-content"></div>
       <div id="playbook-content">
         <div class="welcome" style="padding:60px 20px">
           <p style="color:var(--text2)">Chưa có dữ liệu. Hãy chạy phân tích trước.</p>
@@ -385,7 +350,7 @@
     <!-- HISTORY PAGE -->
     <div id="page-history" style="display:none">
       <div class="topbar">
-        <div><h2>Lịch sử phân tích</h2><span>Lịch sử cục bộ của app và Any.Run task history nếu có API key</span></div>
+        <div><h2>Lịch sử phân tích</h2><span>Mở lại hồ sơ và tiếp tục điều tra.</span></div>
         <button class="btn btn-primary" onclick="loadHistory()">🔄 Tải lại</button>
       </div>
       <div class="card">

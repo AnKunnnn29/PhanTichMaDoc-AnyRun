@@ -1,5 +1,39 @@
 # 🛡️ AnyRun Malware Incident Response Tool
 
+## Chạy dự án kèm Ghidra và Java — Windows x64
+
+Sau khi clone, đứng tại thư mục repo và chạy:
+
+```powershell
+python start.py
+```
+
+Cần Python 3.10+; lần đầu cần Internet. Lệnh này tự chuẩn bị môi trường Python, Ghidra và JDK ngay trong
+thư mục dự án rồi mở server ở `http://127.0.0.1:5000`. Các lần sau dùng lại runtime đã có.
+Không cần đường dẫn `D:\SecureCRT\...` hay cài Ghidra/Java toàn máy.
+Xem [cấu trúc runtime và cách sao chép offline](tools/README.md).
+
+## Bản triển khai phục vụ tiểu luận — 29/10/2026
+
+Đã bổ sung pipeline evidence → Agent → khuyến nghị có chuyên viên xem xét, lưu quyết định bằng SQLite,
+và công cụ đánh giá trích xuất IOC. Xem [đối chiếu đề cương, hướng dẫn demo và thực nghiệm](docs/THESIS_IMPLEMENTATION.md).
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
+$env:AGENT_PROVIDER = 'rules'
+.\.venv\Scripts\python.exe app.py
+```
+
+Mở `http://127.0.0.1:5000`. Demo là dữ liệu mô phỏng. Mặc định là rules; cấu hình Ollama trong hướng dẫn
+để chạy Agent LLM. Kiểm tra mode `llm`/`fallback` trong kết quả trước khi đánh giá AI.
+Ứng dụng tạo khuyến nghị và mẫu lệnh cần xem xét; không tự thực thi khắc phục.
+
+```powershell
+.\.venv\Scripts\python.exe evaluation.py --demo
+.\.venv\Scripts\python.exe -m pytest
+```
+
 > Hệ thống phân tích mã độc thực tế từ **Any.Run Sandbox** và tự động sinh **Quy trình Phản ứng Sự cố (Incident Response Playbook)** theo chuẩn **NIST SP 800-61** kết hợp **MITRE ATT&CK Framework**.
 
 ---
@@ -10,7 +44,7 @@ Khi một tổ chức bị nhiễm mã độc, đội ngũ bảo mật cần nha
 1. **Hiểu rõ mã độc** đang làm gì (hành vi, IOC, kỹ thuật tấn công)
 2. **Có ngay kế hoạch hành động** để ngăn chặn, loại bỏ và phục hồi
 
-Chương trình này giải quyết cả hai bài toán trên tự động: lấy dữ liệu phân tích từ Any.Run → phân tích → sinh ra quy trình IR cụ thể với từng lệnh thực thi.
+Chương trình lấy báo cáo Any.Run → chuẩn hóa evidence → phân tích IOC → sinh khuyến nghị IR để chuyên viên kiểm tra.
 Chạy app: run main.py
 Chạy LLM Ollama: "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" run llama3.1:8b
 ---
@@ -276,6 +310,10 @@ OLLAMA_NUM_PREDICT=500
 Không commit file `.env` lên GitHub.
 
 ### 3. Cài Ghidra để phân tích tĩnh local (tùy chọn)
+
+Luồng khuyến nghị trên Windows: `python start.py`. Ghidra được chuẩn bị tại
+`tools/ghidra/ghidra_12.1.4_PUBLIC`, JDK tại `tools/java/jdk-21` và được ưu tiên tự nhận.
+Các cấu hình bên dưới chỉ cần khi muốn dùng một bộ Ghidra ngoài dự án.
 
 Tải Ghidra từ GitHub chính thức của NSA: https://github.com/NationalSecurityAgency/ghidra/releases
 

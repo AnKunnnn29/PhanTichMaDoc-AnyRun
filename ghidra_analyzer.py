@@ -9,15 +9,62 @@ small local triage pass.
 from __future__ import annotations
 
 import hashlib
+import base64
 import json
 import math
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
+from functools import lru_cache
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+@lru_cache(maxsize=4)
+def _runtime_alias(project_root: str) -> Path:
+    """An ASCII junction avoids the Windows native-Java codepage limitation.
+
+    This is a directory link, not another installation or a runtime copy.
+    """
+    root = Path(project_root).resolve()
+    alias = Path(tempfile.gettempdir()) / 'anyrun-ir-runtime' / hashlib.sha256(str(root).encode('utf-8')).hexdigest()[:16]
+    if not str(alias).isascii() or any(c in str(root) + str(alias) for c in '%"\r\n'):
+        raise OSError('Use an ASCII local project path or an ASCII TEMP directory for Ghidra')
+    alias.parent.mkdir(parents=True, exist_ok=True)
+    if not alias.exists():
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        script = f"New-Item -ItemType Junction -Path {quote(alias)} -Target {quote(root)} -ErrorAction Stop | Out-Null"
+        encoded = base64.b64encode(script.encode('utf-16-le')).decode('ascii')
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+                                capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        if result.returncode and not alias.exists():
+            raise OSError('Could not create a temporary runtime directory link')
+    if alias.resolve() != root:
+        raise OSError('Runtime directory link points to an unexpected location')
+    return alias
+
+
+def runtime_path(path) -> str:
+    """Use an existing NTFS short alias for native launchers in Unicode folders."""
+    path = str(Path(path).resolve())
+    if os.name == 'nt':
+        root = PROJECT_ROOT.resolve()
+        if not path.isascii() and Path(path).is_relative_to(root):
+            return str(_runtime_alias(str(root)) / Path(path).relative_to(root))
+        import ctypes
+        from ctypes import wintypes
+        get_short = ctypes.windll.kernel32.GetShortPathNameW
+        get_short.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        get_short.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(32768)
+        if get_short(path, buffer, len(buffer)):
+            return buffer.value
+    return path
 
 
 URL_RE = re.compile(rb"https?://[^\s\"'<>]{4,}", re.IGNORECASE)
@@ -49,6 +96,12 @@ SUSPICIOUS_APIS = [
 
 def find_analyze_headless() -> str:
     """Return an analyzeHeadless executable path if Ghidra is configured."""
+    name = 'analyzeHeadless.bat' if os.name == 'nt' else 'analyzeHeadless'
+    bundled = PROJECT_ROOT / 'tools' / 'ghidra'
+    for home in [bundled, *sorted(bundled.glob('ghidra_*'), reverse=True)]:
+        launcher = home / 'support' / name
+        if launcher.is_file():
+            return str(launcher.resolve())
     env_candidates = [os.environ.get("GHIDRA_HEADLESS")]
     for env_name in ("GHIDRA_HOME", "GHIDRA_INSTALL_DIR"):
         home = os.environ.get(env_name)
@@ -66,19 +119,74 @@ def find_analyze_headless() -> str:
         ]
     )
     for candidate in env_candidates:
-        if candidate and Path(candidate).exists():
-            return str(Path(candidate))
+        if candidate:
+            path = Path(candidate)
+            path = path if path.is_absolute() else PROJECT_ROOT / path
+            if path.is_file():
+                return str(path.resolve())
     return ""
+
+
+@lru_cache(maxsize=8)
+def _java_major(executable: str, modified: int) -> int:
+    try:
+        result = subprocess.run([executable, '-version'], capture_output=True, text=True,
+                                encoding='utf-8', errors='replace', timeout=8,
+                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        match = re.search(r'version "(?:1\.)?(\d+)', result.stderr + result.stdout)
+        return int(match.group(1)) if result.returncode == 0 and match else 0
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+
+
+def find_java_home() -> str:
+    executable = 'java.exe' if os.name == 'nt' else 'java'
+    compiler = 'javac.exe' if os.name == 'nt' else 'javac'
+    candidates = [PROJECT_ROOT / 'tools/java/jdk-21']
+    if os.environ.get('JAVA_HOME'):
+        home = Path(os.environ['JAVA_HOME'])
+        candidates.append(home if home.is_absolute() else PROJECT_ROOT / home)
+    system_java = shutil.which(executable)
+    if system_java:
+        candidates.append(Path(system_java).resolve().parent.parent)
+    for home in candidates:
+        java = home / 'bin' / executable
+        try:
+            if java.is_file() and (home / 'bin' / compiler).is_file() and _java_major(runtime_path(java), java.stat().st_mtime_ns) >= 21:
+                return str(home.resolve())
+        except OSError:
+            continue
+    return ''
+
+
+def headless_command(headless, java_home):
+    """Launch the same Java main class without cmd/batch argument reinterpretation."""
+    home = Path(headless).parent.parent
+    properties = home / 'support/launch.properties'
+    options = ['-Djava.system.class.loader=ghidra.GhidraClassLoader', '-Dfile.encoding=UTF8']
+    platform_key = 'VMARGS_WINDOWS' if os.name == 'nt' else 'VMARGS_MACOS' if sys.platform == 'darwin' else 'VMARGS_LINUX'
+    if properties.is_file():
+        for line in properties.read_text(encoding='utf-8').splitlines():
+            key, separator, value = line.partition('=')
+            if separator and key in {'VMARGS', platform_key} and value.strip():
+                options.append(value.strip())
+    return [runtime_path(Path(java_home) / 'bin' / ('java.exe' if os.name == 'nt' else 'java')),
+            *options, '-Xmx2G', '-XX:ParallelGCThreads=2', '-XX:CICompilerCount=2', '-Djava.awt.headless=true',
+            '-cp', runtime_path(home / 'Ghidra/Framework/Utility/lib/Utility.jar'),
+            'ghidra.Ghidra', 'ghidra.app.util.headless.AnalyzeHeadless']
 
 
 def ghidra_status() -> dict:
     headless = find_analyze_headless()
+    java_home = find_java_home() if headless else ''
     return {
-        "available": bool(headless),
+        "available": bool(headless and java_home),
+        "installed": bool(headless),
+        "java_available": bool(java_home),
         "analyze_headless": headless,
-        "ghidra_home": os.environ.get("GHIDRA_HOME") or os.environ.get("GHIDRA_INSTALL_DIR") or "",
-        "configured_by": "GHIDRA_HEADLESS/GHIDRA_HOME/PATH" if headless else "",
-        "setup_hint": "Cài Ghidra và đặt GHIDRA_HOME trỏ tới thư mục Ghidra, ví dụ C:\\Tools\\ghidra_<version>_PUBLIC",
+        "ghidra_home": str(Path(headless).parent.parent) if headless else '',
+        "configured_by": "project" if headless and Path(headless).is_relative_to(PROJECT_ROOT / 'tools') else "external" if headless else '',
+        "setup_hint": "Chạy python start.py để chuẩn bị Ghidra và Java trong dự án.",
     }
 
 
@@ -156,6 +264,12 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
     headless = find_analyze_headless()
     if not headless:
         return {"available": False, "status": "not_configured", "error": ghidra_status()["setup_hint"]}
+    java_home = find_java_home()
+    if not java_home:
+        return {"available": False, "status": "java_unavailable", "error": ghidra_status()["setup_hint"]}
+    environment = os.environ.copy()
+    environment['JAVA_HOME'] = runtime_path(java_home)
+    environment['PATH'] = runtime_path(Path(java_home) / 'bin') + os.pathsep + environment.get('PATH', '')
 
     scripts_dir = Path(__file__).resolve().parent / "scripts" / "ghidra"
     script_name = "MalwareSummaryExporter.java"
@@ -164,16 +278,16 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
         output_json = Path(tmp) / "ghidra_summary.json"
         project_dir.mkdir(parents=True, exist_ok=True)
         cmd = [
-            headless,
-            str(project_dir),
+            *headless_command(headless, java_home),
+            runtime_path(project_dir),
             "IRStaticAnalysis",
             "-import",
-            str(Path(path).resolve()),
+            runtime_path(path),
             "-overwrite",
             "-analysisTimeoutPerFile",
             str(timeout),
             "-scriptPath",
-            str(scripts_dir),
+            runtime_path(scripts_dir),
             "-postScript",
             script_name,
             str(output_json),
@@ -185,6 +299,12 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
+                env=environment,
+                cwd=PROJECT_ROOT,
+                stdin=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 timeout=timeout + 60,
                 check=False,
             )
@@ -193,9 +313,11 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
                 "available": True,
                 "status": "timeout",
                 "error": f"Ghidra vượt quá thời gian {timeout}s",
-                "stdout": (exc.stdout or "")[-4000:],
-                "stderr": (exc.stderr or "")[-4000:],
+                "stdout": (exc.stdout.decode('utf-8', errors='replace') if isinstance(exc.stdout, bytes) else exc.stdout or '')[-4000:],
+                "stderr": (exc.stderr.decode('utf-8', errors='replace') if isinstance(exc.stderr, bytes) else exc.stderr or '')[-4000:],
             }
+        except OSError as exc:
+            return {"available": True, "status": "error", "error": f"Không khởi động được Ghidra ({type(exc).__name__})"}
 
         result = {
             "available": True,

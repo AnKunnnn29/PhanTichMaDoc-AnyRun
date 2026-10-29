@@ -403,7 +403,9 @@ class TestAIEndpoints:
         assert "provider" in payload["data"]
         assert "api_key" not in str(payload["data"]).lower()
 
-    def test_ai_stream_returns_ndjson_events(self, flask_test_client):
+    def test_ai_stream_returns_ndjson_events(self, flask_test_client, monkeypatch):
+        monkeypatch.setenv("AI_PROVIDER", "auto")
+        monkeypatch.setenv("AI_FAST_MODE", "1")
         data = {
             "threat": {"verdict": "Malicious", "threat_level": 3, "threat_name": "Emotet"},
             "network": {"ips": ["192.0.2.10"], "domains": ["evil.example"], "urls": []},

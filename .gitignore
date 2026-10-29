@@ -25,6 +25,10 @@ htmlcov/
 # Runtime-generated local history, reports, and temporary sample uploads
 reports/
 tmp_upload_*
+tools/ghidra/
+tools/java/
+tools/.downloads/
+.venv/.requirements-sha256
 
 # Local agent planning files
 .kiro/

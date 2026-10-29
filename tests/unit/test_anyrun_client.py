@@ -36,7 +36,7 @@ class TestAnyRunClientGetMethods:
     def test_get_task_report_returns_json(self, mock_anyrun_client, emotet_report):
         responses.add(
             responses.GET,
-            "https://api.any.run/v1/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
+            "https://api.any.run/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
             json=emotet_report,
             status=200,
         )
@@ -49,7 +49,7 @@ class TestAnyRunClientGetMethods:
     def test_get_task_iocs_returns_json(self, mock_anyrun_client, emotet_ioc):
         responses.add(
             responses.GET,
-            "https://api.any.run/v1/report/550e8400-e29b-41d4-a716-446655440000/ioc/json",
+            "https://api.any.run/report/550e8400-e29b-41d4-a716-446655440000/ioc/json",
             json=emotet_ioc,
             status=200,
         )
@@ -88,10 +88,15 @@ class TestAnyRunClientErrorHandling:
     def test_http_error_status_maps_to_custom_error(self, mock_anyrun_client, status, error_type):
         responses.add(
             responses.GET,
-            "https://api.any.run/v1/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
+            "https://api.any.run/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
             json={"status": "error"},
             status=status,
         )
+
+        if status in (401, 403, 404):
+            responses.add(responses.GET,
+                "https://api.any.run/v1/analysis/550e8400-e29b-41d4-a716-446655440000",
+                json={"status": "error"}, status=status)
 
         with pytest.raises(error_type):
             mock_anyrun_client.get_task_report("550e8400-e29b-41d4-a716-446655440000")
@@ -100,7 +105,7 @@ class TestAnyRunClientErrorHandling:
     def test_unexpected_http_status_raises_api_error(self, mock_anyrun_client):
         responses.add(
             responses.GET,
-            "https://api.any.run/v1/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
+            "https://api.any.run/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
             body="server error",
             status=500,
         )
@@ -130,7 +135,7 @@ class TestAnyRunClientErrorHandling:
     def test_malformed_json_response_raises_value_error(self, mock_anyrun_client):
         responses.add(
             responses.GET,
-            "https://api.any.run/v1/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
+            "https://api.any.run/report/550e8400-e29b-41d4-a716-446655440000/summary/json",
             body="not-json",
             status=200,
         )

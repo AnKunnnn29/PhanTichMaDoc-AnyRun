@@ -28,6 +28,12 @@ class IncidentAction:
     sla: str = ""
     evidence_required: List[str] = field(default_factory=list)
     status: str = "pending"
+    id: str = ""
+    evidence_ids: List[str] = field(default_factory=list)
+    preconditions: List[str] = field(default_factory=list)
+    risks: List[str] = field(default_factory=list)
+    nist_function: str = ""
+    blocked: bool = False
 
 
 @dataclass
@@ -80,6 +86,19 @@ class IncidentResponseGenerator:
         procs   = result.processes
         iocs    = result.iocs
         file    = result.file_info
+
+        if threat.threat_level == 0 and not threat.mitre_techniques and not procs.injected_processes:
+            action = IncidentAction(priority=3, phase=self.PHASES["IDENTIFY"], category="Triage",
+                title="Xác minh dữ liệu và phạm vi quan sát",
+                description="Nguồn chưa đủ cơ sở cho khuyến nghị xử lý phá hủy; không suy ra máy thực tế đã sạch.",
+                notes=["Một domain hoặc Registry artifact không tự chứng minh C2/persistence."])
+            self._apply_operational_defaults(action)
+            return IncidentResponsePlaybook(malware_name=threat.threat_name or "Unknown", severity="LOW",
+                threat_level=0, summary="Chưa xác nhận hành vi mã độc; cần đối chiếu nguồn và log thực tế.",
+                actions=[action], ioc_blocklist={"ip_addresses": [], "domains": [], "urls": [], "file_hashes": [], "filenames": []},
+                mitigation_summary="Thu thập và xác minh bằng chứng trước khi can thiệp hệ thống.", affected_os=result.os_env,
+                severity_score={"score": 0, "recommended_severity": "LOW", "model": "triage", "reasons": ["Chưa xác nhận hành vi độc hại"]},
+                timeline=[], scope_hunting=[])
 
         severity_vi, severity_en = self._SEVERITY_MAP.get(
             threat.threat_level, ("Không xác định", "UNKNOWN")
@@ -135,22 +154,24 @@ class IncidentResponseGenerator:
 
         # ── Phase 2: Containment ─────────────────────────────────────────── #
         if network.ip_addresses or network.domains:
+            from response_policy import is_protected_destination
+            protected_network = any(is_protected_destination(v) for v in network.domains + network.urls)
             block_rules = []
-            for ip in network.ip_addresses[:10]:
+            for ip in ([] if protected_network else network.ip_addresses[:10]):
                 block_rules.append(f'netsh advfirewall firewall add rule name="Block_IR_{ip}" dir=out action=block remoteip={ip}')
             actions.append(IncidentAction(
                 priority=1,
                 phase=self.PHASES["CONTAIN"],
                 category="Cô lập mạng",
-                title="Chặn kết nối C2 tại tường lửa",
+                title="Xem xét chặn đích mạng sau khi xác minh",
                 description=(
                     f"Phát hiện {len(network.ip_addresses)} địa chỉ IP và "
-                    f"{len(network.domains)} domain nghi ngờ C2. "
-                    "Chặn ngay các kết nối này tại firewall và DNS."
+                    f"{len(network.domains)} domain cần xác minh vai trò. "
+                    "Xác minh vai trò trước khi chặn; duy trì truy cập kill-switch nếu có."
                 ),
                 commands=block_rules + [
-                    "# Chặn DNS - thêm vào file hosts:",
-                    *[f"0.0.0.0 {d}" for d in network.domains[:10]],
+                    "# Chỉ áp dụng sau khi xác minh đích chặn; không chặn kill-switch",
+                    *[f"0.0.0.0 {d}" for d in network.domains[:10] if not is_protected_destination(d)],
                 ],
                 notes=[
                     "Kiểm tra tất cả thiết bị trong mạng nội bộ xem có kết nối đến các IP/domain trên không.",
@@ -170,7 +191,7 @@ class IncidentResponseGenerator:
                     "Cần dừng ngay trước khi tiến hành xóa."
                 ),
                 commands=[
-                    f'taskkill /F /IM "{p}" /T'
+                    'taskkill /F /PID <verified_endpoint_pid>'
                     for p in procs.injected_processes[:5]
                 ],
                 notes=["Ghi lại process tree trước khi kill bằng Process Hacker/ProcMon."],
@@ -191,7 +212,7 @@ class IncidentResponseGenerator:
                         "Xóa các key này để ngăn mã độc tự khởi động lại."
                     ),
                     commands=[
-                        f'reg delete "{k}" /f' for k in suspicious_keys[:5]
+                        '# Sau khi backup, dùng reg delete <verified_key> /v <verified_value> /f; không xóa cả Run key'
                     ],
                     notes=["Export registry backup trước khi xóa: reg export HKLM\\SOFTWARE backup.reg"],
                 ))
@@ -288,7 +309,7 @@ class IncidentResponseGenerator:
             eradicate_cmds += [
                 "",
                 "# Xóa các file mã độc đã drop:",
-                *[f'Remove-Item -Force "{f["name"]}" -ErrorAction SilentlyContinue'
+                *["Remove-Item -LiteralPath '" + str(f["name"]).replace("'", "''") + "' -Force -WhatIf"
                   for f in procs.dropped_files[:5]],
             ]
 
@@ -492,10 +513,10 @@ class IncidentResponseGenerator:
 
         # ── Summary ───────────────────────────────────────────────────────── #
         summary = (
-            f"Phát hiện mã độc '{malware_name}' với mức độ '{severity_vi}'. "
-            f"Mã độc thực hiện {len(threat.mitre_techniques)} kỹ thuật MITRE ATT&CK, "
-            f"kết nối {len(network.ip_addresses)} IP/{len(network.domains)} domain C2, "
-            f"và tạo {len(procs.dropped_files)} file độc hại trên hệ thống. "
+            f"Nguồn báo cáo mẫu '{malware_name}'; mức ưu tiên xem xét '{severity_vi}'. "
+            f"Có {len(threat.mitre_techniques)} ánh xạ MITRE cần đối chiếu evidence, "
+            f"{len(network.ip_addresses)} IP/{len(network.domains)} domain, "
+            f"và {len(procs.dropped_files)} file được liệt kê. Không mặc định mọi artifact là độc hại. "
             f"Ma trận rủi ro nội bộ chấm {severity_score['score']}/100 "
             f"({severity_score['recommended_severity']})."
         )
@@ -706,6 +727,9 @@ class IncidentResponseGenerator:
         return timeline
 
     def _build_scope_hunting(self, result: MalwareAnalysisResult) -> List[Dict]:
+        import json
+        import ntpath
+        quote = lambda value: json.dumps(str(value), ensure_ascii=False)
         iocs = result.iocs
         procs = result.processes
         technique_ids = self._technique_ids(result.threat_info.mitre_techniques)
@@ -713,29 +737,34 @@ class IncidentResponseGenerator:
 
         if iocs.ips or iocs.domains or iocs.urls:
             terms = iocs.ips + iocs.domains + iocs.urls
-            quoted = ", ".join(f'"{item}"' for item in terms[:20])
+            quoted = " OR ".join(quote(item) for item in terms[:20])
             hunts.append({
                 "priority": "P1",
                 "data_source": "DNS / Proxy / Firewall",
-                "question": "Host nào đã kết nối tới IOC C2?",
+                "question": "Host nào đã kết nối tới đích mạng trong báo cáo?",
                 "query": f"index=* ({quoted}) | stats earliest(_time) latest(_time) values(user) by host src_ip",
                 "evidence": "Danh sách host, user, thời gian kết nối IOC",
             })
         hash_values = [list(item.values())[0] for item in iocs.file_hashes if item]
         if hash_values or iocs.filenames:
-            values = hash_values + iocs.filenames
-            quoted = ", ".join(f'"{item}"' for item in values[:20])
+            clauses = []
+            for kind, column in (("md5", "MD5"), ("sha1", "SHA1"), ("sha256", "SHA256")):
+                values = [item[kind] for item in iocs.file_hashes if item.get(kind)]
+                if values:
+                    clauses.append(f"{column} in (" + ", ".join(quote(v) for v in values[:20]) + ")")
+            if iocs.filenames:
+                clauses.append("FileName in (" + ", ".join(quote(ntpath.basename(v)) for v in iocs.filenames[:20]) + ")")
             hunts.append({
                 "priority": "P1",
                 "data_source": "EDR / AV telemetry",
                 "question": "Endpoint nào có file hash/tên file trùng IOC?",
-                "query": f"DeviceFileEvents | where SHA256 in ({quoted}) or FileName in ({quoted})",
+                "query": "DeviceFileEvents | where " + " or ".join(clauses),
                 "evidence": "Host, file path, SHA256, action taken của EDR",
             })
         process_names = [p.get("name", "") for p in procs.processes if p.get("name")]
         if process_names or procs.injected_processes:
             values = list(dict.fromkeys(procs.injected_processes + process_names))[:20]
-            quoted = ", ".join(f'"{item}"' for item in values)
+            quoted = ", ".join(quote(item) for item in values)
             hunts.append({
                 "priority": "P2",
                 "data_source": "Process telemetry",
@@ -744,11 +773,11 @@ class IncidentResponseGenerator:
                 "evidence": "Process command line, parent process, user thực thi",
             })
         if procs.registry_keys:
-            quoted = ", ".join(f'"{item}"' for item in procs.registry_keys[:20])
+            quoted = ", ".join(quote(item) for item in procs.registry_keys[:20])
             hunts.append({
                 "priority": "P2",
                 "data_source": "Registry telemetry",
-                "question": "Máy nào có persistence registry tương tự?",
+                "question": "Máy nào có Registry artifact tương tự cần xác minh?",
                 "query": f"DeviceRegistryEvents | where RegistryKey in ({quoted})",
                 "evidence": "Registry key/value, device, user, timestamp",
             })

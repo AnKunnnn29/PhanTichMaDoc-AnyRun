@@ -50,7 +50,8 @@ class TestMITREActions:
         playbook = IncidentResponseGenerator().generate(sample_analysis_result)
 
         commands = "\n".join(command for action in playbook.actions for command in action.commands)
-        assert 'taskkill /F /IM "rundll32.exe" /T' in commands
+        assert 'taskkill /F /PID <verified_endpoint_pid>' in commands
+        assert 'taskkill /F /IM' not in commands
 
     def test_t1486_creates_ransomware_critical_action(self, sample_analysis_result):
         sample_analysis_result.threat_info.mitre_techniques.append(
@@ -138,7 +139,7 @@ class TestMITREActions:
 
         commands = "\n".join(command for action in playbook.actions for command in action.commands)
         assert "reg delete" in commands
-        assert "CurrentVersion\\Run\\Updater" in commands
+        assert "<verified_value>" in commands
 
     def test_empty_network_data_still_generates_playbook(self, sample_analysis_result):
         sample_analysis_result.network.ip_addresses = []

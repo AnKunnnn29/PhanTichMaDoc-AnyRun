@@ -75,6 +75,7 @@ class MalwareAnalysisResult:
     duration_seconds: int
     os_env: str
     raw_report: Dict[str, Any] = field(default_factory=dict)
+    research: Dict[str, Any] = field(default_factory=dict)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,12 +136,14 @@ class MalwareAnalyzer:
         """
         Nhận report JSON + IOC JSON từ API, trả về MalwareAnalysisResult.
         """
+        from validation import validate_report
+        validate_report(report_json, ioc_json)
         data = report_json.get("data", {})
         analysis = data.get("analysis", {})
         content  = data.get("content", {})
 
         task_uuid    = analysis.get("uuid", "unknown")
-        analysis_url = f"https://app.any.run/tasks/{task_uuid}"
+        analysis_url = f"https://app.any.run/tasks/{task_uuid}" if re.fullmatch(r"[a-fA-F0-9-]{36}", str(task_uuid)) else ""
         duration     = analysis.get("duration", 0)
         os_env       = analysis.get("options", {}).get("os", {}).get("version", "Unknown OS")
 
@@ -184,11 +187,11 @@ class MalwareAnalyzer:
         scores = content.get("scores", {})
         verdict_raw = scores.get("verdict", {})
         threat_level = verdict_raw.get("threatLevel", 0)
-        verdict_str  = verdict_raw.get("threat", self._VERDICT_MAP.get(threat_level, "Unknown"))
+        verdict_str  = verdict_raw.get("threat", self._VERDICT_MAP.get(threat_level, "Unknown") if "threatLevel" in verdict_raw else "Unknown")
         threat_name  = scores.get("specs", {}).get("knownThreat", "")
 
         # Tags từ analysis tags
-        tags = analysis.get("tags", []) or []
+        tags = list(analysis.get("tags", []) or [])
 
         # MITRE ATT&CK
         mitre = []
@@ -202,16 +205,10 @@ class MalwareAnalyzer:
         detected_family = self._detect_malware_family(analysis, content, threat_name, tags)
         if detected_family and self._is_generic_threat_name(threat_name):
             threat_name = detected_family
-        elif detected_family and detected_family.lower() not in str(threat_name).lower():
-            threat_name = detected_family
 
         tag_names = [str(t).lower() for t in tags]
         if threat_name and threat_name.lower() not in tag_names:
             tags.append(threat_name.lower())
-
-        if threat_name == "WannaCry" and threat_level < 3:
-            threat_level = 3
-            verdict_str = "Malicious"
 
         return ThreatInfo(
             verdict           = verdict_str,
@@ -231,13 +228,7 @@ class MalwareAnalyzer:
         text_parts = [
             threat_name or "",
             " ".join(str(t) for t in tags or []),
-            content.get("mainObject", {}).get("filename", ""),
-            content.get("mainObject", {}).get("type", ""),
         ]
-        try:
-            text_parts.append(json.dumps(content, ensure_ascii=False, sort_keys=True))
-        except Exception:
-            text_parts.append(str(content))
 
         haystack = "\n".join(text_parts).lower()
         for family, aliases in self._FAMILY_ALIASES.items():
@@ -269,6 +260,7 @@ class MalwareAnalyzer:
     def _parse_network(self, content: dict) -> NetworkActivity:
         network_data = content.get("network", {}) or {}
 
+        from evidence import normalize
         ips     = []
         domains = []
         urls    = []
@@ -277,16 +269,19 @@ class MalwareAnalyzer:
 
         # HTTP connections
         for conn in network_data.get("connections", []) or []:
-            ip = conn.get("ip", "")
+            ip, valid = normalize("ip", conn.get("ip", ""))
+            ip = ip if valid else ""
             if ip and ip not in ips:
                 ips.append(ip)
 
         # HTTP requests
         for req in network_data.get("httpRequests", []) or []:
-            url = req.get("url", "")
+            url, valid = normalize("url", req.get("url", ""))
+            url = url if valid else ""
             if url and url not in urls:
                 urls.append(url)
-            domain = req.get("domain", "")
+            domain, valid = normalize("domain", req.get("domain", ""))
+            domain = domain if valid else ""
             if domain and domain not in domains:
                 domains.append(domain)
             http_reqs.append({
@@ -298,7 +293,8 @@ class MalwareAnalyzer:
 
         # DNS
         for dns in network_data.get("dnsRequests", []) or []:
-            domain = dns.get("domain", "")
+            domain, valid = normalize("domain", dns.get("domain", ""))
+            domain = domain if valid else ""
             if domain:
                 dns_queries.append(domain)
                 if domain not in domains:

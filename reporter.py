@@ -12,6 +12,7 @@ import html
 import textwrap
 from pathlib import Path
 from typing import Optional, Any
+from dataclasses import asdict
 
 from rich.console import Console
 from rich.table import Table
@@ -383,6 +384,11 @@ def _build_affected_files(result: MalwareAnalysisResult) -> list[dict[str, str]]
 
 
 def build_malware_analysis(result: MalwareAnalysisResult) -> dict[str, Any]:
+    if result.research.get("agent_analysis"):
+        return {"behavior": [f"{row['ioc_id']}: {row['explanation']} Evidence: {', '.join(row['evidence_ids'])}"
+                             for row in result.research["agent_analysis"]["findings"]],
+                "spread": ["Sandbox không tự chứng minh vector lây nhiễm trên hệ thống thực tế."],
+                "affected_files": _build_affected_files(result), "origin": _build_origin_analysis(result)}
     return {
         "behavior": _build_behavior_narrative(result),
         "spread": _build_spread_analysis(result),
@@ -418,6 +424,8 @@ def build_ir_evaluation(result: MalwareAnalysisResult, playbook: IncidentRespons
         gaps.append("Cần đối chiếu log thật để xác nhận phạm vi ảnh hưởng.")
 
     return {
+        "metric_kind": "structural_completeness_only",
+        "metric_limitations": "Không đo độ chính xác, hiệu quả ứng cứu hoặc khả năng dùng trong production.",
         "readiness_score": readiness,
         "ioc_count": ioc_count,
         "mitre_count": len(result.threat_info.mitre_techniques),
@@ -436,6 +444,7 @@ def _report_payload(
     playbook: IncidentResponsePlaybook,
 ) -> dict[str, Any]:
     return {
+        **result.research,
         "generated_at": datetime.datetime.now().isoformat(),
         "task_uuid": result.task_uuid,
         "analysis_url": result.analysis_url,
@@ -482,22 +491,7 @@ def _report_payload(
             "threat_level": playbook.threat_level,
             "summary": playbook.summary,
             "mitigation": playbook.mitigation_summary,
-            "actions": [
-                {
-                    "priority": a.priority,
-                    "phase": a.phase,
-                    "category": a.category,
-                    "title": a.title,
-                    "description": a.description,
-                    "commands": a.commands,
-                    "notes": a.notes,
-                    "owner": a.owner,
-                    "sla": a.sla,
-                    "evidence_required": a.evidence_required,
-                    "status": a.status,
-                }
-                for a in playbook.actions
-            ],
+            "actions": [asdict(a) for a in playbook.actions],
             "ioc_blocklist": playbook.ioc_blocklist,
             "severity_score": playbook.severity_score,
             "timeline": playbook.timeline,
@@ -697,10 +691,30 @@ def build_html_report(data: dict[str, Any]) -> str:
   <h2>8. IR Playbook</h2>
   <div class="card"><strong>Biện pháp ưu tiên:</strong> {_html(playbook.get("mitigation", ""))}</div>
   {action_html}
+  <h2>Evidence / Agent / Review</h2>
+  <pre style="white-space:pre-wrap;overflow-wrap:anywhere">{_html(chr(10).join(_research_lines(data)))}</pre>
 </main>
 </body>
 </html>
 """
+
+
+def _research_lines(data):
+    agent = data.get("agent_analysis")
+    if not agent:
+        return ["No evidence-agent metadata in this legacy report."]
+    lines = [f"Case: {data.get('case_id')} | Agent: {agent['mode']} | Model: {agent['model']}",
+             "Reference integrity is not semantic accuracy. Recommendations require analyst review."]
+    for row in agent["findings"]:
+        lines += [f"{row['ioc_id']} | {row['role']} | {row['assessment_status']}", row["explanation"],
+                  row["potential_impact"], row["verification_needed"], "Evidence: " + ", ".join(row["evidence_ids"])]
+    for row in data["evidence_bundle"]["evidence"]:
+        lines.append(f"{row['id']} | {row['type']}: {row['value']} | {row['source_id']}{row['source_path']} | SHA256 {row['source_sha256']}")
+    for event in data.get("review_history", []):
+        lines.append(f"Review {event['revision']} | {event['action_id']} | {event['decision']} | {event['reviewer']} | {event['reason']}")
+    for row in data.get("response_exclusions", []):
+        lines.append(f"Response exclusion: {row['value']} | {row['reason']} | {row['source_url']}")
+    return lines
 
 
 def _pdf_literal(text: Any) -> str:
@@ -921,6 +935,9 @@ def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
         if action.get("commands"):
             add_para("Commands: " + " | ".join(action.get("commands", [])[:4]))
 
+    add_para("Evidence / Agent / Review", "Heading2")
+    for line in _research_lines(data):
+        add_para(line)
     doc = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     doc.build(story)
     return path
@@ -1148,7 +1165,8 @@ class ReportExporter:
             f"*Báo cáo tự động được tạo bởi AnyRun-IR-Tool*",
         ]
 
-        filename.write_text("\n".join(lines), encoding="utf-8")
+        from analysis_pipeline import research_markdown
+        filename.write_text("\n".join(lines) + research_markdown(_report_payload(result, playbook)), encoding="utf-8")
         return filename
 
     def export_json(
@@ -1161,6 +1179,7 @@ class ReportExporter:
 
         payload = _report_payload(result, playbook)
         data = {
+            **payload,
             "generated_at": payload["generated_at"],
             "task_uuid": payload["task_uuid"],
             "analysis_url": payload["analysis_url"],

@@ -25,6 +25,16 @@ from incident_response import IncidentAction, IncidentResponsePlaybook  # noqa: 
 import ml_engine as _ml_engine  # noqa: E402,F401
 
 
+@pytest.fixture(autouse=True)
+def isolate_runtime_state(monkeypatch, tmp_path):
+    import history_store
+    monkeypatch.setattr(history_store, "_HISTORY_PATH", str(tmp_path / "history.json"))
+    monkeypatch.setenv("IR_CASE_DB", str(tmp_path / "cases.sqlite3"))
+    monkeypatch.setenv("AGENT_PROVIDER", "rules")
+    monkeypatch.setenv("AI_PROVIDER", "local")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-placeholder")
+
+
 @pytest.fixture
 def project_root() -> Path:
     return ROOT

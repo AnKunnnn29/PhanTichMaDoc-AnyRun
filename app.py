@@ -5,10 +5,13 @@ Chạy: python app.py  →  truy cập http://localhost:5000
 Chạy model LLM: & "$env:LOCALAPPDATA\\Programs\\Ollama\\ollama.exe" pull llama3.1:8b
 """
 
-import io, sys, os, json, threading, time, tempfile
+import io, sys, os, json, threading, time, tempfile, re
 from collections import defaultdict, deque
 from functools import wraps
 from pathlib import Path
+from dataclasses import asdict
+from analysis_pipeline import run_pipeline, analysis_key, research_markdown
+from case_store import find_case, save_case, load_case, review_action
 
 if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -35,8 +38,6 @@ from reporter import build_html_report, build_ir_evaluation, build_malware_analy
 from siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
 from history_store import (
     extract_hashes_from_report,
-    find_exact_cached_payload,
-    find_family_cached_payload,
     load_history as load_local_history,
     record_analysis,
     task_uuid_from_report,
@@ -77,6 +78,11 @@ def _handle_request_too_large(_exc):
     return _error_response("Payload vượt quá giới hạn kích thước cho phép", 413, "payload_too_large")
 
 
+@app.errorhandler(ValidationError)
+def _handle_validation_error(exc):
+    return _error_response(str(exc))
+
+
 def _json_body():
     body = request.get_json(silent=True)
     if body is None:
@@ -87,9 +93,6 @@ def _json_body():
 
 
 def _client_ip():
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
     return request.remote_addr or "local"
 
 
@@ -120,48 +123,21 @@ def rate_limit(max_requests=60, window_seconds=60):
 
 
 def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
-    report_hashes = extract_hashes_from_report(report_json, ioc_json)
-    task_uuid = task_uuid_from_report(report_json)
     if use_cache:
-        cached = find_exact_cached_payload(task_uuid, report_hashes)
-        if cached:
+        cached = find_case(analysis_key(report_json, ioc_json))
+        if cached and cached.get("agent_analysis", {}).get("mode") != "fallback":
+            cached["cache"] = {"hit": True, "reason": "Trùng toàn bộ nội dung và phiên bản/cấu hình phân tích"}
             return cached
 
-    result = analyzer.parse_report(report_json, ioc_json)
-
-    if use_cache:
-        cached = find_family_cached_payload(
-            result.threat_info.threat_name,
-            current_task_uuid=result.task_uuid,
-            hashes=report_hashes,
-        )
-        if cached:
-            return cached
-
-    playbook = ir_gen.generate(result)
+    result, playbook = run_pipeline(report_json, ioc_json, source=source)
     f = result.file_info
 
-    actions_list = []
-    for a in playbook.actions:
-        actions_list.append(
-            {
-                "priority": a.priority,
-                "phase": a.phase,
-                "category": a.category,
-                "title": a.title,
-                "description": a.description,
-                "commands": a.commands,
-                "notes": a.notes,
-                "owner": a.owner,
-                "sla": a.sla,
-                "evidence_required": a.evidence_required,
-                "status": a.status,
-            }
-        )
+    actions_list = [asdict(a) for a in playbook.actions]
 
     ml_result = ml_predictor.predict(result)
 
     payload = {
+        **result.research,
         "task_uuid": result.task_uuid,
         "analysis_url": result.analysis_url,
         "os_env": result.os_env,
@@ -215,6 +191,7 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
             "scope_hunting": playbook.scope_hunting,
         },
     }
+    save_case(payload)
     record_analysis(payload, source=source)
     return payload
 
@@ -268,8 +245,8 @@ def _load_report_upload(field_name, supplemental_text=""):
         return markdown_to_anyrun_report(text, filename)
     try:
         return json.loads(text)
-    except Exception:
-        return markdown_to_anyrun_report(text, filename)
+    except json.JSONDecodeError as exc:
+        raise ValidationError("File .json không chứa JSON hợp lệ; dùng .md/.txt cho báo cáo văn bản") from exc
 
 
 def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
@@ -719,6 +696,29 @@ def ai_status():
     return jsonify({"ok": True, "data": get_ai_status()})
 
 
+@app.route("/api/cases/<case_id>", methods=["GET"])
+def case_detail(case_id):
+    payload = load_case(case_id)
+    return jsonify({"ok": True, "data": payload}) if payload else _error_response("Không tìm thấy phân tích", 404)
+
+
+@app.route("/api/cases/<case_id>/review", methods=["POST"])
+@rate_limit(max_requests=30)
+def case_review(case_id):
+    try:
+        body = _json_body()
+        payload = review_action(case_id, body.get("action_id"), body.get("decision"), body.get("reviewer"),
+                                body.get("reason"), body.get("expected_revision"))
+        record_analysis(payload, source="analyst_review")
+        return jsonify({"ok": True, "data": payload})
+    except KeyError as exc:
+        return _error_response(str(exc), 404)
+    except RuntimeError as exc:
+        return _error_response(str(exc), 409, "review_conflict")
+    except ValueError as exc:
+        return _error_response(str(exc))
+
+
 @app.route("/api/export", methods=["POST"])
 @rate_limit(max_requests=30)
 def export_report():
@@ -727,15 +727,23 @@ def export_report():
     data = body.get("data")
     if not data:
         return jsonify({"ok": False, "error": "Không có data"}), 400
+    if not isinstance(data, dict):
+        return _error_response("data phải là object")
+    if data.get("case_id"):
+        data = load_case(data["case_id"])
+        if not data:
+            return _error_response("Không tìm thấy bản phân tích trên server", 404)
     if fmt not in {"json", "markdown", "html", "pdf", *SIEM_FORMATS}:
         return _error_response("Format export không được hỗ trợ")
     import datetime
 
-    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     os.makedirs("reports", exist_ok=True)
     if fmt == "markdown":
         path = f"reports/IR_Report_{now}.md"
         _write_markdown(data, path)
+        with open(path, "a", encoding="utf-8") as evidence_report:
+            evidence_report.write(research_markdown(data))
     elif fmt == "html":
         path = f"reports/IR_Report_{now}.html"
         _write_html(data, path)
@@ -750,7 +758,14 @@ def export_report():
         path = f"reports/IR_Report_{now}.json"
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2)
-    return jsonify({"ok": True, "path": path})
+    return jsonify({"ok": True, "path": path, "download_url": "/api/exports/" + Path(path).name})
+
+
+@app.route("/api/exports/<filename>", methods=["GET"])
+def download_export(filename):
+    if not re.fullmatch(r"(?:IR_Report|SIEM_[a-z0-9_]+)_[0-9]{8}_[0-9]{6}_[0-9]{6}\.[a-z0-9]+", filename):
+        return _error_response("Không tìm thấy báo cáo", 404)
+    return send_from_directory(str(Path.cwd() / "reports"), filename, as_attachment=True)
 
 
 def _ensure_malware_analysis(data: dict) -> dict:
@@ -990,4 +1005,4 @@ def _write_siem(data: dict, fmt: str, path: str):
 if __name__ == "__main__":
     print("=== AnyRun IR Tool Web GUI ===")
     print("Truy cập: http://localhost:5000")
-    app.run(debug=False, port=5000, host="0.0.0.0")
+    app.run(debug=False, port=5000, host="127.0.0.1")

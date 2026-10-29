@@ -241,10 +241,10 @@ def _normalize_processes(processes: dict) -> list[dict]:
         normalized.append(
             {
                 "pid": item.get("pid") or (values[0] if values else 0),
-                "ppid": 0,
+                "ppid": None,
                 "name": item.get("fileName") or Path(str(values[2] if len(values) > 2 else "")).name,
                 "cmd": str(values[1] if len(values) > 1 else ""),
-                "isInjected": False,
+                "isInjected": None,
                 "scores": {"verdict": {"threatLevel": row.get("threatLevel", 0)}},
             }
         )
@@ -293,5 +293,6 @@ def _behavior_to_mitre(groups: list[dict]) -> list[dict]:
             text = str(behavior.get("name", "")).lower()
             for needle, tid, name, tactic in mapping:
                 if needle in text:
-                    found[tid] = {"id": tid, "name": name, "tactic": tactic}
+                    found[tid] = {"id": tid, "name": name, "tactic": tactic,
+                                  "origin": "adapter_keyword_hypothesis", "evidence_text": behavior.get("name", "")}
     return list(found.values())
