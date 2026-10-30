@@ -41,6 +41,7 @@ function showPage(id, el) {
     void target.offsetWidth;
     target.classList.add('page-enter');
     animateCards(target);
+    window.scrollTo({top:0,behavior:'instant'});
   }
 }
 
@@ -692,9 +693,9 @@ function renderDashboard(d) {
 
   // Stats
   document.getElementById('stat-row').innerHTML = `
-    <div class="stat-box stat-gauge">${buildThreatGauge(riskScore, lvl)}<div class="lbl">Threat Score</div></div>
-    <div class="stat-box"><div class="val" style="color:var(--accent)">${t.mitre.length}</div><div class="lbl">MITRE Techniques</div></div>
-    <div class="stat-box"><div class="val" style="color:var(--red)">${net.ips.length + net.domains.length}</div><div class="lbl">Network Observables</div></div>
+    <div class="stat-box stat-gauge">${buildThreatGauge(riskScore, lvl)}<div class="lbl">Điểm rủi ro</div></div>
+    <div class="stat-box"><div class="val" style="color:var(--accent)">${t.mitre.length}</div><div class="lbl">Kỹ thuật MITRE</div></div>
+    <div class="stat-box"><div class="val" style="color:var(--red)">${net.ips.length + net.domains.length}</div><div class="lbl">Chỉ báo mạng</div></div>
   `;
 
   // Threat card
@@ -722,7 +723,7 @@ function renderDashboard(d) {
       <span style="font-size:22px;font-weight:700;color:${severityColor(lvl)}">${esc(t.verdict)}</span>
     </div>
     <div style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(t.threat_name || 'Unknown Malware')}</div>
-    <div style="margin-bottom:12px">${t.tags.map(g=>`<span style="background:rgba(0,212,255,0.1);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:4px;margin-right:4px">${esc(g)}</span>`).join('')}</div>
+    <div style="margin-bottom:12px">${t.tags.map(g=>`<span style="background:var(--bg3);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:4px;margin-right:4px">${esc(g)}</span>`).join('')}</div>
     <div class="threat-bar-wrap">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px"><span>Mức độ nguy hiểm</span><span>${lvl}/4</span></div>
       <div class="threat-bar"><div class="threat-bar-fill" style="width:${bar_w}%;background:${severityColor(lvl)}"></div></div>
@@ -749,11 +750,11 @@ function renderDashboard(d) {
       <div class="mono" style="font-size:11px;word-break:break-all">${renderHashValue(f.sha256)}</div>
     </div>
     ${renderVirusTotalLink(f)}`
-    : `<div class="card-title">📄 Thông tin File</div><p style="color:var(--text2)">Không có thông tin file (phân tích URL).</p>`;
+    : `<div class="card-title">Thông tin tệp</div><p style="color:var(--text2)">Không có thông tin file (phân tích URL).</p>`;
 
   // MITRE
   document.getElementById('card-mitre').innerHTML = `
-    <div class="card-title">🎯 MITRE ATT&CK Techniques (${t.mitre.length})</div>
+    <div class="card-title">Kỹ thuật MITRE ATT&CK (${t.mitre.length})</div>
     <div class="mitre-grid">${t.mitre.map(m=>`
       <div class="mitre-chip">
         <div class="mid">${esc(m.id)}</div>
@@ -763,7 +764,7 @@ function renderDashboard(d) {
 
   // Network
   document.getElementById('card-network').innerHTML = `
-    <div class="card-title">🌐 Hoạt động mạng</div>
+    <div class="card-title">Hoạt động mạng</div>
     <div class="tabs" role="tablist" aria-label="Loại chỉ báo mạng" style="margin-bottom:14px">
       <button type="button" class="tab active" role="tab" aria-selected="true" aria-controls="net-ips" onclick="netTab('ips',this)">IPs (${net.ips.length})</button>
       <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-domains" onclick="netTab('domains',this)">Domains (${net.domains.length})</button>
@@ -780,7 +781,7 @@ function renderDashboard(d) {
   // Process
   const inj = pr.injected.length;
   document.getElementById('card-process').innerHTML = `
-    <div class="card-title">⚙️ Hoạt động tiến trình</div>
+    <div class="card-title">Hoạt động tiến trình</div>
     <div class="grid-3" style="margin-bottom:16px">
       <div class="stat-box"><div class="val" style="font-size:22px;color:var(--red)">${inj}</div><div class="lbl">Tiến trình bị inject</div></div>
       <div class="stat-box"><div class="val" style="font-size:22px;color:var(--orange)">${pr.dropped.length}</div><div class="lbl">Files dropped</div></div>
@@ -927,28 +928,28 @@ function renderIOCs(d) {
     ${exclusions.length ? `<div class="card"><details><summary>Đích loại trừ (${exclusions.length})</summary>${exclusions.map(row => `<p style="margin-top:12px"><b>${esc(row.value)}</b><br>${esc(row.reason)}</p>`).join('')}</details></div>` : ''}
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">🔴 IP Addresses (${b.ip_addresses.length})</div>
+        <div class="card-title">Địa chỉ IP (${b.ip_addresses.length})</div>
         <div class="tag-list">${b.ip_addresses.map(v=>`<span class="tag tag-ip" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
-        <div class="card-title">🟠 Domains (${b.domains.length})</div>
+        <div class="card-title">Tên miền (${b.domains.length})</div>
         <div class="tag-list">${b.domains.map(v=>`<span class="tag tag-domain" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
-        <div class="card-title">🟢 URLs (${b.urls.length})</div>
+        <div class="card-title">URL (${b.urls.length})</div>
         <div class="tag-list">${b.urls.map(v=>`<span class="tag tag-url" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
       <div class="card">
-        <div class="card-title">🟣 File Hashes (${b.file_hashes.length})</div>
+        <div class="card-title">Mã băm tệp (${b.file_hashes.length})</div>
         <div class="tag-list">${b.file_hashes.map(v=>`<span class="tag tag-hash" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all;font-size:10px">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">🟡 Filenames (${b.filenames.length})</div>
+      <div class="card-title">Tên tệp (${b.filenames.length})</div>
       <div class="tag-list">${b.filenames.map(v=>`<span class="tag tag-file" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
     </div>
     <div class="card">
-      <div class="card-title">📋 Firewall Block Rules (PowerShell)</div>
+      <div class="card-title">Quy tắc tường lửa · PowerShell</div>
       <div class="code-block">${
         b.ip_addresses.map(ip=>`<span class="cmd-line">netsh advfirewall firewall add rule name="Block_${esc(ip)}" dir=out action=block remoteip=${esc(ip)}</span>`).join('\n')
         + (b.domains.length ? '\n\n<span class="cmd-comment"># Thêm vào C:\\Windows\\System32\\drivers\\etc\\hosts:</span>\n' +

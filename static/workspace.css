@@ -90,6 +90,13 @@ body .phase-header { background:var(--bg2); border:1px solid var(--border); colo
 body .ghidra-console,body .ghidra-panel { background:var(--bg2); box-shadow:none; border-color:var(--border); }
 body .ghidra-upload { background:var(--bg); border-color:var(--border); }
 body .ai-card { border-color:var(--border); box-shadow:none; }
+body .card.card-glow { border-color:var(--border); box-shadow:none; }
+body .ai-card { background:var(--bg2); }
+body .grid-2 > *,body .grid-3 > * { min-width:0; }
+body .tabs { flex-wrap:wrap; }
+body .topbar { flex-wrap:wrap; }
+body .mono,body .code-block { overflow-wrap:anywhere; }
+body button,body a { touch-action:manipulation; }
 body .ai-bubble { background:var(--bg); }
 body .tag { border-radius:5px; }
 body .card-title,body .ai-section-title { text-transform:none; }
