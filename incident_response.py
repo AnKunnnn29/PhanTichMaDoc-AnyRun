@@ -41,6 +41,10 @@ class IncidentAction:
     verification: List[str] = field(default_factory=list)
     rollback: str = ""
     related_observations: List[Dict] = field(default_factory=list)
+    agent_decision: str = ""
+    agent_priority: int = 0
+    agent_rationale: str = ""
+    agent_evidence_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

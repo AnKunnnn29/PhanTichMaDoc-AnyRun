@@ -7,6 +7,7 @@ import uuid
 
 from analyzer import MalwareAnalyzer
 from analysis_agent import agent_settings, investigate
+from case_agent import CASE_PROMPT_VERSION, apply_case_plan, investigate_case
 from evidence import PIPELINE_VERSION, collect_evidence, digest, validate_bundle
 from incident_response import IncidentResponseGenerator
 from validation import validate_report
@@ -17,7 +18,7 @@ from operational_guidance import apply_guidance
 
 def analysis_key(report, iocs) -> str:
     # Entire inputs AND analysis settings: never family names or shared dropped-file hashes.
-    return "case-" + digest([PIPELINE_VERSION, agent_settings(), catalogue()["source_sha256"], report, iocs])
+    return "case-" + digest([PIPELINE_VERSION, CASE_PROMPT_VERSION, agent_settings(), catalogue()["source_sha256"], report, iocs])
 
 
 def build_behavior(bundle):
@@ -100,10 +101,17 @@ def run_pipeline(report, iocs, source="manual"):
         apply_guidance(action, result, bundle)
         action.description = "Khuyến nghị có điều kiện, cần analyst đối chiếu evidence trước khi áp dụng. " + action.description
         action.nist_function = "DE" if "identification" in action.phase.lower() else "RC" if "recovery" in action.phase.lower() else "ID.IM" if "lessons" in action.phase.lower() else "RS"
+    threat = {"verdict": result.threat_info.verdict, "threat_name": result.threat_info.threat_name,
+              "threat_level": result.threat_info.threat_level, "tags": result.threat_info.tags}
+    case_agent = investigate_case(bundle, behavior, mappings, [
+        {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
+         "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids}
+        for a in playbook.actions], threat)
+    apply_case_plan(playbook.actions, case_agent)
     result.research = {
         "case_id": "case-" + uuid.uuid4().hex, "analysis_fingerprint": analysis_key(report, iocs),
         "pipeline_version": PIPELINE_VERSION, "source": source,
-        "evidence_bundle": bundle, "agent_analysis": agent, "behavior_chain": behavior, "mitre_mappings": mappings,
+        "evidence_bundle": bundle, "agent_analysis": agent, "case_agent": case_agent, "behavior_chain": behavior, "mitre_mappings": mappings,
         "mitre_catalog": catalog_meta,
         "response_exclusions": excluded,
         "analysis_status": "insufficient_data" if result.threat_info.verdict == "Unknown" else "completed_with_review_required",
@@ -131,6 +139,22 @@ def research_markdown(payload: dict) -> str:
              "| IOC ID | Vai trò dự kiến | Nguy cơ giả định | Diễn giải | Ảnh hưởng | Cần xác minh | Evidence |", "|---|---|---|---|---|---|---|"]
     for row in agent["findings"]:
         lines.append("| " + " | ".join(safe(row[k]) for k in ("ioc_id", "role", "severity", "explanation", "potential_impact", "verification_needed", "evidence_ids")) + " |")
+    case = payload.get("case_agent")
+    if case:
+        a = case["assessment"]
+        lines += ["", "### Agent điều tra hồ sơ", "",
+                  f"Chế độ: {safe(case['mode'])}; model: {safe(case['model'])}; prompt: {safe(case['prompt_version'])}; "
+                  f"số bước: {case['steps_used']}/{case['max_steps']}; evidence đã đọc: {len(case['evidence_read'])}",
+                  "", safe(a["summary"]), "", f"Ảnh hưởng: {safe(a['impact']['severity'])} — {safe(a['impact']['summary'])}",
+                  "", "| Giai đoạn | MITRE | Trạng thái | Nhận định | Evidence |", "|---|---|---|---|---|"]
+        for s in a["behavior_chain"]:
+            lines.append("| " + " | ".join(safe(v) for v in (s["stage"], ", ".join(s["mitre"]), s["assessment_status"], s["summary"], ", ".join(s["evidence_ids"]))) + " |")
+        lines += ["", "| Action ID | Quyết định Agent | Ưu tiên | Lý do |", "|---|---|---|---|"]
+        for row in a["action_plan"]:
+            lines.append("| " + " | ".join(safe(v) for v in (row["action_id"], row["decision"], row["priority"], row["rationale"])) + " |")
+        lines += [""] + ["- Cần xác minh: " + safe(q) for q in a["open_questions"]]
+        lines += [""] + ["- Bước " + safe(t["step"]) + ": " + safe(t["tool"]) + " → " + safe(t["status"]) for t in case["tool_trace"]]
+        lines += ["- Cảnh báo: " + safe(w) for w in case["warnings"]]
     lines += ["", "### Bằng chứng nguồn", "", "| ID | Loại | Giá trị | Nguồn và vị trí | SHA256 nguồn |", "|---|---|---|---|---|"]
     for row in payload["evidence_bundle"]["evidence"]:
         lines.append("| " + " | ".join(safe(v) for v in (row["id"], row["type"], row["value"], row["source_id"] + row["source_path"], row["source_sha256"])) + " |")

@@ -1088,6 +1088,36 @@ function renderEvidencePanel(data) {
     parent.appendChild(el);
     return el;
   };
+  const caseAgent = data.case_agent;
+  if (caseAgent) {
+    const section = add(root, 'section', undefined, 'card case-agent');
+    add(section, 'h3', 'Agent điều tra hồ sơ');
+    add(section, 'span', caseAgent.mode === 'llm' ? `AI · ${caseAgent.model}` : caseAgent.mode === 'fallback' ? 'AI chưa hoàn tất · Dùng quy tắc' : 'Theo quy tắc (chưa bật AI)', 'analysis-badge');
+    const a = caseAgent.assessment;
+    add(section, 'p', a.summary);
+    const sevLabel = {unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'};
+    add(section, 'p', `Ảnh hưởng: ${sevLabel[a.impact.severity] || a.impact.severity} — ${a.impact.summary}`);
+    for (const w of caseAgent.warnings || []) add(section, 'p', w, 'agent-warning');
+    add(section, 'h4', `Chuỗi hành vi (${a.behavior_chain.length} giai đoạn)`);
+    const stages = add(section, 'ol');
+    for (const s of a.behavior_chain) {
+      const status = s.assessment_status === 'reported' ? 'nguồn báo cáo' : 'giả thuyết';
+      add(stages, 'li', `${s.stage}${s.mitre.length ? ' · ' + s.mitre.join(', ') : ''} (${status}): ${s.summary} [${s.evidence_ids.length} evidence]`);
+    }
+    if (a.open_questions.length) {
+      add(section, 'h4', 'Cần xác minh trên hệ thống thật');
+      const qs = add(section, 'ul');
+      for (const q of a.open_questions) add(qs, 'li', q);
+    }
+    const trace = add(section, 'details');
+    add(trace, 'summary', `Các bước Agent đã thực hiện (${caseAgent.tool_trace.length}/${caseAgent.max_steps}) · đã đọc ${caseAgent.evidence_read.length} evidence`);
+    const steps = add(trace, 'ol', undefined, 'agent-trace');
+    for (const t of caseAgent.tool_trace) {
+      const args = t.args && Object.keys(t.args).length ? ' ' + JSON.stringify(t.args) : '';
+      add(steps, 'li', `${t.tool}${args} → ${t.status}${t.reason ? ': ' + t.reason : ''}`);
+    }
+    if (!caseAgent.tool_trace.length) add(trace, 'p', 'Chế độ quy tắc không gọi công cụ. Đặt AGENT_PROVIDER để Agent tự điều tra.');
+  }
   const card = add(root, 'section', undefined, 'card');
   add(card, 'h3', 'Chỉ báo & bằng chứng');
   const agent = data.agent_analysis;

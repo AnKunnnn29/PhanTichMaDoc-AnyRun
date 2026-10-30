@@ -158,7 +158,7 @@ def rate_limit(max_requests=60, window_seconds=60):
 def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
     if use_cache:
         cached = find_case(analysis_key(report_json, ioc_json))
-        if cached and cached.get("agent_analysis", {}).get("mode") != "fallback":
+        if cached and "fallback" not in (cached.get("agent_analysis", {}).get("mode"), cached.get("case_agent", {}).get("mode")):
             cached["cache"] = {"hit": True, "reason": "Trùng toàn bộ nội dung và phiên bản/cấu hình phân tích"}
             return cached
 

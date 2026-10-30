@@ -26,9 +26,11 @@ def agent_settings() -> dict:
     provider = os.getenv("AGENT_PROVIDER", "rules").strip().lower()
     return {"provider": provider, "model": os.getenv("OLLAMA_MODEL", "llama3.1:8b") if provider == "ollama"
             else os.getenv("DEEPSEEK_MODEL", "deepseek-flash") if provider == "deepseek"
+            else os.getenv("GEMINI_MODEL", "gemini-3.5-flash") if provider == "gemini"
             else os.getenv("OPENAI_MODEL", "gpt-4o-mini") if provider == "openai" else "deterministic",
             "endpoint": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") if provider == "ollama"
             else os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com") if provider == "deepseek"
+            else os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai") if provider == "gemini"
             else os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1") if provider == "openai" else "local",
             "temperature": 0.1, "prompt_version": PROMPT_VERSION, "response_policy_version": POLICY_VERSION,
             "batch_size": BATCH_SIZE}
@@ -101,20 +103,29 @@ def _call_model(messages: list, settings: dict) -> dict:
         response = requests.post(url, json=payload, timeout=(5, 120))
         response.raise_for_status()
         text = response.json()["message"]["content"]
-    elif settings["provider"] in {"openai", "deepseek"}:
+    elif settings["provider"] in {"openai", "deepseek", "gemini"}:
         deepseek = settings["provider"] == "deepseek"
-        key = os.getenv("DEEPSEEK_API_KEY" if deepseek else "OPENAI_API_KEY", "").strip()
+        # Gemini is called through Google's OpenAI-compatible endpoint with an AI Studio key.
+        key = (os.getenv("AISTUDIO_API_KEY") or os.getenv("GEMINI_API_KEY", "") if settings["provider"] == "gemini"
+               else os.getenv("DEEPSEEK_API_KEY" if deepseek else "OPENAI_API_KEY", "")).strip()
         if not key:
             raise ValueError("Thiếu API key cho nhà cung cấp AI")
         url = settings["endpoint"].rstrip("/") + "/chat/completions"
-        response = requests.post(url, headers={"Authorization": "Bearer " + key}, json={
-            "model": settings["model"], "messages": messages, "response_format": {"type": "json_object"},
-            **({"thinking": {"type": "disabled"}} if deepseek else {}),
-            "temperature": 0.1, "max_tokens": 4096}, timeout=(5, 120))
+        body = {"model": settings["model"], "messages": messages, "response_format": {"type": "json_object"},
+                **({"thinking": {"type": "disabled"}} if deepseek else {}),
+                "temperature": 0.1, "max_tokens": 4096}
+        # Free tiers allow only a few requests per minute: wait and retry on 429 instead of failing the case.
+        retries = int(os.getenv("AGENT_RATE_LIMIT_RETRIES", "4"))
+        for attempt in range(retries + 1):
+            response = requests.post(url, headers={"Authorization": "Bearer " + key}, json=body, timeout=(5, 120))
+            if response.status_code != 429 or attempt == retries:
+                break
+            retry_after = response.headers.get("Retry-After", "")
+            time.sleep(min(float(retry_after), 90) if retry_after.replace(".", "", 1).isdigit() else 15 * (attempt + 1))
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
     else:
-        raise ValueError("AGENT_PROVIDER chỉ hỗ trợ rules, ollama, openai hoặc deepseek")
+        raise ValueError("AGENT_PROVIDER chỉ hỗ trợ rules, ollama, openai, deepseek hoặc gemini")
     if len(text) > 100000:
         raise ValueError("Agent output quá lớn")
     answer = json.loads(text)

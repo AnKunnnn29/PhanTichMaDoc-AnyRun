@@ -705,6 +705,14 @@ def _research_lines(data):
         return ["No evidence-agent metadata in this legacy report."]
     lines = [f"Case: {data.get('case_id')} | Agent: {agent['mode']} | Model: {agent['model']}",
              "Reference integrity is not semantic accuracy. Recommendations require analyst review."]
+    case = data.get("case_agent")
+    if case:
+        a = case["assessment"]
+        lines += [f"Case agent: {case['mode']} | steps {case['steps_used']}/{case['max_steps']} | impact {a['impact']['severity']}",
+                  a["summary"]]
+        lines += [f"Stage {s['stage']} ({', '.join(s['mitre'])}): {s['summary']} Evidence: {', '.join(s['evidence_ids'])}"
+                  for s in a["behavior_chain"]]
+        lines += [f"Action {row['action_id']}: {row['decision']} P{row['priority']} - {row['rationale']}" for row in a["action_plan"]]
     for row in agent["findings"]:
         lines += [f"{row['ioc_id']} | {row['role']} | {row['assessment_status']}", row["explanation"],
                   row["potential_impact"], row["verification_needed"], "Evidence: " + ", ".join(row["evidence_ids"])]
