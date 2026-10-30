@@ -27,12 +27,12 @@ async function loadConfigFromBackend() {
   try {
     const r = await fetch('/api/config');
     const j = await r.json();
-    if (j.ok && j.data.api_key) {
-      // Nếu backend có API key (từ .env), tự động load
-      G.apiKey = j.data.api_key;
-      localStorage.setItem('ir_apikey', G.apiKey);
-      console.log('✅ Auto-loaded API key from backend .env');
-    } else if (localStorage.getItem('ir_apikey')) {
+    G.serverKey = Boolean(j.ok && j.data.has_api_key);
+    if (G.serverKey) {
+      // Key nằm trong .env máy chủ; để trống ô nhập thì backend tự dùng key đó
+      document.getElementById('api-key-input').placeholder = 'Đang dùng API key trong .env máy chủ (có thể nhập key khác)';
+    }
+    if (localStorage.getItem('ir_apikey')) {
       // Fallback về localStorage nếu có
       G.apiKey = localStorage.getItem('ir_apikey');
       console.log('✅ Loaded API key from localStorage');
@@ -183,7 +183,7 @@ function extractTaskUuid(value) {
 // Submit URL chỉ lấy UUID
 async function submitURLOnly() {
   const key = getKey(), url = document.getElementById('submit-url').value.trim();
-  if (!key) return toast('Nhập API key trước', 'err');
+  if (!key && !G.serverKey) return toast('Nhập API key trước', 'err');
   if (!url) return toast('Nhập URL', 'err');
   document.getElementById('url-result').innerHTML = '<div style="color:var(--text2);font-size:13px">Đang submit...</div>';
   try {
@@ -201,7 +201,7 @@ async function submitURLOnly() {
 // Submit URL → tự chờ → tự phân tích (như main.py --url)
 async function submitAnalyzeURL() {
   const key = getKey(), url = document.getElementById('submit-url').value.trim();
-  if (!key) return toast('Nhập API key trước', 'err');
+  if (!key && !G.serverKey) return toast('Nhập API key trước', 'err');
   if (!url) return toast('Nhập URL', 'err');
   document.getElementById('url-result').innerHTML = '';
   try {
@@ -216,7 +216,7 @@ async function submitAnalyzeURL() {
 // Submit File chỉ lấy UUID
 async function submitFileOnly() {
   const key = getKey();
-  if (!key) return toast('Nhập API key trước', 'err');
+  if (!key && !G.serverKey) return toast('Nhập API key trước', 'err');
   if (!selectedFile) return toast('Chọn file trước', 'err');
   const fd = new FormData();
   fd.append('api_key', key);
@@ -236,7 +236,7 @@ async function submitFileOnly() {
 // Submit File → tự chờ → tự phân tích (như main.py --file)
 async function submitAnalyzeFile() {
   const key = getKey();
-  if (!key) return toast('Nhập API key trước', 'err');
+  if (!key && !G.serverKey) return toast('Nhập API key trước', 'err');
   if (!selectedFile) return toast('Chọn file trước', 'err');
   const fd = new FormData();
   fd.append('api_key', key);
@@ -596,7 +596,7 @@ async function loadHistory() {
 
     let anyrunTasks = [];
     let anyrunError = '';
-    if (key) {
+    if (key || G.serverKey) {
       try {
         const r = await fetch('/api/history', {
           method: 'POST',

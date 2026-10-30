@@ -14,9 +14,17 @@ _cache={}
 _lock=threading.Lock()
 
 
+EXPLICIT_TERMS=('tra cuu ma bam','tra cuu hash','lookup hash','nhan dien tep','tep nay la ma doc gi','file nay la ma doc gi')
+
+
 def lookup_requested(question):
+    # Only explicit lookups: a bare hash, "tra cứu <hash>" or a lookup phrase.
+    # Remediation questions that merely mention "hash" or "tra cứu" stay with the assistant.
     q=''.join(c for c in unicodedata.normalize('NFD',str(question).lower().replace('đ','d')) if unicodedata.category(c)!='Mn')
-    return bool(HASH_RE.search(str(question))) or any(term in q for term in ('tra cuu','ma bam','hash','nhan dien tep','tep nay la ma doc gi','file nay la ma doc gi'))
+    if any(term in q for term in EXPLICIT_TERMS):return True
+    if not HASH_RE.search(q):return False
+    rest=re.sub(r'[^\w\s]',' ',HASH_RE.sub(' ',q)).split()
+    return len(rest)<=3 or 'tra cuu' in q
 
 
 def select_hash(question,payload):

@@ -87,6 +87,21 @@ def keep_workspace_cookie(response):
     return response
 
 
+def _server_api_key():
+    """API key trong .env, chỉ dùng cho bản chạy trên máy."""
+    if cloud_mode():
+        return ""
+    key = os.getenv("ANYRUN_API_KEY", "").strip()
+    return "" if key in ("", "your_api_key_here", "your_anyrun_api_key_here") else key
+
+
+def _resolve_api_key(value):
+    """Ưu tiên key người dùng nhập; nếu trống thì dùng key trong .env của máy chủ."""
+    if isinstance(value, str) and value.strip():
+        return validate_api_key(value)
+    return validate_api_key(_server_api_key())
+
+
 def _error_response(message, status=400, code="bad_request"):
     return jsonify({"ok": False, "error": message, "code": code}), status
 
@@ -292,19 +307,13 @@ def index():
 
 @app.route("/api/config", methods=["GET"])
 def get_config():
-    """Trả về config public (không sensitive) để frontend tự động load."""
-    api_key = os.getenv("ANYRUN_API_KEY", "")
-    # Chỉ trả về nếu có key và không phải placeholder
-    has_key = bool(api_key and api_key != "your_api_key_here")
+    """Trả về config public; API key chỉ ở máy chủ, không gửi xuống trình duyệt."""
     return jsonify({
         "ok": True,
         "data": {
             "cloud_mode": cloud_mode(),
             "ui_version": "response-v2",
-            "has_api_key": has_key,
-            "api_key_hint": f"{api_key[:8]}..." if has_key and len(api_key) > 10 else "",
-            # Trả về full key để frontend tự động điền (chỉ trong localhost)
-            "api_key": api_key if not cloud_mode() and has_key and request.host in ("localhost", "127.0.0.1", "localhost:5000", "127.0.0.1:5000") else "",
+            "has_api_key": bool(_server_api_key()),
         }
     })
 
@@ -331,7 +340,7 @@ def demo(malware):
 def analyze():
     try:
         body = _json_body()
-        api_key_raw = body.get("api_key", "")
+        api_key_raw = body.get("api_key", "") or _server_api_key()
         task_id = validate_task_uuid(body.get("task_id"))
         task_ref = body.get("task_ref") or task_id
         force_analyze = bool(body.get("force_analyze", False))
@@ -432,7 +441,7 @@ def ghidra_analyze_upload():
 def submit_url():
     try:
         body = _json_body()
-        api_key = validate_api_key(body.get("api_key"))
+        api_key = _resolve_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
 
@@ -451,7 +460,7 @@ def submit_url():
 def submit_file():
     tmp_path = ""
     try:
-        api_key = validate_api_key(request.form.get("api_key"))
+        api_key = _resolve_api_key(request.form.get("api_key"))
         if "file" not in request.files:
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
@@ -573,7 +582,7 @@ def submit_analyze_url():
     """Submit URL → polling → analyze (1 bước, như main.py --url)."""
     try:
         body = _json_body()
-        api_key = validate_api_key(body.get("api_key"))
+        api_key = _resolve_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
         from anyrun_client import AnyRunClient
 
@@ -597,7 +606,7 @@ def submit_analyze_file():
     """Submit file → polling → analyze (1 bước, như main.py --file)."""
     tmp_path = ""
     try:
-        api_key = validate_api_key(request.form.get("api_key"))
+        api_key = _resolve_api_key(request.form.get("api_key"))
         if "file" not in request.files:
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
@@ -645,7 +654,7 @@ def open_reports():
 def history():
     try:
         body = _json_body()
-        api_key = validate_api_key(body.get("api_key"))
+        api_key = _resolve_api_key(body.get("api_key"))
         from anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)

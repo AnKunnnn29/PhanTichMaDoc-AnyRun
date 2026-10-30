@@ -425,3 +425,39 @@ class TestAIEndpoints:
         assert [event["event"] for event in events] == ["meta", "delta", "done"]
         assert events[0]["mode"] == "fast_local"
         assert "IOC" in events[1]["text"]
+
+
+class TestServerSideApiKey:
+    def test_config_never_returns_server_key(self, flask_test_client, monkeypatch):
+        monkeypatch.setenv("ANYRUN_API_KEY", "private-local-key-1234567890")
+        response = flask_test_client.get("/api/config", base_url="http://127.0.0.1:5000")
+        data = response.get_json()["data"]
+        assert data["has_api_key"] is True
+        assert "private-local-key" not in response.get_data(as_text=True)
+
+    def test_analyze_uses_server_key_when_body_key_is_empty(self, flask_test_client, monkeypatch):
+        import anyrun_client
+        import app as app_module
+
+        used = {}
+
+        class FakeAnyRunClient:
+            def __init__(self, api_key):
+                used["key"] = api_key
+
+            def get_task_report(self, task_id):
+                return {"data": {"analysis": {"uuid": task_id}, "content": {}}}
+
+            def get_task_iocs(self, task_id):
+                return {}
+
+        monkeypatch.setenv("ANYRUN_API_KEY", "private-local-key-1234567890")
+        monkeypatch.setattr(anyrun_client, "AnyRunClient", FakeAnyRunClient)
+        monkeypatch.setattr(app_module, "_build_payload", lambda report, iocs, use_cache=True, source="manual": {"source": source})
+        response = flask_test_client.post(
+            "/api/analyze",
+            json={"api_key": "", "task_id": "9268e832-505c-4895-b172-797b9c1ea370"},
+        )
+        assert response.status_code == 200
+        assert used["key"] == "private-local-key-1234567890"
+        assert response.get_json()["data"] == {"source": "anyrun:task"}
