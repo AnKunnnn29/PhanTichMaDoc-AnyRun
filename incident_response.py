@@ -615,7 +615,7 @@ class IncidentResponseGenerator:
         technique_ids = self._technique_ids(threat.mitre_techniques)
         high_risk_kind = malware_kind in {"stealer", "botnet", "downloader", "trojan", "worm"}
         has_persistence = bool(procs.registry_keys) or any(t.startswith(("T1547", "T1053")) for t in technique_ids)
-        has_evasion = bool(procs.injected_processes) or any(t.startswith(("T1055", "T1562", "T1027")) for t in technique_ids)
+        has_evasion = bool(procs.injected_processes) or any(t.startswith(("T1055", "T1562", "T1685", "T1027")) for t in technique_ids)
         has_credential_risk = any(t.startswith(("T1555", "T1003", "T1056")) for t in technique_ids)
         has_c2 = bool(result.network.ip_addresses or result.network.domains or result.network.urls)
         return high_risk_kind and (has_persistence or has_evasion or has_credential_risk or (has_c2 and threat.threat_level >= 2))

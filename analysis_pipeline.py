@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from analyzer import MalwareAnalyzer
 from analysis_agent import agent_settings, investigate
@@ -77,7 +78,9 @@ def run_pipeline(report, iocs, source="manual"):
     network_profiles = build_network_profiles(bundle)
     # Simulated demo indicators are not worth (or safe to imply as) real intel lookups.
     threat_intel = enrich_network_profiles(network_profiles, enabled=not str(source).startswith("demo"))
-    agent = investigate(bundle, network_profiles)
+    # The per-IOC agent does not feed the playbook or the case agent, so it runs alongside them.
+    ioc_pool = ThreadPoolExecutor(max_workers=1)
+    ioc_future = ioc_pool.submit(investigate, bundle, network_profiles)
     impact = analyze_impact(report, bundle, network_profiles)
     behavior = build_behavior(bundle)
     mappings, catalog_meta = map_evidence(bundle)
@@ -139,6 +142,10 @@ def run_pipeline(report, iocs, source="manual"):
          "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids, "origin": a.origin}
         for a in playbook.actions], threat, network_profiles, impact)
     apply_case_plan(playbook.actions, case_agent)
+    try:
+        agent = ioc_future.result()
+    finally:
+        ioc_pool.shutdown(wait=True)
     result.research = {
         "case_id": "case-" + uuid.uuid4().hex, "analysis_fingerprint": analysis_key(report, iocs),
         "pipeline_version": PIPELINE_VERSION, "source": source,

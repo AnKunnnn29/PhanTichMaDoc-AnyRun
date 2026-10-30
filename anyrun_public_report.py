@@ -435,8 +435,9 @@ def _normalize_malware_config(config: dict) -> list[str]:
 def _behavior_to_mitre(groups: list[dict]) -> list[dict]:
     mapping = [
         ("powershell", "T1059.001", "PowerShell", "Execution"),
-        ("defender exclusion", "T1562.001", "Impair Defenses", "Defense Evasion"),
-        ("defender settings", "T1562.001", "Impair Defenses", "Defense Evasion"),
+        # ATT&CK v19 replaced T1562.001 with T1685 (Disable or Modify Tools, Defense Impairment).
+        ("defender exclusion", "T1685", "Disable or Modify Tools", "Defense Impairment"),
+        ("defender settings", "T1685", "Disable or Modify Tools", "Defense Impairment"),
         ("autorun", "T1547.001", "Registry Run Keys / Startup Folder", "Persistence"),
         ("startup directory", "T1547.001", "Registry Run Keys / Startup Folder", "Persistence"),
         ("task scheduler", "T1053.005", "Scheduled Task", "Persistence"),

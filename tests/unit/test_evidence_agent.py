@@ -182,3 +182,35 @@ def test_agent_repairs_enum_arrays_within_step_budget(monkeypatch, emotet_report
     output = investigate(bundle)
     assert output["mode"] == "llm"
     assert any(e["status"] == "rejected" for e in output["tool_trace"])
+
+
+def test_llm_citing_unread_evidence_gets_a_retry(monkeypatch, emotet_report):
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    bundle = collect_evidence(emotet_report, {})
+    bundle["observables"] = bundle["observables"][:2]
+    rows = [_baseline(x) for x in bundle["observables"]]
+    ids = [e for r in rows for e in r["evidence_ids"]]
+    responses = iter([{"tool": "submit_findings", "findings": rows},
+                      {"tool": "get_evidence", "evidence_ids": ids},
+                      {"tool": "submit_findings", "findings": rows}])
+    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(responses))
+    result = investigate(bundle)
+    assert result["mode"] == "llm"
+    assert [x["status"] for x in result["tool_trace"][1:]] == ["rejected", "ok", "validated"]
+
+
+def test_one_failing_batch_keeps_the_other_llm_findings(monkeypatch, emotet_report):
+    import analysis_agent
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    monkeypatch.setenv("AGENT_PARALLEL", "1")
+    monkeypatch.setattr(analysis_agent, "BATCH_SIZE", 1)
+    bundle = collect_evidence(emotet_report, {})
+    bundle["observables"] = bundle["observables"][:2]
+    first = _baseline(bundle["observables"][0])
+    responses = iter([{"tool": "get_evidence", "evidence_ids": first["evidence_ids"]},
+                      {"tool": "submit_findings", "findings": [first]},
+                      *[{"tool": "run_shell"}] * analysis_agent.BATCH_STEPS])
+    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(responses))
+    result = investigate(bundle)
+    assert result["mode"] == "partial" and any("1/2" in w for w in result["warnings"])
+    assert [f["origin"] for f in result["findings"]] == ["llm_hypothesis", "rule_based"]

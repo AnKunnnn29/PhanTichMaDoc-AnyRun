@@ -11,6 +11,16 @@ def catalogue():
     return json.loads((Path(__file__).parent / "data" / "attack_catalog.json").read_text(encoding="utf-8"))
 
 
+def replacement(technique_id: str) -> str:
+    """Active technique that took over a revoked one with the same name (e.g. T1562.001 -> T1685 in v19)."""
+    techniques = catalogue()["techniques"]
+    old = techniques.get(technique_id.upper())
+    if not old or not (old["revoked"] or old["deprecated"]):
+        return ""
+    return next((tid for tid, t in techniques.items()
+                 if t["name"] == old["name"] and not t["revoked"] and not t["deprecated"]), "")
+
+
 def map_evidence(bundle):
     catalog = catalogue()
     mappings = {}

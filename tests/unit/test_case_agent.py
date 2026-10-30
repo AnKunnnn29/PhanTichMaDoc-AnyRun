@@ -6,7 +6,7 @@ from dataclasses import asdict
 import pytest
 
 from analysis_pipeline import run_pipeline
-from case_agent import CaseTools, apply_case_plan, investigate_case
+from case_agent import MAX_STEPS, CaseTools, apply_case_plan, investigate_case
 from response_policy import is_protected_destination
 from demo_data_wannacry import DEMO_WANNACRY_IOC, DEMO_WANNACRY_REPORT
 
@@ -118,7 +118,7 @@ def test_invalid_assessment_falls_back_after_step_budget(monkeypatch, wannacry, 
     bad = valid_assessment(bundle, actions, ids)
     mutate(bad, actions)
     scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}}]
-             + [{"tool": "submit_assessment", "assessment": bad}] * 11)
+             + [{"tool": "submit_assessment", "assessment": bad}] * (MAX_STEPS - 1))
     case = investigate_case(bundle, behavior, mappings, actions, threat)
     assert case["mode"] == "fallback" and case["warnings"]
     assert reason in case["tool_trace"][1]["reason"]
@@ -144,7 +144,7 @@ def test_recommending_block_of_kill_switch_is_rejected(monkeypatch, wannacry):
                               "rationale": "Chặn domain C2.", "evidence_ids": kill}]
     scripted(monkeypatch, [{"tool": "search_evidence", "args": {"query": "iuqerfsodp"}},
                            {"tool": "submit_assessment", "assessment": answer}]
-             + [{"tool": "list_actions", "args": {}}] * 10)
+             + [{"tool": "list_actions", "args": {}}] * (MAX_STEPS - 2))
     case = investigate_case(bundle, behavior, mappings, actions, threat)
     assert case["mode"] == "fallback"
     assert "ngoại lệ ứng cứu" in case["tool_trace"][1]["reason"]
@@ -194,3 +194,18 @@ def test_gemini_provider_retries_rate_limit(monkeypatch):
         rsps.post(url, json={"choices": [{"message": {"content": '{"tool": "list_actions", "args": {}}'}}]})
         assert _call_model([{"role": "user", "content": "x"}], settings) == {"tool": "list_actions", "args": {}}
         assert rsps.calls[1].request.headers["Authorization"] == "Bearer test-placeholder"
+
+
+def test_revoked_attack_id_rejection_names_its_replacement(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+    bad = valid_assessment(bundle, actions, ids)
+    bad["behavior_chain"][0].update(stage="defense-impairment", mitre=["T1562.001"])
+    fixed = copy.deepcopy(bad)
+    fixed["behavior_chain"][0]["mitre"] = ["T1685"]
+    calls = scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                                   {"tool": "submit_assessment", "assessment": bad},
+                                   {"tool": "submit_assessment", "assessment": fixed}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert case["mode"] == "llm" and "dùng T1685" in case["tool_trace"][1]["reason"]
+    assert "dùng T1685" in calls[2][-1]["content"]

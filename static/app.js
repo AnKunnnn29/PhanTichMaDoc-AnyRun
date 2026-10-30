@@ -1167,7 +1167,7 @@ function renderEvidencePanel(data) {
   add(card, 'h3', 'Chỉ báo & bằng chứng');
   const agent = data.agent_analysis;
   if (!agent) { add(card, 'p', 'Phân tích lại để cập nhật bằng chứng.'); return; }
-  add(card, 'span', agent.mode === 'llm' ? 'AI đã phân tích' : agent.mode === 'fallback' ? 'AI chưa hoàn tất · Cần xem xét' : 'Phân tích cơ bản', 'analysis-badge');
+  add(card, 'span', agent.mode === 'llm' ? 'AI đã phân tích' : agent.mode === 'partial' ? 'AI đã phân tích một phần · Phần còn lại theo quy tắc' : agent.mode === 'fallback' ? 'AI chưa hoàn tất · Cần xem xét' : 'Phân tích cơ bản', 'analysis-badge');
   const bundle = data.evidence_bundle;
   const evidence = new Map(bundle.evidence.map(e => [e.id, e]));
   const values = new Map(bundle.observables.map(o => [o.id, o]));
