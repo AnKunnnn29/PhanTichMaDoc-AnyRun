@@ -29,10 +29,30 @@
       ['Chờ xem xét',pending,'Hồ sơ còn khuyến nghị cần xử lý'],
       ['Chỉ báo duy nhất',refs.size,'Đối chiếu từ các hồ sơ có evidence'],
       ['Ưu tiên cao',urgent,'Đánh giá cao hoặc nghiêm trọng']
-    ].map(([label,value,hint]) => `<div class="overview-stat"><span>${label}</span><b>${nf.format(value)}</b><small>${hint}</small></div>`).join('');
+    ].map(([label,value,hint]) => `<div class="overview-stat" title="${escAttr(hint)}"><span>${label}</span><b>${nf.format(value)}</b></div>`).join('');
     const counts = Object.fromEntries(Object.keys(names).map(k => [k,items.filter(i => priority(i) === k).length]));
     byId('priority-distribution').innerHTML = `<div class="priority-meter" aria-hidden="true">${Object.keys(names).map(k => `<i style="width:${items.length ? counts[k]/items.length*100 : 0}%;background:${colors[k]}"></i>`).join('')}</div>` + Object.keys(names).map(k => `<div class="priority-row"><i style="background:${colors[k]}"></i><span>${names[k]}</span><b>${nf.format(counts[k])}</b></div>`).join('');
-    renderChart(); renderRows();
+    renderChart(); renderRows(); renderCurrent();
+  }
+  function renderCurrent() {
+    const root = byId('overview-current');
+    if (!root) return;
+    const data = G.data;
+    root.replaceChildren();
+    root.hidden = !data;
+    if (!data) return;
+    const name = document.createElement('strong');
+    name.textContent = data.file?.name || data.playbook?.malware_name || 'Hồ sơ';
+    const controls = document.createElement('div');
+    controls.className = 'overview-current-actions';
+    const pending = (data.playbook?.actions || []).filter(a => ['pending','changes_requested'].includes(a.status)).length;
+    const status = document.createElement('span');
+    status.textContent = `${pending} khuyến nghị chờ xem xét`;
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'btn btn-outline';
+    open.textContent = 'Tiếp tục →';
+    open.addEventListener('click', () => goToResult('playbook'));
+    controls.append(status, open); root.append(name, controls);
   }
   function renderChart() {
     const days = Number(byId('activity-period').value);
@@ -70,7 +90,8 @@
       byId('cases-next').disabled = true;
     },
     setHistory(items) {state.items=[...items].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)); render();},
-    focusSearch() {showPage('home',document.querySelector('[data-page="home"]')); byId('case-search').focus(); byId('case-search').scrollIntoView({block:'center'});}
+    updateCurrent: renderCurrent,
+    focusSearch() {showPage('overview',document.querySelector('[data-page="overview"]')); byId('case-search').focus(); byId('case-search').scrollIntoView({block:'center'});}
   };
   window.addEventListener('load',()=>{
     byId('case-search').addEventListener('input',()=>{state.page=0;renderRows();});

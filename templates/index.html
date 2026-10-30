@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/workspace.css"/>
 <link rel="stylesheet" href="/static/guide.css"/>
 <link rel="stylesheet" href="/static/response.css"/>
+<link rel="stylesheet" href="/static/overview.css?v=1"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Đến nội dung chính</a>
@@ -20,7 +21,8 @@
       <span>Đọc báo cáo · Hỗ trợ ứng cứu</span>
     </div>
     <nav aria-label="Điều hướng chính"><p class="nav-caption">Không gian làm việc</p>
-      <button type="button" class="nav-item active" data-page="home" aria-label="Trang chủ" aria-current="page" onclick="showPage('home',this)">
+      <button type="button" class="nav-item active" data-page="overview" aria-label="Bảng tổng quan" aria-current="page" onclick="showPage('overview',this)"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span>Tổng quan</span></button>
+      <button type="button" class="nav-item" data-page="home" aria-label="Trang chủ" onclick="showPage('home',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
         <span>Bắt đầu</span>
       </button>
@@ -51,47 +53,45 @@
 
   <!-- MAIN -->
   <div class="workspace-shell">
-  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Bắt đầu</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
+  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Tổng quan</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
   <main class="main" id="main-content" tabindex="-1">
 
-    <!-- HOME PAGE -->
-    <div id="page-home">
-      <section class="overview-heading"><div><h1>Từ báo cáo mã độc đến kế hoạch xử lý</h1><p class="intro-copy">IR Workspace giúp bạn đọc báo cáo Any.Run, tìm dấu hiệu xâm nhập và xây dựng các bước ứng cứu có dẫn chứng. Bắt đầu với báo cáo có sẵn hoặc dùng dữ liệu mẫu để hiểu cách làm.</p></div></section>
-      <p class="help-note" id="cloud-notice" hidden><b>Bản web dùng thử.</b> Hồ sơ và lịch sử trên máy chủ chỉ được lưu tạm, có thể mất khi hệ thống khởi động lại. Hãy tải báo cáo sau khi xem xét. Ghidra cần chạy bản trên máy tính.</p>
-      <section class="start-panel" aria-label="Chọn cách bắt đầu">
-        <div class="start-main"><h3>Bạn đã có báo cáo?</h3><p>Tải tệp Results.md hoặc JSON xuất từ Any.Run. Không cần API key khi nhập báo cáo có sẵn.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết Any.Run</button></div></div>
-        <div class="start-demo"><h3>Lần đầu sử dụng?</h3><p>Mở một ca WannaCry mô phỏng để xem kết quả, dẫn chứng và quy trình xử lý. Không cần tải tệp hay cấu hình.</p><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">Dùng thử với WannaCry →</button></div>
-      </section>
-      <section class="workflow" aria-labelledby="workflow-title"><h3 id="workflow-title">Một hồ sơ đi qua 4 bước</h3><p class="page-guidance" id="flow-status" role="status">Chưa có dữ liệu. Bắt đầu bằng một báo cáo hoặc dữ liệu mẫu.</p><ol>
-        <li><b>Chọn dữ liệu</b><p>Nhập báo cáo, dùng liên kết Any.Run hoặc mở dữ liệu mẫu.</p><button type="button" onclick="startAnalysis()">Bắt đầu nhập</button></li>
-        <li><b>Đọc kết quả &amp; dẫn chứng</b><p>Xem mức nguy hiểm, hành vi và IOC — các dấu hiệu cần kiểm tra.</p><button type="button" data-needs-analysis disabled onclick="goToResult('dashboard')">Xem kết quả</button></li>
-        <li><b>Xem xét khuyến nghị</b><p>Đối chiếu bằng chứng, ghi người duyệt và lý do cho từng bước xử lý.</p><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Mở quy trình xử lý</button></li>
-        <li><b>Xuất &amp; bàn giao</b><p>Tải PDF để đọc, JSON để giữ dữ liệu hoặc quy tắc cho hệ thống giám sát.</p><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Đến phần xuất báo cáo</button></li>
-      </ol></section>
-      <p class="help-note">Chương trình hỗ trợ phân tích và đề xuất. Bạn xem xét trước khi áp dụng; các lệnh khắc phục không tự chạy. Dữ liệu mẫu là mô phỏng.</p>
-      <details class="compact-insights"><summary>Thống kê &amp; hoạt động hồ sơ</summary>
-      <section class="overview-stats" aria-label="Thống kê hồ sơ" id="overview-stats">
-        <div class="overview-stat"><span>Hồ sơ đã lưu</span><b>—</b><small>Đang tải dữ liệu…</small></div>
-      </section>
+    <!-- OVERVIEW PAGE -->
+    <div id="page-overview" class="dashboard-overview">
+      <div class="topbar"><h2>Tổng quan</h2><div class="topbar-actions"><button type="button" class="btn btn-outline" onclick="loadHistory()">Làm mới</button><button type="button" class="btn btn-primary" onclick="startAnalysis('uuid')">Phân tích mới</button></div></div>
+      <div id="overview-current" class="overview-current" hidden></div>
+      <section aria-label="Thống kê hồ sơ" class="overview-stats" id="overview-stats">
+<div class="overview-stat"><span>Hồ sơ đã lưu</span><b>—</b><small>Đang tải dữ liệu…</small></div>
+</section>
       <div class="overview-grid">
-        <section class="card"><div class="panel-heading"><div><h3>Hoạt động hồ sơ</h3><p>Số hồ sơ được cập nhật theo ngày</p></div><select id="activity-period" aria-label="Khoảng thời gian biểu đồ"><option value="7">7 ngày qua</option><option value="14" selected>14 ngày qua</option><option value="30">30 ngày qua</option></select></div><div id="activity-chart" class="activity-chart" role="img" aria-label="Đang tải biểu đồ"></div><div class="activity-footer"><span id="activity-total">Đang tải…</span><span>Cập nhật từ lịch sử đã lưu</span></div></section>
-        <section class="card"><div class="panel-heading"><div><h3>Mức ưu tiên</h3><p>Phân bố theo đánh giá nguồn</p></div></div><div id="priority-distribution"></div></section>
-      </div>
-      </details>
-      <section class="card recent-card"><div class="panel-heading"><div><h3>Hồ sơ gần đây</h3><p>Mở hồ sơ để xem bằng chứng và khuyến nghị</p></div><button class="btn btn-outline" type="button" onclick="loadHistory()">Làm mới</button></div>
-        <div class="overview-controls"><input type="search" id="case-search" name="case-search" autocomplete="off" spellcheck="false" placeholder="Tìm tên tệp, mã băm, họ mã độc…" aria-label="Tìm hồ sơ"/><select id="case-filter" aria-label="Lọc hồ sơ"><option value="all">Tất cả hồ sơ</option><option value="review">Chờ xem xét</option><option value="critical">Ưu tiên cao</option><option value="demo">Dữ liệu mẫu</option></select></div>
-        <div class="table-wrap"><table><thead><tr><th scope="col">Hồ sơ</th><th scope="col">Phân loại</th><th scope="col">Ưu tiên</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th></tr></thead><tbody id="recent-cases"><tr><td colspan="5">Đang tải hồ sơ…</td></tr></tbody></table></div>
-        <div class="table-footer"><span id="case-page-info">Đang tải…</span><div><button id="cases-prev" type="button" class="btn btn-outline" aria-label="Trang hồ sơ trước">Trước</button> <button id="cases-next" type="button" class="btn btn-outline" aria-label="Trang hồ sơ tiếp">Sau</button></div></div>
+<section class="card"><div class="panel-heading"><div><h3>Hồ sơ theo ngày</h3></div><select aria-label="Khoảng thời gian biểu đồ" id="activity-period"><option value="7">7 ngày qua</option><option selected="" value="14">14 ngày qua</option><option value="30">30 ngày qua</option></select></div><div aria-label="Đang tải biểu đồ" class="activity-chart" id="activity-chart" role="img"></div><div class="activity-footer"><span id="activity-total">Đang tải…</span></div></section>
+<section class="card"><div class="panel-heading"><div><h3>Mức ưu tiên</h3></div></div><div id="priority-distribution"></div></section>
+</div>
+      <section class="card recent-card"><div class="panel-heading"><div><h3>Hồ sơ gần đây</h3></div></div>
+<div class="overview-controls"><input aria-label="Tìm hồ sơ" autocomplete="off" id="case-search" name="case-search" placeholder="Tìm hồ sơ…" spellcheck="false" type="search"/><select aria-label="Lọc hồ sơ" id="case-filter"><option value="all">Tất cả hồ sơ</option><option value="review">Chờ xem xét</option><option value="critical">Ưu tiên cao</option><option value="demo">Dữ liệu mẫu</option></select></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">Hồ sơ</th><th scope="col">Phân loại</th><th scope="col">Ưu tiên</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th></tr></thead><tbody id="recent-cases"><tr><td colspan="5">Đang tải hồ sơ…</td></tr></tbody></table></div>
+<div class="table-footer"><span id="case-page-info">Đang tải…</span><div><button aria-label="Trang hồ sơ trước" class="btn btn-outline" id="cases-prev" type="button">Trước</button> <button aria-label="Trang hồ sơ tiếp" class="btn btn-outline" id="cases-next" type="button">Sau</button></div></div>
+</section>
+      <p class="help-note" id="cloud-notice" hidden>Hồ sơ trên web chỉ lưu tạm. Tải báo cáo để giữ kết quả; Ghidra cần chạy trên máy.</p>
+    </div>
+    <!-- HOME PAGE -->
+    <div id="page-home" style="display:none">
+      <section class="overview-heading"><h1>Bắt đầu phân tích</h1></section>
+      <p class="page-guidance" id="flow-status" role="status">Chưa mở hồ sơ.</p>
+      <section class="start-panel" aria-label="Chọn cách bắt đầu">
+        <div class="start-main"><h3>Báo cáo Any.Run</h3><p>Nhập Results.md / JSON hoặc dùng liên kết công khai.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết</button></div></div>
+        <div class="start-demo"><h3>Dữ liệu mẫu</h3><p>Hồ sơ mô phỏng, không cần API key.</p><div class="action-row"><button type="button" class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button type="button" class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></div>
       </section>
-      <details class="feature-guide"><summary>Các chức năng dùng để làm gì?</summary><dl>
-        <dt>Nhập dữ liệu</dt><dd>Đọc Results.md / JSON hoặc lấy báo cáo qua Any.Run. Gửi URL và tệp mới tới sandbox cần API key có quyền tương ứng.</dd>
-        <dt>Kết quả phân tích</dt><dd>Tóm tắt tệp, mức nguy hiểm, kết nối mạng, tiến trình và kỹ thuật MITRE ATT&amp;CK được ghi nhận hoặc suy luận.</dd>
-        <dt>Chỉ báo &amp; SIEM</dt><dd>Tra cứu IP, tên miền, URL và mã băm; xuất danh sách IOC hoặc mẫu truy vấn cho Splunk, Elastic, Sentinel, Sigma, Suricata và STIX.</dd>
-        <dt>Xem xét &amp; xuất</dt><dd>Xem nguồn dẫn chứng, trao đổi với trợ lý điều tra, duyệt hoặc yêu cầu bổ sung khuyến nghị; tải báo cáo PDF, HTML, Markdown và JSON.</dd>
-        <dt>Lịch sử</dt><dd>Mở lại hồ sơ đã phân tích để tiếp tục xem xét. Lịch sử Any.Run cần API key; hồ sơ tạm trên bản web có thể mất khi máy chủ khởi động lại.</dd>
-        <dt>Ghidra trên máy</dt><dd>Phân tích tĩnh tệp bằng Ghidra khi chạy ứng dụng trên máy tính. Tệp không được thực thi trong quá trình phân tích tĩnh.</dd>
-      </dl></details>
-      <div class="overview-bottom"><span id="home-current-case">Chưa có hồ sơ đang mở.</span><details class="card sample-library"><summary>Dữ liệu mẫu</summary><div class="home-actions compact"><button class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></details></div>
+      <details class="feature-guide workflow"><summary>Cách sử dụng</summary><ol><li><b>Nhập dữ liệu</b><button type="button" onclick="startAnalysis()">Chọn báo cáo</button></li><li><b>Đọc kết quả</b><button type="button" data-needs-analysis disabled onclick="goToResult('dashboard')">Xem kết quả</button></li><li><b>Xem xét khuyến nghị</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Mở kế hoạch</button></li><li><b>Xuất báo cáo</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Xuất & bàn giao</button></li></ol></details>
+      <details class="feature-guide"><summary>Chức năng &amp; giới hạn</summary><dl>
+<dt>Nhập dữ liệu</dt><dd>Đọc Results.md / JSON hoặc lấy báo cáo qua Any.Run. Gửi URL và tệp mới tới sandbox cần API key có quyền tương ứng.</dd>
+<dt>Kết quả phân tích</dt><dd>Tóm tắt tệp, mức nguy hiểm, kết nối mạng, tiến trình và kỹ thuật MITRE ATT&amp;CK được ghi nhận hoặc suy luận.</dd>
+<dt>Chỉ báo &amp; SIEM</dt><dd>Tra cứu IP, tên miền, URL và mã băm; xuất danh sách IOC hoặc mẫu truy vấn cho Splunk, Elastic, Sentinel, Sigma, Suricata và STIX.</dd>
+<dt>Xem xét &amp; xuất</dt><dd>Xem nguồn dẫn chứng, trao đổi với trợ lý điều tra, duyệt hoặc yêu cầu bổ sung khuyến nghị; tải báo cáo PDF, HTML, Markdown và JSON.</dd>
+<dt>Lịch sử</dt><dd>Mở lại hồ sơ đã phân tích để tiếp tục xem xét. Lịch sử Any.Run cần API key; hồ sơ tạm trên bản web có thể mất khi máy chủ khởi động lại.</dd>
+<dt>Ghidra trên máy</dt><dd>Phân tích tĩnh tệp bằng Ghidra khi chạy ứng dụng trên máy tính. Tệp không được thực thi trong quá trình phân tích tĩnh.</dd>
+</dl></details>
+      <span id="home-current-case" hidden></span>
     </div>
 
     <!-- DASHBOARD PAGE -->
@@ -99,7 +99,7 @@
       <div class="topbar">
         <div>
           <h2>2. Kết quả phân tích</h2>
-          <span>Chỉ báo, hành vi và mức ưu tiên xử lý.</span>
+
         </div>
         <div class="topbar-actions">
           <button type="button" class="btn btn-outline" onclick="showPage('history',document.querySelector('[data-page=history]'))">Lịch sử</button>
@@ -108,14 +108,14 @@
       </div>
       <div id="dashboard-empty" class="dashboard-empty">
         <h3>Chưa có kết quả đang mở</h3>
-        <p>Nhập báo cáo ở bước 1 hoặc dùng dữ liệu mẫu. Kết quả sẽ xuất hiện tại đây.</p>
+        <p>Nhập báo cáo hoặc chọn dữ liệu mẫu.</p>
         <div class="home-actions compact">
           <button type="button" class="btn btn-primary" onclick="openImportJson()">Nhập báo cáo</button>
           <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
         </div>
       </div>
       <div id="dashboard" style="display:none">
-        <p class="page-guidance">Đọc mức nguy hiểm trước, sau đó đối chiếu hành vi và chỉ báo bên dưới. Mở Chỉ báo &amp; SIEM để xem từng IOC, hoặc chuyển đến quy trình để xem xét khuyến nghị.</p>
+
         <!-- Stat row -->
         <div class="grid-3" style="margin-bottom:20px" id="stat-row"></div>
         <!-- Threat + File info -->
@@ -130,18 +130,18 @@
         <!-- Process -->
         <div class="card" id="card-process"></div>
       </div>
-      <div class="next-step"><span>Tiếp theo: đối chiếu chỉ báo và duyệt các bước xử lý.</span><div class="action-row"><button type="button" class="btn btn-outline" data-needs-analysis disabled onclick="goToResult('iocs')">Xem chỉ báo</button><button type="button" class="btn btn-primary" data-needs-analysis disabled onclick="goToResult('playbook')">Xem xét khuyến nghị →</button></div></div>
+      <div class="next-step"><div class="action-row"><button type="button" class="btn btn-outline" data-needs-analysis disabled onclick="goToResult('iocs')">Xem chỉ báo</button><button type="button" class="btn btn-primary" data-needs-analysis disabled onclick="goToResult('playbook')">Xem xét khuyến nghị →</button></div></div>
     </div>
 
     <!-- ANALYZE PAGE -->
     <div id="page-analyze" style="display:none">
-      <div class="topbar"><div><h2>1. Nhập dữ liệu</h2><span>Chọn một nguồn dữ liệu để bắt đầu. Nhập báo cáo là cách đơn giản nhất.</span></div></div>
+      <div class="topbar"><div><h2>1. Nhập dữ liệu</h2><span>Liên kết, báo cáo hoặc dữ liệu mẫu.</span></div></div>
 
       <!-- API Key -->
       <details class="card connection-settings">
         <summary>Kết nối Any.Run bằng API key (tùy chọn)</summary>
         <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
-          Quản lý quyền truy cập task và gửi mẫu phân tích.
+          Dùng khi gọi API hoặc gửi mẫu.
         </p>
         <div class="grid-2">
           <div class="form-group">
@@ -169,11 +169,10 @@
         <!-- UUID pane -->
         <div class="tab-pane" id="pane-uuid" role="tabpanel" aria-labelledby="tab-uuid" hidden>
           <div class="form-group">
-            <label for="task-uuid">Task UUID hoặc public report URL</label>
+            <label for="task-uuid">Liên kết Any.Run / Task ID</label>
             <input type="text" id="task-uuid" placeholder="https://any.run/report/&lt;sha256&gt;/&lt;uuid&gt;"/>
             <small style="color:var(--text2);font-size:12px;margin-top:4px;display:block">
-              Dán link <strong>app.any.run/tasks/…</strong>, <strong>any.run/report/…</strong> hoặc Task ID công khai. Không cần API key cho task công khai được Any.Run cho phép đọc.<br>
-              Trang xem được trong trình duyệt vẫn có thể chặn yêu cầu tải từ máy chủ. Khi đó, dùng báo cáo Results.md/JSON đã xuất.
+              Task công khai không cần API key.
             </small>
           </div>
           <button class="btn btn-primary" onclick="analyzeTask()">
@@ -188,27 +187,30 @@
         </div>
 
         <!-- Import JSON pane -->
-        <div class="tab-pane active" id="pane-import" role="tabpanel" aria-labelledby="tab-import">
-          <p style="color:var(--text2);margin-bottom:16px;font-size:14px">
-            Trên Any.Run, chọn Export → Results (.md) hoặc JSON, rồi tải tệp ở đây. IOC JSON và thông tin bổ sung có thể để trống.
-          </p>
-          <div class="grid-2">
-            <div class="form-group">
-              <label for="report-json-input">Any.Run Results .md / JSON Report</label>
-              <input type="file" id="report-json-input" accept=".md,.txt,.json,text/markdown,text/plain,application/json" onchange="handleJsonSelect(this,'report')"/>
-            </div>
-            <div class="form-group">
-              <label for="ioc-json-input">IOC JSON (tùy chọn)</label>
-              <input type="file" id="ioc-json-input" accept=".json,application/json" onchange="handleJsonSelect(this,'ioc')"/>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="supplemental-text">Thông tin copy thêm từ Any.Run (tùy chọn)</label>
-            <textarea id="supplemental-text" rows="8" placeholder="Dán IOC/hash/process copy từ Any.Run, ví dụ:&#10;Main object - WannaCry.zip&#10;sha256 WannaCry.zip 0ea87b...&#10;Dropped file&#10;sha256 C:\note.txt 8e9f..."></textarea>
-          </div>
-          <button class="btn btn-primary" onclick="analyzeJsonImport()">Phân tích báo cáo</button>
-          <div id="json-import-result" aria-live="polite" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
-        </div>
+        <div aria-labelledby="tab-import" class="tab-pane active" id="pane-import" role="tabpanel">
+<p style="color:var(--text2);margin-bottom:16px;font-size:14px">Xuất Results.md hoặc JSON từ Any.Run rồi tải lên.</p>
+<div class="report-input">
+<div class="form-group">
+<label for="report-json-input">Báo cáo Results.md / JSON</label>
+<input accept=".md,.txt,.json,text/markdown,text/plain,application/json" id="report-json-input" onchange="handleJsonSelect(this,'report')" type="file"/>
+</div>
+
+</div>
+
+<details class="import-extra"><summary>Dữ liệu bổ sung (tùy chọn)</summary><div class="form-group">
+<label for="ioc-json-input">IOC JSON (tùy chọn)</label>
+<input accept=".json,application/json" id="ioc-json-input" onchange="handleJsonSelect(this,'ioc')" type="file"/>
+</div><div class="form-group">
+<label for="supplemental-text">Thông tin bổ sung</label>
+<textarea id="supplemental-text" placeholder="Dán IOC/hash/process copy từ Any.Run, ví dụ:
+Main object - WannaCry.zip
+sha256 WannaCry.zip 0ea87b...
+Dropped file
+sha256 C:\note.txt 8e9f..." rows="3"></textarea>
+</div></details><button class="btn btn-primary" onclick="analyzeJsonImport()">Phân tích báo cáo</button>
+<div aria-live="polite" id="json-import-result" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
+</div>
+
 
         <!-- URL pane -->
         <div class="tab-pane" id="pane-url" role="tabpanel" aria-labelledby="tab-url" hidden>
@@ -217,12 +219,11 @@
             <input type="text" id="submit-url" placeholder="http://suspicious-site.com/malware"/>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-primary" onclick="submitAnalyzeURL()">▶ Submit &amp; Phân tích ngay</button>
-            <button class="btn btn-outline" onclick="submitURLOnly()">Submit (lấy UUID)</button>
+            <button class="btn btn-primary" onclick="submitAnalyzeURL()">Gửi &amp; phân tích</button>
+            <button class="btn btn-outline" onclick="submitURLOnly()">Gửi lấy Task ID</button>
           </div>
           <p style="font-size:12px;color:var(--text2);margin-top:8px">
-            <b>Submit &amp; Phân tích ngay</b>: tự động chờ sandbox xong rồi hiện kết quả (như <code>main.py --url</code>)<br>
-            <b>Submit (lấy UUID)</b>: chỉ lấy Task ID để dùng sau
+            Chờ kết quả phân tích hoặc lấy Task ID để xem sau.
           </p>
           <div id="url-result" aria-live="polite" style="margin-top:14px"></div>
         </div>
@@ -236,11 +237,11 @@
             <span style="font-size:12px;color:var(--text2)">.exe .dll .doc .pdf .zip ...</span>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-            <button class="btn btn-primary" onclick="submitAnalyzeFile()">▶ Submit &amp; Phân tích ngay</button>
-            <button class="btn btn-outline" onclick="submitFileOnly()">Submit (lấy UUID)</button>
+            <button class="btn btn-primary" onclick="submitAnalyzeFile()">Gửi &amp; phân tích</button>
+            <button class="btn btn-outline" onclick="submitFileOnly()">Gửi lấy Task ID</button>
           </div>
           <p style="font-size:12px;color:var(--text2);margin-top:8px">
-            <b>Submit &amp; Phân tích ngay</b>: upload file → sandbox phân tích → tự hiện kết quả (như <code>main.py --file</code>)
+            Gửi tệp tới sandbox và chờ kết quả.
           </p>
           <div id="file-result" aria-live="polite" style="margin-top:14px"></div>
         </div>
@@ -252,7 +253,7 @@
               <div>
                 <div class="card-title">🧩 Phân tích tĩnh local bằng Ghidra</div>
                 <h3>Static triage + reverse engineering leads</h3>
-                <p>Upload mẫu mã độc để trích hash, entropy, strings, IOC tĩnh và API đáng ngờ. Khi Ghidra sẵn sàng, app chạy headless analysis để bổ sung format, function/import summary và hướng xử lý IR.</p>
+                <p>Phân tích tĩnh trên máy: hash, chuỗi, IOC và cấu trúc tệp. Không chạy mẫu.</p>
               </div>
               <div id="ghidra-status" class="ghidra-status" aria-live="polite">Đang kiểm tra Ghidra...</div>
             </div>
@@ -398,7 +399,7 @@
   <div class="chat-messages" id="chat-messages" role="log" aria-label="Lịch sử trò chuyện" aria-live="polite"><div id="ai-answer" class="chat-welcome">Nhập SHA256, SHA1 hoặc MD5 để tra cứu ngay. Bạn cũng có thể mở hồ sơ hoặc chạy dữ liệu mẫu để trao đổi về bằng chứng và cách xử lý.</div></div>
   <div class="ai-quick"><button type="button" class="btn btn-outline" onclick="askAI('Tra cứu mã băm của tệp trong hồ sơ này')">Tra cứu mã băm</button><button type="button" class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button><button type="button" class="btn btn-outline" onclick="askAI('Cần thêm bằng chứng nào trước khi khắc phục?')">Cần thêm bằng chứng gì?</button><button type="button" class="btn btn-outline" onclick="clearChat()">Xóa hội thoại</button></div>
   <form id="chat-form" class="chat-form"><input id="ai-question" type="text" aria-label="Câu hỏi về hồ sơ" maxlength="2000" placeholder="Hỏi về biện pháp xử lý hoặc dẫn chứng…" autocomplete="off"/><button type="submit" class="btn btn-primary">Gửi</button><button type="button" id="ai-stop-btn" class="btn btn-outline" onclick="stopAI()" disabled>Dừng</button></form>
-  <p class="chat-foot">AI hỗ trợ diễn giải. Đối chiếu log và người phụ trách trước khi áp dụng; chat không tự thực thi lệnh.</p>
+  <p class="chat-foot">Đối chiếu bằng chứng trước khi xử lý. Chat không thực thi lệnh.</p>
 </dialog>
 <script src="/static/app.js?v=20261030-response"></script>
 <script src="/static/workspace.js"></script>

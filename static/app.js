@@ -49,7 +49,7 @@ async function loadConfigFromBackend() {
 function showPage(id, el) {
   if (typeof updateGuide === 'function') updateGuide();
   const pageLabel = document.getElementById('workspace-page-label');
-  if (pageLabel) pageLabel.textContent = ({home:'Bắt đầu',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Kế hoạch khắc phục',evidence:'Bằng chứng nguồn',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
+  if (pageLabel) pageLabel.textContent = ({overview:'Tổng quan',home:'Bắt đầu',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Kế hoạch khắc phục',evidence:'Bằng chứng nguồn',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
   const target = document.getElementById('page-' + id);
   document.querySelectorAll('[id^="page-"]').forEach(p => {
     p.style.display = p === target ? 'block' : 'none';
@@ -750,6 +750,7 @@ function formatFileSize(bytes) {
 }
 
 function renderDashboard(d) {
+  if (window.WorkspaceUI?.updateCurrent) WorkspaceUI.updateCurrent();
   const currentCase = document.getElementById('home-current-case');
   if (currentCase) currentCase.textContent = `${d.file?.name || 'Báo cáo'} · ${d.playbook?.malware_name || 'Chưa phân loại'}`;
   document.getElementById('dashboard-empty').style.display = 'none';

@@ -19,12 +19,12 @@ function updateGuide() {
   const status = document.getElementById('flow-status');
   status.replaceChildren();
   if (!G.data) {
-    status.textContent = 'Chưa có dữ liệu. Bắt đầu bằng một báo cáo hoặc dữ liệu mẫu.';
+    status.textContent = 'Chưa mở hồ sơ.';
     return;
   }
   // A case reopened from the last visit is named, so the chat context is never a surprise.
   const name = G.data.file?.name || G.data.playbook?.malware_name || 'hồ sơ';
-  status.append(`Đang mở hồ sơ ${name}${G.restored ? ' (khôi phục từ lần làm việc trước)' : ''}. Tiếp theo: kiểm tra chỉ báo và xem xét khuyến nghị. `);
+  status.append(`${name}${G.restored ? ' · Đã khôi phục' : ''} `);
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'btn btn-outline';
@@ -39,6 +39,7 @@ function closeCase() {
   if (typeof clearChat === 'function') clearChat();
   document.getElementById('chat-case-name').textContent = 'Chưa mở hồ sơ';
   updateGuide();
+  if (window.WorkspaceUI?.updateCurrent) WorkspaceUI.updateCurrent();
   toast('Đã đóng hồ sơ. Lịch sử vẫn giữ để mở lại khi cần.');
 }
 window.addEventListener('load', async () => {
@@ -57,7 +58,7 @@ window.addEventListener('load', async () => {
       for (const pane of ['url', 'file']) {
         const note = document.createElement('p');
         note.className = 'help-note';
-        note.textContent = 'Trên bản web, hãy gửi mẫu để lấy Task ID. Khi Any.Run phân tích xong, dán ID vào mục Liên kết / Task ID để đọc kết quả.';
+        note.textContent = 'Gửi mẫu lấy Task ID; nhập ID khi sandbox phân tích xong.';
         document.getElementById('pane-' + pane).prepend(note);
       }
     }
