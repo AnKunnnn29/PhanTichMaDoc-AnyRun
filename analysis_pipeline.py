@@ -16,6 +16,7 @@ from response_policy import exclusions
 from operational_guidance import apply_guidance
 from network_intel import build_network_profiles, enrich_network_profiles
 from impact_analysis import analyze_impact
+from remediation import build_case_actions, merge_actions
 
 
 def analysis_key(report, iocs) -> str:
@@ -123,9 +124,19 @@ def run_pipeline(report, iocs, source="manual"):
         action.nist_function = "DE" if "identification" in action.phase.lower() else "RC" if "recovery" in action.phase.lower() else "ID.IM" if "lessons" in action.phase.lower() else "RS"
     threat = {"verdict": result.threat_info.verdict, "threat_name": result.threat_info.threat_name,
               "threat_level": result.threat_info.threat_level, "tags": result.threat_info.tags}
+    # Actions built from this case's facts replace the generic template of the same kind.
+    evidence_by_id = {e["id"]: e for e in bundle["evidence"]}
+    case_actions = build_case_actions(report, impact, network_profiles, threat)
+    for n, action in enumerate(case_actions):
+        action.id = "action-" + digest([analysis_key(report, iocs), "case", n, action.title])[:20]
+        action.blocked = not bool(action.evidence_ids)
+        action.related_observations = [{"id": i, "type": evidence_by_id[i]["type"], "value": evidence_by_id[i]["value"]}
+                                       for i in action.evidence_ids if i in evidence_by_id][:6]
+        action.nist_function = "DE" if "identification" in action.phase.lower() else "RC" if "recovery" in action.phase.lower() else "ID.IM" if "lessons" in action.phase.lower() else "RS"
+    playbook.actions = merge_actions(playbook.actions, case_actions)
     case_agent = investigate_case(bundle, behavior, mappings, [
         {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
-         "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids}
+         "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids, "origin": a.origin}
         for a in playbook.actions], threat, network_profiles, impact)
     apply_case_plan(playbook.actions, case_agent)
     result.research = {

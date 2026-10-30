@@ -321,7 +321,9 @@ def baseline_assessment(tools: CaseTools) -> dict:
             "behavior_chain": sorted(chain.values(), key=lambda s: STAGE_ORDER.index(s["stage"])),
             "action_plan": [{"action_id": a["id"], "decision": "recommend" if a.get("evidence_ids") else "defer",
                              "priority": a.get("priority", 3), "evidence_ids": a.get("evidence_ids", [])[:5],
-                             "rationale": "Theo khuôn mẫu playbook; chưa có đánh giá riêng của Agent."} for a in tools.actions],
+                             "rationale": ("Dựng từ dữ kiện và bằng chứng của hồ sơ; Agent (chế độ quy tắc) chưa đánh giá thêm."
+                                           if a.get("origin") == "case_specific" else
+                                           "Theo khuôn mẫu playbook; chưa có đánh giá riêng của Agent.")} for a in tools.actions],
             "open_questions": ["Mẫu có xuất hiện trên endpoint nào của tổ chức (EDR/SIEM theo SHA256)?",
                                "Các kết nối mạng trong sandbox có xuất hiện trong log DNS/proxy/firewall thật không?"]}
 

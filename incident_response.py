@@ -45,6 +45,7 @@ class IncidentAction:
     agent_priority: int = 0
     agent_rationale: str = ""
     agent_evidence_ids: List[str] = field(default_factory=list)
+    origin: str = "template"  # "case_specific" when built from this case's facts
 
 
 @dataclass

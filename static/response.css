@@ -21,3 +21,4 @@ body .main{padding-bottom:90px}.chat-form input{border:1px solid #cdd7dc;border-
 .agent-decision{border-radius:4px;padding:1px 6px;background:#eef1f4;color:#3b4650}.agent-recommend{background:#e6f4ee;color:#1f6b4f}.agent-defer{background:#fff6e5;color:#7a5410}.agent-not_applicable{background:#f1f1f1;color:#666}
 .agent-rationale{font-size:13px;line-height:1.6;color:#33424b;background:#f6f9fa;border-left:3px solid #6f8f99;padding:6px 10px;margin:8px 0}.agent-rationale span{color:#6b7a83}
 .case-agent ol{padding-left:18px}.case-agent li{margin:6px 0}.case-agent .agent-trace li{font-family:ui-monospace,Consolas,monospace;font-size:12px}.case-agent .agent-warning{color:#8a4b00}
+.response-origin{font-size:12px;margin:4px 0 6px;padding:2px 8px;border-radius:4px;display:inline-block}.origin-case{background:#e6f4ee;color:#1f6b4f}.origin-template{background:#f1f1f1;color:#666}
