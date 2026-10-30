@@ -617,6 +617,12 @@ def local_history():
     items = []
     for item in load_local_history():
         clean = {k: v for k, v in item.items() if k != "payload"}
+        payload = item.get("payload") or {}
+        clean["summary"] = {
+            "observable_ids": [o["id"] for o in payload.get("evidence_bundle", {}).get("observables", []) if o.get("id")],
+            "action_statuses": [a.get("status", "pending") for a in payload.get("playbook", {}).get("actions", [])],
+            "source": payload.get("source", item.get("source", "")),
+        }
         items.append(clean)
     return jsonify({"ok": True, "items": items})
 

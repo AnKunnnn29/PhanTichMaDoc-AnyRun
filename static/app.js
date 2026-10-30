@@ -22,6 +22,8 @@ window.onload = async () => {
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 function showPage(id, el) {
+  const pageLabel = document.getElementById('workspace-page-label');
+  if (pageLabel) pageLabel.textContent = ({home:'Tổng quan',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Quy trình IR',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
   const target = document.getElementById('page-' + id);
   document.querySelectorAll('[id^="page-"]').forEach(p => {
     p.style.display = p === target ? 'block' : 'none';
@@ -546,8 +548,10 @@ async function loadHistory() {
         anyrunError = e.message;
       }
     }
+    window.WorkspaceUI?.setHistory(localJson.items || []);
     renderCombinedHistory(localJson.items || [], anyrunTasks, anyrunError);
   } catch (e) {
+    window.WorkspaceUI?.setError();
     document.getElementById('history-content').innerHTML = `<div class="card"><span style="color:var(--red)">${esc(e.message)}</span></div>`;
     toast(e.message, 'err');
   }
@@ -700,7 +704,7 @@ function renderDashboard(d) {
   if (t.ml && t.ml.status === 'success') {
       const mlColor = t.ml.prediction === 'Malicious' ? 'var(--red)' : t.ml.prediction === 'Suspicious' ? 'var(--orange)' : 'var(--green)';
       ml_html = `<div style="margin-top:14px;padding:10px;border-radius:6px;background:var(--bg3);border:1px solid var(--border)">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">🤖 MACHINE LEARNING ASSESSMENT</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">Đánh giá học máy</div>
         <div class="ml-row">
            <span style="font-size:14px;font-weight:600;color:${mlColor}">${t.ml.prediction}</span>
            <span style="font-size:13px;color:var(--text2)">Độ tin cậy: <b style="color:var(--text)">${t.ml.confidence}%</b></span>
@@ -712,7 +716,7 @@ function renderDashboard(d) {
   </div>` : '';
 
   document.getElementById('card-threat').innerHTML = `
-    <div class="card-title">⚠️ Threat Assessment</div>
+    <div class="card-title">Đánh giá mối đe dọa</div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
       <span class="badge ${severityClass(lvl)}">${esc(p.severity)}</span>
       <span style="font-size:22px;font-weight:700;color:${severityColor(lvl)}">${esc(t.verdict)}</span>
@@ -733,7 +737,7 @@ function renderDashboard(d) {
   // File card
   const f = d.file;
   document.getElementById('card-file').innerHTML = f ? `
-    <div class="card-title">📄 Thông tin File</div>
+    <div class="card-title">Thông tin tệp</div>
     <div style="font-size:16px;font-weight:600;margin-bottom:12px;word-break:break-all">${esc(f.name || 'N/A')}</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${esc(f.type || 'N/A')} &nbsp;|&nbsp; ${formatFileSize(f.size)}</div>
     <div style="margin-top:12px">

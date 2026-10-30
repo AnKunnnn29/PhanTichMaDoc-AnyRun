@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>IR Workspace · Phân tích mã độc</title>
 <link rel="stylesheet" href="/static/style.css"/>
+<link rel="stylesheet" href="/static/workspace.css"/>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Đến nội dung chính</a>
 <div class="app">
 
   <!-- SIDEBAR -->
@@ -15,7 +17,7 @@
       <h1>IR Workspace</h1>
       <span>Malware analysis</span>
     </div>
-    <nav aria-label="Điều hướng chính">
+    <nav aria-label="Điều hướng chính"><p class="nav-caption">Không gian làm việc</p>
       <button type="button" class="nav-item active" data-page="home" aria-label="Trang chủ" aria-current="page" onclick="showPage('home',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
         <span>Trang chủ</span>
@@ -41,31 +43,30 @@
         <span>Lịch sử</span>
       </button>
     </nav>
+<div class="sidebar-footer"><b>IR Workspace</b>Phân tích &amp; phản ứng sự cố</div>
   </aside>
 
   <!-- MAIN -->
-  <main class="main">
+  <div class="workspace-shell">
+  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Tổng quan</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
+  <main class="main" id="main-content" tabindex="-1">
 
     <!-- HOME PAGE -->
     <div id="page-home">
-      <section class="workspace-header">
-        <div><div class="home-kicker">KHÔNG GIAN ĐIỀU TRA</div>
-          <h2 id="home-title">Tổng quan phân tích</h2>
-          <p>Hồ sơ mã độc, bằng chứng và kế hoạch ứng cứu.</p></div>
-        <button type="button" class="btn btn-primary" onclick="openImportJson()">+ Phân tích mới</button>
+      <section class="overview-heading"><div><h2>Tổng quan</h2><p>Theo dõi hồ sơ và hoạt động phân tích.</p></div><button class="btn btn-primary" type="button" onclick="openImportJson()">+ Phân tích mới</button></section>
+      <section class="overview-stats" aria-label="Thống kê hồ sơ" id="overview-stats">
+        <div class="overview-stat"><span>Hồ sơ đã lưu</span><b>—</b><small>Đang tải dữ liệu…</small></div>
       </section>
-      <section class="workspace-grid" aria-label="Bắt đầu phân tích">
-        <button class="workspace-tile" onclick="openImportJson()"><span class="tile-index">01</span><h3>Nhập báo cáo</h3><p>Results, Markdown hoặc JSON</p><span class="tile-link">Chọn báo cáo ↗</span></button>
-        <button class="workspace-tile" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'));switchTab('tab-uuid')"><span class="tile-index">02</span><h3>Mở task Any.Run</h3><p>Task UUID hoặc liên kết báo cáo</p><span class="tile-link">Mở task ↗</span></button>
-        <button class="workspace-tile" onclick="showPage('history',document.querySelector('[data-page=history]'))"><span class="tile-index">03</span><h3>Hồ sơ điều tra</h3><p>Tiếp tục xem xét kết quả đã lưu</p><span class="tile-link">Xem lịch sử ↗</span></button>
+      <div class="overview-grid">
+        <section class="card"><div class="panel-heading"><div><h3>Hoạt động hồ sơ</h3><p>Số hồ sơ được cập nhật theo ngày</p></div><select id="activity-period" aria-label="Khoảng thời gian biểu đồ"><option value="7">7 ngày qua</option><option value="14" selected>14 ngày qua</option><option value="30">30 ngày qua</option></select></div><div id="activity-chart" class="activity-chart" role="img" aria-label="Đang tải biểu đồ"></div><div class="activity-footer"><span id="activity-total">Đang tải…</span><span>Cập nhật từ lịch sử đã lưu</span></div></section>
+        <section class="card"><div class="panel-heading"><div><h3>Mức ưu tiên</h3><p>Phân bố theo đánh giá nguồn</p></div></div><div id="priority-distribution"></div></section>
+      </div>
+      <section class="card recent-card"><div class="panel-heading"><div><h3>Hồ sơ gần đây</h3><p>Mở hồ sơ để xem bằng chứng và khuyến nghị</p></div><button class="btn btn-outline" type="button" onclick="loadHistory()">Làm mới</button></div>
+        <div class="overview-controls"><input type="search" id="case-search" name="case-search" autocomplete="off" spellcheck="false" placeholder="Tìm tên tệp, mã băm, họ mã độc…" aria-label="Tìm hồ sơ"/><select id="case-filter" aria-label="Lọc hồ sơ"><option value="all">Tất cả hồ sơ</option><option value="review">Chờ xem xét</option><option value="critical">Ưu tiên cao</option><option value="demo">Dữ liệu mẫu</option></select></div>
+        <div class="table-wrap"><table><thead><tr><th scope="col">Hồ sơ</th><th scope="col">Phân loại</th><th scope="col">Ưu tiên</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th></tr></thead><tbody id="recent-cases"><tr><td colspan="5">Đang tải hồ sơ…</td></tr></tbody></table></div>
+        <div class="table-footer"><span id="case-page-info">Đang tải…</span><div><button id="cases-prev" type="button" class="btn btn-outline" aria-label="Trang hồ sơ trước">Trước</button> <button id="cases-next" type="button" class="btn btn-outline" aria-label="Trang hồ sơ tiếp">Sau</button></div></div>
       </section>
-      <section class="card workspace-current"><div class="card-title">Hồ sơ đang mở</div>
-        <p id="home-current-case">Chưa có hồ sơ được chọn.</p>
-        <button class="btn btn-outline" onclick="showDashboard()">Mở kết quả</button>
-      </section>
-      <details class="card sample-library"><summary>Dữ liệu mẫu</summary><p>Ba tình huống mô phỏng để trải nghiệm quy trình.</p>
-        <div class="home-actions compact"><button class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div>
-      </details>
+      <div class="overview-bottom"><span id="home-current-case">Chưa có hồ sơ đang mở.</span><details class="card sample-library"><summary>Dữ liệu mẫu</summary><div class="home-actions compact"><button class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></details></div>
     </div>
 
     <!-- DASHBOARD PAGE -->
@@ -364,9 +365,11 @@
     </div>
 
   </main>
+  </div>
 </div>
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script src="/static/app.js?v=20260609-public-report"></script>
+<script src="/static/workspace.js"></script>
 </body>
 </html>
