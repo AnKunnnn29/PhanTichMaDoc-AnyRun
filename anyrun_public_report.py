@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlparse
 
 import requests
 from anyrun_public_client import fetch_public_page, resolve_public_task, PublicTaskLookupError
+from report_context import NOTABLE_MODULES, graph_context, static_context
 
 
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -213,6 +214,9 @@ def _public_vue_data_to_anyrun_report(data: dict, fallback_uuid: str) -> dict:
         "indicators": [str(i) for i in general.get("indicators", []) or []],
         "malwareConfig": _normalize_malware_config(data.get("malwareConfiguration") or {}),
     }
+    content["processGraph"] = graph_context(data.get("processes") or {}, content["processes"])
+    content["processRelations"] = content["processGraph"]["relations"]
+    content["staticProfile"] = static_context(data)
     return {
         "publicReport": data,
         "data": {
@@ -331,6 +335,14 @@ def _normalize_network(network: dict) -> dict:
     return {"connections": connections, "httpRequests": http_requests, "dnsRequests": dns_requests, "alerts": alerts}
 
 
+def _modules(row: dict) -> dict:
+    """Every process loads dozens of common DLLs; keep the few that support an analysis, count the rest."""
+    loaded = [_text(_at(m, 0) if isinstance(m, list) else m) for m in
+              ((row.get("information") or {}).get("modules") or [])[:1500] if isinstance(m, (str, list))]
+    notable = [m for m in loaded if m.replace("/", "\\").rsplit("\\", 1)[-1].lower() in NOTABLE_MODULES]
+    return {"modules": notable, "moduleCount": len(loaded)}
+
+
 def _normalize_processes(processes: dict) -> list[dict]:
     rows = []
     for item in processes.get("processesValues", []) or []:
@@ -340,6 +352,7 @@ def _normalize_processes(processes: dict) -> list[dict]:
         path = _text(_at(values, 2))
         indicators = _at(values, 3, [])
         rows.append({
+            "uuid": _text(item.get("rowId", "")).lower(),
             "pid": _pid(item.get("pid") or _at(values, 0)) or 0,
             "ppid": None,
             "parentName": _text(_at(values, 4)),
@@ -349,7 +362,8 @@ def _normalize_processes(processes: dict) -> list[dict]:
             "indicators": [str(i) for i in indicators] if isinstance(indicators, list) else [],
             "user": _text(_at(info, 0)), "company": _text(_at(info, 1)), "integrity": _text(_at(info, 2)),
             "description": _text(_at(info, 3)),
-            "isInjected": None,
+            **_modules(row),
+            "isInjected": row.get("isInjected") if isinstance(row.get("isInjected"), bool) else None,
             "scores": {"verdict": {"threatLevel": row.get("threatLevel", 0)}},
         })
     # The public page names the parent but not its PID. Link only when that name is unique,
@@ -373,6 +387,7 @@ def _normalize_dropped(files: dict) -> list[dict]:
             "pid": _pid(item.get("pid")), "process": _text(item.get("process", "")),
             "hashes": {"md5": _text(item.get("md5", "")), "sha256": _text(item.get("sha256", ""))},
             "type": _label(item.get("type") or ""),
+            "timestamp": item.get("timestamp") if isinstance(item.get("timestamp"), (str, int, float)) else None,
         })
     return result
 

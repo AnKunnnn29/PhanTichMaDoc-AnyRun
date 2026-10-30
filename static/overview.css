@@ -11,3 +11,5 @@ body .mitre-chip{background:var(--bg2);border:1px solid var(--border)}body .mitr
 /* Origin label lines up with the objective text under the card header. */
 body .response-action>.response-origin{margin:10px 24px 0}
 body .response-detail>.agent-rationale{margin:12px 24px}
+
+.deep-details{border-top:1px solid var(--border);padding:12px 0;margin-top:12px}.deep-details>summary{cursor:pointer;font-size:13px;font-weight:500;overflow-wrap:anywhere}.deep-details input{width:100%;padding:10px;margin:14px 0;border:1px solid var(--border);border-radius:6px;font:inherit}.deep-details p{font-size:12px;line-height:1.8;margin:10px 0;overflow-wrap:anywhere}.deep-details small,.deep-sources small{font-size:11px;color:var(--text2);overflow-wrap:anywhere}.deep-analysis pre{font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);padding:12px;border-radius:5px;margin:10px 0}.deep-fact{padding:12px 0;border-bottom:1px solid var(--border)}.deep-sources{margin:9px 0;font-size:11px}.deep-sources summary{cursor:pointer;color:var(--accent)}

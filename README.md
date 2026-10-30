@@ -105,7 +105,7 @@ Không đưa `.env` lên Git. Trên Vercel, đặt các biến này trong **Sett
 | | Agent diễn giải IOC (`analysis_agent.py`) | Agent điều tra hồ sơ (`case_agent.py`) |
 |---|---|---|
 | Đầu vào | Nhóm 8 IOC kèm hồ sơ mạng | Tóm tắt hồ sơ; agent tự gọi công cụ để đọc thêm |
-| Công cụ | `get_evidence`, `submit_findings` | `list_observables`, `get_evidence`, `search_evidence`, `get_process_tree`, `get_network_profiles`, `get_impact_analysis`, `get_mitre_candidates`, `lookup_mitre`, `get_family_intel`, `lookup_hash`, `list_actions`, `submit_assessment` |
+| Công cụ | `get_evidence`, `submit_findings` | `list_observables`, `get_evidence`, `search_evidence`, `get_process_tree`, `get_network_profiles`, `get_impact_analysis`, `get_process_story`, `get_static_profile`, `get_family_expectations`, `get_mitre_candidates`, `lookup_mitre`, `get_family_intel`, `lookup_hash`, `list_actions`, `submit_assessment` |
 | Đầu ra | Vai trò, mức nguy cơ, ảnh hưởng, cần xác minh cho từng IOC | Chuỗi hành vi theo tactic ATT&CK, đánh giá ảnh hưởng, quyết định cho từng khuyến nghị, câu hỏi cần xác minh |
 | Giới hạn | 6 lượt mỗi nhóm, 120 IOC ưu tiên (mạng, tiến trình, registry) | 16 lượt |
 
@@ -160,7 +160,7 @@ Trường `mode` trong kết quả cho biết `llm`, `partial`, `fallback` hay `
 ## Kiểm thử
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest          # 333 test, độ phủ 87%
+.\.venv\Scripts\python.exe -m pytest          # Kiểm thử và đo độ phủ
 .\.venv\Scripts\python.exe evaluation.py --demo
 ```
 
@@ -176,7 +176,7 @@ Chi tiết: [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 
 - Dữ liệu là quan sát trong sandbox với tệp mồi: không chứng minh máy thật trong tổ chức đã nhiễm. Mọi biện pháp đều có bước xác minh trước.
 - Vai trò đích mạng và tác động được suy ra bằng quy tắc từ dữ liệu Any.Run; AI chỉ diễn giải thêm, không thay đổi verdict của sandbox.
-- Trang báo cáo công khai của Any.Run không có PPID; quan hệ cha–con suy ra từ tên tiến trình duy nhất được gắn nhãn `inferred`.
+- Báo cáo công khai có graphSvg được đối chiếu theo UUID tiến trình để dựng quan hệ cha–con. Khi chỉ có tên cha duy nhất, quan hệ vẫn được gắn nhãn suy luận; PID trùng không dùng để gán artifact.
 - Kết quả AI phụ thuộc model và có thể khác nhau giữa các lần chạy; cần ghi rõ nhà cung cấp, model và ngày chạy khi báo cáo số liệu.
 - Lệnh trong khuyến nghị là mẫu tham khảo, cần chỉnh theo môi trường trước khi dùng.
 
@@ -187,3 +187,5 @@ Chi tiết: [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 - [docs/LOCAL_CHAT.md](docs/LOCAL_CHAT.md): chat AI chạy trên máy với Ollama
 - [docs/HASH_LOOKUP.md](docs/HASH_LOOKUP.md): tra cứu mã băm trong chat
 - [tools/README.md](tools/README.md): runtime Ghidra/JDK trong dự án
+
+Phân tích sâu A–F, nguồn dữ liệu, mức bằng chứng và giới hạn: [docs/DEEP_ANALYSIS.md](docs/DEEP_ANALYSIS.md).

@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import time
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 from analyzer import MalwareAnalyzer
@@ -18,24 +19,32 @@ from operational_guidance import apply_guidance
 from network_intel import build_network_profiles, enrich_network_profiles
 from impact_analysis import analyze_impact
 from remediation import build_case_actions, merge_actions
+from deep_analysis import build_deep_analysis, family_catalog
 
 
 def analysis_key(report, iocs) -> str:
     # Entire inputs AND analysis settings: never family names or shared dropped-file hashes.
-    return "case-" + digest([PIPELINE_VERSION, CASE_PROMPT_VERSION, agent_settings(), catalogue()["source_sha256"], report, iocs])
+    return "case-" + digest([PIPELINE_VERSION, CASE_PROMPT_VERSION, agent_settings(), catalogue()["source_sha256"],
+                             family_catalog()["source_sha256"], report, iocs])
 
 
 def build_behavior(bundle):
     evidence = bundle["evidence"]
     events, edges = [], []
-    processes = {}
+    processes, uuids = {}, {}
+    pid_counts = Counter(str(e["context"].get("pid")) for e in evidence if e["type"] == "process")
+    uuid_counts = Counter(e["context"].get("uuid") for e in evidence if e["type"] == "process")
+    graph_edges = {e["context"].get("childUuid"): e["id"] for e in evidence if e["type"] == "process_relation"}
     for row in evidence:
         if row["type"] == "process":
             pid = row["context"].get("pid")
-            if pid:
+            if pid and pid_counts[str(pid)] == 1:
                 processes[str(pid)] = row["id"]
+            uid = row["context"].get("uuid")
+            if uid and uuid_counts[uid] == 1:
+                uuids[uid] = row["id"]
     for row in evidence:
-        if row["type"] == "mitre":
+        if row["type"] in {"mitre", "module", "pe_metadata", "file_type", "process_relation"}:
             continue
         context = row["context"]
         timestamp = context.get("timestamp") or context.get("time")
@@ -44,12 +53,15 @@ def build_behavior(bundle):
                        "evidence": row["id"], "evidence_ids": [row["id"]], "mitre": "",
                        "ir_action": "Xác minh artifact trên endpoint/log; chưa suy ra quan hệ nhân quả."})
         pid, ppid = context.get("pid"), context.get("ppid")
-        if row["type"] == "process" and ppid and str(ppid) in processes:
+        graph_parent = uuids.get(context.get("parentUuid")) if context.get("ppidBasis") == "graph_uuid" else None
+        parent = graph_parent or processes.get(str(ppid))
+        if row["type"] == "process" and parent:
             # Public reports name the parent without its PID; a unique-name match is an inference.
             inferred = context.get("ppidBasis") == "unique_parent_name"
-            edges.append({"source": processes[str(ppid)], "target": row["id"],
+            refs = [parent, row["id"]] + ([graph_edges[context["uuid"]]] if graph_parent and context.get("uuid") in graph_edges else [])
+            edges.append({"source": parent, "target": row["id"],
                           "relation": "parent_by_unique_name" if inferred else "reported_parent_process",
-                          "evidence_ids": [processes[str(ppid)], row["id"]],
+                          "parent_basis": context.get("ppidBasis", "source_ppid"), "evidence_ids": refs,
                           "assessment_status": "inferred" if inferred else "reported"})
         elif row["type"] != "process" and pid and str(pid) in processes:
             edges.append({"source": processes[str(pid)], "target": row["id"], "relation": "reported_process_artifact",
@@ -84,6 +96,7 @@ def run_pipeline(report, iocs, source="manual"):
     impact = analyze_impact(report, bundle, network_profiles)
     behavior = build_behavior(bundle)
     mappings, catalog_meta = map_evidence(bundle)
+    deep = build_deep_analysis(report, bundle, mappings, {"threat_name": result.threat_info.threat_name})
     result.threat_info.mitre_techniques = [{"id": m["technique_id"], "name": m["name"],
         "tactic": ", ".join(t.replace("-", " ").title() for t in m["tactics"])}
         for m in {m["technique_id"]: m for m in mappings if m["catalog_validation"] == "active"}.values()]
@@ -140,7 +153,7 @@ def run_pipeline(report, iocs, source="manual"):
     case_agent = investigate_case(bundle, behavior, mappings, [
         {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
          "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids, "origin": a.origin}
-        for a in playbook.actions], threat, network_profiles, impact)
+        for a in playbook.actions], threat, network_profiles, impact, deep)
     apply_case_plan(playbook.actions, case_agent)
     try:
         agent = ioc_future.result()
@@ -151,6 +164,7 @@ def run_pipeline(report, iocs, source="manual"):
         "pipeline_version": PIPELINE_VERSION, "source": source,
         "evidence_bundle": bundle, "agent_analysis": agent, "case_agent": case_agent, "behavior_chain": behavior,
         "network_profiles": network_profiles, "threat_intel_status": threat_intel, "impact_analysis": impact, "mitre_mappings": mappings,
+        **deep,
         "mitre_catalog": catalog_meta,
         "response_exclusions": excluded,
         "analysis_status": "insufficient_data" if result.threat_info.verdict == "Unknown" else "completed_with_review_required",
@@ -222,6 +236,8 @@ def research_markdown(payload: dict) -> str:
         review = row.get("review", {})
         lines.append("| " + " | ".join(safe(v) for v in (row.get("id"), row.get("status"), review.get("reviewer", ""), review.get("reason", ""))) + " |")
     lines += ["", "### Hướng dẫn khắc phục theo từng đề xuất", ""]
+    from deep_analysis import deep_report_lines
+    lines += ["", "### Phân tích sâu", ""] + [safe(line) for line in deep_report_lines(payload)] + [""]
     for row in payload['playbook']['actions']:
         lines += ['#### ' + safe(row.get('title', '')), safe(row.get('objective', '')), safe(row.get('target_scope', ''))]
         lines += [f'{index}. {safe(step)}' for index, step in enumerate(row.get('steps', []), 1)]

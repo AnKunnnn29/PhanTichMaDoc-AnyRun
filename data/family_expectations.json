@@ -1,0 +1,627 @@
+{
+  "version": "19.2",
+  "source_url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack-19.2.json",
+  "source_sha256": "dc1639caa5501d720e280cf1cbd8fbe009884a0c9b3e6e9ed9d0c25166c3d8f4",
+  "families": {
+    "Emotet": {
+      "software_id": "S0367",
+      "url": "https://attack.mitre.org/software/S0367",
+      "aliases": [
+        "Emotet",
+        "Geodo"
+      ],
+      "techniques": [
+        {
+          "id": "T1003.001",
+          "name": "LSASS Memory",
+          "url": "https://attack.mitre.org/techniques/T1003/001",
+          "relationship_id": "relationship--a0321bbd-edab-4ee6-be37-979015511e4a"
+        },
+        {
+          "id": "T1016.002",
+          "name": "Wi-Fi Discovery",
+          "url": "https://attack.mitre.org/techniques/T1016/002",
+          "relationship_id": "relationship--fe8a52b2-b1b8-4193-a637-abd9ec219e6a"
+        },
+        {
+          "id": "T1021.002",
+          "name": "SMB/Windows Admin Shares",
+          "url": "https://attack.mitre.org/techniques/T1021/002",
+          "relationship_id": "relationship--1bc150db-66ca-4361-84a2-2dd0f104790f"
+        },
+        {
+          "id": "T1027.001",
+          "name": "Binary Padding",
+          "url": "https://attack.mitre.org/techniques/T1027/001",
+          "relationship_id": "relationship--136b197b-4900-4e6e-a16f-0b2cf96fd77c"
+        },
+        {
+          "id": "T1027.002",
+          "name": "Software Packing",
+          "url": "https://attack.mitre.org/techniques/T1027/002",
+          "relationship_id": "relationship--d4c5a3a8-203d-4201-80fa-48b5ac9a533f"
+        },
+        {
+          "id": "T1027.009",
+          "name": "Embedded Payloads",
+          "url": "https://attack.mitre.org/techniques/T1027/009",
+          "relationship_id": "relationship--58e22fa6-5925-40b7-9df6-4cda34892ea6"
+        },
+        {
+          "id": "T1027.010",
+          "name": "Command Obfuscation",
+          "url": "https://attack.mitre.org/techniques/T1027/010",
+          "relationship_id": "relationship--9f6eef25-7a90-4f74-a788-8022166952f8"
+        },
+        {
+          "id": "T1027.013",
+          "name": "Encrypted/Encoded File",
+          "url": "https://attack.mitre.org/techniques/T1027/013",
+          "relationship_id": "relationship--c995160b-04cd-42b8-bb1a-106f24c9b28c"
+        },
+        {
+          "id": "T1033",
+          "name": "System Owner/User Discovery",
+          "url": "https://attack.mitre.org/techniques/T1033",
+          "relationship_id": "relationship--05e02170-dc4f-4112-a54c-fde4d05632d7"
+        },
+        {
+          "id": "T1036.004",
+          "name": "Masquerade Task or Service",
+          "url": "https://attack.mitre.org/techniques/T1036/004",
+          "relationship_id": "relationship--9da66aaa-79be-426c-8abe-3c68a9159e8b"
+        },
+        {
+          "id": "T1040",
+          "name": "Network Sniffing",
+          "url": "https://attack.mitre.org/techniques/T1040",
+          "relationship_id": "relationship--aa6d74b0-3db2-4679-bf1c-03d3dd7561b0"
+        },
+        {
+          "id": "T1041",
+          "name": "Exfiltration Over C2 Channel",
+          "url": "https://attack.mitre.org/techniques/T1041",
+          "relationship_id": "relationship--5201448e-f009-4c24-abb5-9382383dc42d"
+        },
+        {
+          "id": "T1047",
+          "name": "Windows Management Instrumentation",
+          "url": "https://attack.mitre.org/techniques/T1047",
+          "relationship_id": "relationship--11f31998-c76f-4433-8e9c-c0ef0b7574d5"
+        },
+        {
+          "id": "T1053.005",
+          "name": "Scheduled Task",
+          "url": "https://attack.mitre.org/techniques/T1053/005",
+          "relationship_id": "relationship--7a28c0d9-28cf-4881-b8a5-8d779eb76e0d"
+        },
+        {
+          "id": "T1055.001",
+          "name": "Dynamic-link Library Injection",
+          "url": "https://attack.mitre.org/techniques/T1055/001",
+          "relationship_id": "relationship--e834920f-bc30-458e-b56e-80947d3a7c6e"
+        },
+        {
+          "id": "T1055.012",
+          "name": "Process Hollowing",
+          "url": "https://attack.mitre.org/techniques/T1055/012",
+          "relationship_id": "relationship--dddf6fd0-6d38-4f33-90dc-42ff99c5072b"
+        },
+        {
+          "id": "T1057",
+          "name": "Process Discovery",
+          "url": "https://attack.mitre.org/techniques/T1057",
+          "relationship_id": "relationship--e39eb7ad-f233-4c22-8707-aaf600f42100"
+        },
+        {
+          "id": "T1059.001",
+          "name": "PowerShell",
+          "url": "https://attack.mitre.org/techniques/T1059/001",
+          "relationship_id": "relationship--7b458295-8e67-4f1f-acde-3316ae2e061e"
+        },
+        {
+          "id": "T1059.003",
+          "name": "Windows Command Shell",
+          "url": "https://attack.mitre.org/techniques/T1059/003",
+          "relationship_id": "relationship--c9e27933-d6fa-427b-b4ff-2367a2d7d060"
+        },
+        {
+          "id": "T1059.005",
+          "name": "Visual Basic",
+          "url": "https://attack.mitre.org/techniques/T1059/005",
+          "relationship_id": "relationship--88309efb-b366-4c4a-bd23-ba43b9f05c4c"
+        },
+        {
+          "id": "T1071.001",
+          "name": "Web Protocols",
+          "url": "https://attack.mitre.org/techniques/T1071/001",
+          "relationship_id": "relationship--50e590c6-32bb-452c-a0ba-20c2ee6f0030"
+        },
+        {
+          "id": "T1078.003",
+          "name": "Local Accounts",
+          "url": "https://attack.mitre.org/techniques/T1078/003",
+          "relationship_id": "relationship--30930d8a-3c0d-41b2-a226-cccc56599bfd"
+        },
+        {
+          "id": "T1087.003",
+          "name": "Email Account",
+          "url": "https://attack.mitre.org/techniques/T1087/003",
+          "relationship_id": "relationship--d3dbd171-a82c-4fef-ba16-2355dd9b513e"
+        },
+        {
+          "id": "T1105",
+          "name": "Ingress Tool Transfer",
+          "url": "https://attack.mitre.org/techniques/T1105",
+          "relationship_id": "relationship--622ba39c-2f40-4605-81ce-ef04cea95808"
+        },
+        {
+          "id": "T1106",
+          "name": "Native API",
+          "url": "https://attack.mitre.org/techniques/T1106",
+          "relationship_id": "relationship--fba17e05-d7dd-4944-97c8-7771d6b833fb"
+        },
+        {
+          "id": "T1110.001",
+          "name": "Password Guessing",
+          "url": "https://attack.mitre.org/techniques/T1110/001",
+          "relationship_id": "relationship--0c76bb94-1a6e-4ec6-9faa-2b444d80002c"
+        },
+        {
+          "id": "T1114",
+          "name": "Email Collection",
+          "url": "https://attack.mitre.org/techniques/T1114",
+          "relationship_id": "relationship--76d0dcb7-046a-40d7-80ec-e0e571359f51"
+        },
+        {
+          "id": "T1114.001",
+          "name": "Local Email Collection",
+          "url": "https://attack.mitre.org/techniques/T1114/001",
+          "relationship_id": "relationship--ea023f09-6a7d-445c-a39d-5e57eea2706b"
+        },
+        {
+          "id": "T1132.001",
+          "name": "Standard Encoding",
+          "url": "https://attack.mitre.org/techniques/T1132/001",
+          "relationship_id": "relationship--48a7db34-eee7-4358-918b-0cc802aaec03"
+        },
+        {
+          "id": "T1134.001",
+          "name": "Token Impersonation/Theft",
+          "url": "https://attack.mitre.org/techniques/T1134/001",
+          "relationship_id": "relationship--2b16958e-8c41-4342-87d8-f98b42548724"
+        },
+        {
+          "id": "T1135",
+          "name": "Network Share Discovery",
+          "url": "https://attack.mitre.org/techniques/T1135",
+          "relationship_id": "relationship--491dc622-fa43-4015-b24a-8ec8d8f5a376"
+        },
+        {
+          "id": "T1140",
+          "name": "Deobfuscate/Decode Files or Information",
+          "url": "https://attack.mitre.org/techniques/T1140",
+          "relationship_id": "relationship--7e4db234-1923-4bfb-ab32-284f31182c76"
+        },
+        {
+          "id": "T1204.001",
+          "name": "Malicious Link",
+          "url": "https://attack.mitre.org/techniques/T1204/001",
+          "relationship_id": "relationship--90b7c9e6-53db-4656-a5ee-f8056a8d6ef7"
+        },
+        {
+          "id": "T1204.002",
+          "name": "Malicious File",
+          "url": "https://attack.mitre.org/techniques/T1204/002",
+          "relationship_id": "relationship--219dcd0b-a6fe-47d4-99b9-24d945b1f168"
+        },
+        {
+          "id": "T1210",
+          "name": "Exploitation of Remote Services",
+          "url": "https://attack.mitre.org/techniques/T1210",
+          "relationship_id": "relationship--6cb2f741-eedb-4b1d-8d84-7823f0095d44"
+        },
+        {
+          "id": "T1218.010",
+          "name": "Regsvr32",
+          "url": "https://attack.mitre.org/techniques/T1218/010",
+          "relationship_id": "relationship--15d75abf-f6e1-4e86-8acb-6461958fdbac"
+        },
+        {
+          "id": "T1543.003",
+          "name": "Windows Service",
+          "url": "https://attack.mitre.org/techniques/T1543/003",
+          "relationship_id": "relationship--eba0a033-02a9-45e8-a1a1-27df73d6442b"
+        },
+        {
+          "id": "T1547.001",
+          "name": "Registry Run Keys / Startup Folder",
+          "url": "https://attack.mitre.org/techniques/T1547/001",
+          "relationship_id": "relationship--3236ca50-2342-455a-b258-6a085cae8fc2"
+        },
+        {
+          "id": "T1552.001",
+          "name": "Credentials In Files",
+          "url": "https://attack.mitre.org/techniques/T1552/001",
+          "relationship_id": "relationship--09c80e35-2839-4b5b-aad8-8f81db8da551"
+        },
+        {
+          "id": "T1555.003",
+          "name": "Credentials from Web Browsers",
+          "url": "https://attack.mitre.org/techniques/T1555/003",
+          "relationship_id": "relationship--7ac04e64-a09e-4a66-b6ce-047030400045"
+        },
+        {
+          "id": "T1566.001",
+          "name": "Spearphishing Attachment",
+          "url": "https://attack.mitre.org/techniques/T1566/001",
+          "relationship_id": "relationship--cc4f0b64-db39-4546-a5fc-a518ecc5438b"
+        },
+        {
+          "id": "T1566.002",
+          "name": "Spearphishing Link",
+          "url": "https://attack.mitre.org/techniques/T1566/002",
+          "relationship_id": "relationship--382b8780-edc3-477f-a7fa-3e6ba62397a2"
+        },
+        {
+          "id": "T1570",
+          "name": "Lateral Tool Transfer",
+          "url": "https://attack.mitre.org/techniques/T1570",
+          "relationship_id": "relationship--0694d72f-cf4b-4355-b485-ccbd8d3a22b2"
+        },
+        {
+          "id": "T1571",
+          "name": "Non-Standard Port",
+          "url": "https://attack.mitre.org/techniques/T1571",
+          "relationship_id": "relationship--12c14ace-db29-4b08-a052-ba867c9ba534"
+        },
+        {
+          "id": "T1573",
+          "name": "Encrypted Channel",
+          "url": "https://attack.mitre.org/techniques/T1573",
+          "relationship_id": "relationship--f18b11ea-4604-4c9e-8f12-6cfb526ef58c"
+        },
+        {
+          "id": "T1573.001",
+          "name": "Symmetric Cryptography",
+          "url": "https://attack.mitre.org/techniques/T1573/001",
+          "relationship_id": "relationship--095a259d-79c7-42b0-b65a-e423f110d187"
+        },
+        {
+          "id": "T1620",
+          "name": "Reflective Code Loading",
+          "url": "https://attack.mitre.org/techniques/T1620",
+          "relationship_id": "relationship--b92542f4-97bc-4e75-9f92-328c25a007ef"
+        }
+      ]
+    },
+    "WannaCry": {
+      "software_id": "S0366",
+      "url": "https://attack.mitre.org/software/S0366",
+      "aliases": [
+        "WannaCry",
+        "WanaCry",
+        "WanaCrypt",
+        "WanaCrypt0r",
+        "WCry"
+      ],
+      "techniques": [
+        {
+          "id": "T1016",
+          "name": "System Network Configuration Discovery",
+          "url": "https://attack.mitre.org/techniques/T1016",
+          "relationship_id": "relationship--b3c7d447-9b00-4bd6-b0b7-25c0bb56d28a"
+        },
+        {
+          "id": "T1018",
+          "name": "Remote System Discovery",
+          "url": "https://attack.mitre.org/techniques/T1018",
+          "relationship_id": "relationship--7a116d1c-33ab-4729-abff-2e37dc387f31"
+        },
+        {
+          "id": "T1047",
+          "name": "Windows Management Instrumentation",
+          "url": "https://attack.mitre.org/techniques/T1047",
+          "relationship_id": "relationship--6ad5d5c8-b53e-417c-a574-3818269d1e85"
+        },
+        {
+          "id": "T1083",
+          "name": "File and Directory Discovery",
+          "url": "https://attack.mitre.org/techniques/T1083",
+          "relationship_id": "relationship--3ca496bf-41f9-4d0b-b36d-576f90db340e"
+        },
+        {
+          "id": "T1090.003",
+          "name": "Multi-hop Proxy",
+          "url": "https://attack.mitre.org/techniques/T1090/003",
+          "relationship_id": "relationship--cf498579-a7c9-4d06-949b-fb75bf762990"
+        },
+        {
+          "id": "T1120",
+          "name": "Peripheral Device Discovery",
+          "url": "https://attack.mitre.org/techniques/T1120",
+          "relationship_id": "relationship--3f58682a-dc04-40f6-b224-42bab6ef6f67"
+        },
+        {
+          "id": "T1210",
+          "name": "Exploitation of Remote Services",
+          "url": "https://attack.mitre.org/techniques/T1210",
+          "relationship_id": "relationship--0e12dc13-6f73-4ad9-9cb5-845d443b4d58"
+        },
+        {
+          "id": "T1222.001",
+          "name": "Windows Permissions",
+          "url": "https://attack.mitre.org/techniques/T1222/001",
+          "relationship_id": "relationship--c49a3d89-c8fa-4c5d-813e-f4495d892d1a"
+        },
+        {
+          "id": "T1486",
+          "name": "Data Encrypted for Impact",
+          "url": "https://attack.mitre.org/techniques/T1486",
+          "relationship_id": "relationship--5c56206f-8ae3-4296-ab89-bc2036b74896"
+        },
+        {
+          "id": "T1489",
+          "name": "Service Stop",
+          "url": "https://attack.mitre.org/techniques/T1489",
+          "relationship_id": "relationship--1427027f-0fd1-4781-b4b3-06dc8e6e9998"
+        },
+        {
+          "id": "T1490",
+          "name": "Inhibit System Recovery",
+          "url": "https://attack.mitre.org/techniques/T1490",
+          "relationship_id": "relationship--76d0be57-e439-4640-b26d-db422353d9e5"
+        },
+        {
+          "id": "T1543.003",
+          "name": "Windows Service",
+          "url": "https://attack.mitre.org/techniques/T1543/003",
+          "relationship_id": "relationship--facd3eca-9156-47a8-85d1-09719bc0eb88"
+        },
+        {
+          "id": "T1563.002",
+          "name": "RDP Hijacking",
+          "url": "https://attack.mitre.org/techniques/T1563/002",
+          "relationship_id": "relationship--6b22c256-44a9-4b73-8df6-e4da9c32a5a3"
+        },
+        {
+          "id": "T1564.001",
+          "name": "Hidden Files and Directories",
+          "url": "https://attack.mitre.org/techniques/T1564/001",
+          "relationship_id": "relationship--a802b910-b023-425a-8c09-c1b2df185812"
+        },
+        {
+          "id": "T1570",
+          "name": "Lateral Tool Transfer",
+          "url": "https://attack.mitre.org/techniques/T1570",
+          "relationship_id": "relationship--fe78de3a-107f-4870-b5a1-c60289d68dec"
+        },
+        {
+          "id": "T1573.002",
+          "name": "Asymmetric Cryptography",
+          "url": "https://attack.mitre.org/techniques/T1573/002",
+          "relationship_id": "relationship--d9bfa498-69a1-44f9-8e44-67a6a4c48088"
+        }
+      ]
+    },
+    "RedLine Stealer": {
+      "software_id": "S1240",
+      "url": "https://attack.mitre.org/software/S1240",
+      "aliases": [
+        "RedLine Stealer"
+      ],
+      "techniques": [
+        {
+          "id": "T1005",
+          "name": "Data from Local System",
+          "url": "https://attack.mitre.org/techniques/T1005",
+          "relationship_id": "relationship--91872d37-d1f6-4a12-a011-85f929a3f8aa"
+        },
+        {
+          "id": "T1012",
+          "name": "Query Registry",
+          "url": "https://attack.mitre.org/techniques/T1012",
+          "relationship_id": "relationship--39b63ba5-41dc-4b47-9858-97abdda827cd"
+        },
+        {
+          "id": "T1016",
+          "name": "System Network Configuration Discovery",
+          "url": "https://attack.mitre.org/techniques/T1016",
+          "relationship_id": "relationship--88f285fd-670b-4600-878f-7d78b86ab929"
+        },
+        {
+          "id": "T1027.002",
+          "name": "Software Packing",
+          "url": "https://attack.mitre.org/techniques/T1027/002",
+          "relationship_id": "relationship--5d256f6f-9501-4fec-9255-941b8c2fe35a"
+        },
+        {
+          "id": "T1027.010",
+          "name": "Command Obfuscation",
+          "url": "https://attack.mitre.org/techniques/T1027/010",
+          "relationship_id": "relationship--d9ae6db9-d29e-4576-8567-520920c7ef79"
+        },
+        {
+          "id": "T1027.013",
+          "name": "Encrypted/Encoded File",
+          "url": "https://attack.mitre.org/techniques/T1027/013",
+          "relationship_id": "relationship--7c6646c0-25d9-4de6-9c13-b7d588f295f9"
+        },
+        {
+          "id": "T1033",
+          "name": "System Owner/User Discovery",
+          "url": "https://attack.mitre.org/techniques/T1033",
+          "relationship_id": "relationship--242af6ac-a8f9-44fd-ae3f-edd975b37b4c"
+        },
+        {
+          "id": "T1036",
+          "name": "Masquerading",
+          "url": "https://attack.mitre.org/techniques/T1036",
+          "relationship_id": "relationship--5cd22798-0d6e-4bed-b139-c46a4cfa87a5"
+        },
+        {
+          "id": "T1041",
+          "name": "Exfiltration Over C2 Channel",
+          "url": "https://attack.mitre.org/techniques/T1041",
+          "relationship_id": "relationship--a6d72bce-1f65-40e8-9c7b-c9c384276d6e"
+        },
+        {
+          "id": "T1053.005",
+          "name": "Scheduled Task",
+          "url": "https://attack.mitre.org/techniques/T1053/005",
+          "relationship_id": "relationship--c31efd65-8907-41f7-8cc2-17c7f8313a67"
+        },
+        {
+          "id": "T1059.003",
+          "name": "Windows Command Shell",
+          "url": "https://attack.mitre.org/techniques/T1059/003",
+          "relationship_id": "relationship--ddc7c412-20f1-4820-9816-ec2c8063cc1c"
+        },
+        {
+          "id": "T1059.011",
+          "name": "Lua",
+          "url": "https://attack.mitre.org/techniques/T1059/011",
+          "relationship_id": "relationship--891d4be2-c0d1-48f2-920c-0bd9378ac44e"
+        },
+        {
+          "id": "T1071.001",
+          "name": "Web Protocols",
+          "url": "https://attack.mitre.org/techniques/T1071/001",
+          "relationship_id": "relationship--b0e89ad2-f1ff-4646-8af6-8f60bcf96281"
+        },
+        {
+          "id": "T1082",
+          "name": "System Information Discovery",
+          "url": "https://attack.mitre.org/techniques/T1082",
+          "relationship_id": "relationship--afe95822-7845-4f16-b50c-62f428c59697"
+        },
+        {
+          "id": "T1087.001",
+          "name": "Local Account",
+          "url": "https://attack.mitre.org/techniques/T1087/001",
+          "relationship_id": "relationship--5b2c1413-9760-4867-8fe4-3b7c55f1e780"
+        },
+        {
+          "id": "T1102",
+          "name": "Web Service",
+          "url": "https://attack.mitre.org/techniques/T1102",
+          "relationship_id": "relationship--870704bf-fa76-413b-a529-b95bbca48771"
+        },
+        {
+          "id": "T1105",
+          "name": "Ingress Tool Transfer",
+          "url": "https://attack.mitre.org/techniques/T1105",
+          "relationship_id": "relationship--94813c25-e3ba-4f51-ba49-f0fc5e486e8a"
+        },
+        {
+          "id": "T1113",
+          "name": "Screen Capture",
+          "url": "https://attack.mitre.org/techniques/T1113",
+          "relationship_id": "relationship--536cdc1b-65c7-4236-8e2a-b0093495c9d9"
+        },
+        {
+          "id": "T1132.001",
+          "name": "Standard Encoding",
+          "url": "https://attack.mitre.org/techniques/T1132/001",
+          "relationship_id": "relationship--94eef51a-f00b-49db-9a8a-9730b4c80b9a"
+        },
+        {
+          "id": "T1140",
+          "name": "Deobfuscate/Decode Files or Information",
+          "url": "https://attack.mitre.org/techniques/T1140",
+          "relationship_id": "relationship--a1e3d08f-cec9-48df-b377-6f0d0d223e3b"
+        },
+        {
+          "id": "T1204.002",
+          "name": "Malicious File",
+          "url": "https://attack.mitre.org/techniques/T1204/002",
+          "relationship_id": "relationship--5a817bea-020f-47f5-8bf3-80e0c8bdef79"
+        },
+        {
+          "id": "T1217",
+          "name": "Browser Information Discovery",
+          "url": "https://attack.mitre.org/techniques/T1217",
+          "relationship_id": "relationship--9cf53303-770b-4de2-bbf2-3d79d5432f93"
+        },
+        {
+          "id": "T1218.007",
+          "name": "Msiexec",
+          "url": "https://attack.mitre.org/techniques/T1218/007",
+          "relationship_id": "relationship--ae711f8d-3b42-405f-8e31-fdb561f08a79"
+        },
+        {
+          "id": "T1480",
+          "name": "Execution Guardrails",
+          "url": "https://attack.mitre.org/techniques/T1480",
+          "relationship_id": "relationship--b6455e96-9b28-4749-8b76-220f27ac4ee8"
+        },
+        {
+          "id": "T1497",
+          "name": "Virtualization/Sandbox Evasion",
+          "url": "https://attack.mitre.org/techniques/T1497",
+          "relationship_id": "relationship--c398b815-5ec1-45a9-bbe8-14153ae5d703"
+        },
+        {
+          "id": "T1518",
+          "name": "Software Discovery",
+          "url": "https://attack.mitre.org/techniques/T1518",
+          "relationship_id": "relationship--ea245e90-c14f-457c-998f-04c431dcc458"
+        },
+        {
+          "id": "T1518.001",
+          "name": "Security Software Discovery",
+          "url": "https://attack.mitre.org/techniques/T1518/001",
+          "relationship_id": "relationship--30b3b0e1-88a4-4126-8a2e-78ccaedbb36d"
+        },
+        {
+          "id": "T1539",
+          "name": "Steal Web Session Cookie",
+          "url": "https://attack.mitre.org/techniques/T1539",
+          "relationship_id": "relationship--98847982-f5fe-4c8e-bd90-b24ba3ff58bd"
+        },
+        {
+          "id": "T1553.002",
+          "name": "Code Signing",
+          "url": "https://attack.mitre.org/techniques/T1553/002",
+          "relationship_id": "relationship--02595a79-3ef9-41a6-be6f-14aebf3a96f1"
+        },
+        {
+          "id": "T1555",
+          "name": "Credentials from Password Stores",
+          "url": "https://attack.mitre.org/techniques/T1555",
+          "relationship_id": "relationship--9fba03e7-126f-42ca-81a4-5c314756a36a"
+        },
+        {
+          "id": "T1555.003",
+          "name": "Credentials from Web Browsers",
+          "url": "https://attack.mitre.org/techniques/T1555/003",
+          "relationship_id": "relationship--a0704053-1dec-4f7d-bcb2-ff2372640b02"
+        },
+        {
+          "id": "T1614",
+          "name": "System Location Discovery",
+          "url": "https://attack.mitre.org/techniques/T1614",
+          "relationship_id": "relationship--79275d9c-25cb-4792-8ac9-57009b44bd35"
+        },
+        {
+          "id": "T1614.001",
+          "name": "System Language Discovery",
+          "url": "https://attack.mitre.org/techniques/T1614/001",
+          "relationship_id": "relationship--7e3b8db0-f8bf-4f61-bfc8-b87b5e42a998"
+        },
+        {
+          "id": "T1657",
+          "name": "Financial Theft",
+          "url": "https://attack.mitre.org/techniques/T1657",
+          "relationship_id": "relationship--5b05bcf1-4943-4f19-8bc3-a44eec42d047"
+        },
+        {
+          "id": "T1685",
+          "name": "Disable or Modify Tools",
+          "url": "https://attack.mitre.org/techniques/T1685",
+          "relationship_id": "relationship--1eb7d0a2-784b-44e8-a1dd-2c444b67bf29"
+        }
+      ]
+    }
+  }
+}

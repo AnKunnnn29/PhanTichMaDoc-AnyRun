@@ -107,8 +107,6 @@ def test_citing_unread_evidence_is_rejected_then_corrected(monkeypatch, wannacry
 
 @pytest.mark.parametrize("mutate,reason", [
     (lambda a, acts: a["action_plan"][0].update(action_id="action-invented"), "action_id lạ"),
-    (lambda a, acts: a["behavior_chain"][0].update(mitre=["T9999"]), "không có hoặc đã ngừng"),
-    (lambda a, acts: a["behavior_chain"][0].update(mitre=["T1486"]), "thuộc tactic impact, không phải execution"),
     (lambda a, acts: a["behavior_chain"][0].update(evidence_ids=["ev-invented"]), "không tồn tại"),
     (lambda a, acts: a["impact"].update(severity="catastrophic"), "impact.severity"),
 ])
@@ -196,16 +194,66 @@ def test_gemini_provider_retries_rate_limit(monkeypatch):
         assert rsps.calls[1].request.headers["Authorization"] == "Bearer test-placeholder"
 
 
-def test_revoked_attack_id_rejection_names_its_replacement(monkeypatch, wannacry):
+def test_attack_ids_are_corrected_against_the_catalogue_and_recorded(monkeypatch, wannacry):
     bundle, behavior, mappings, actions, threat, _ = wannacry
     ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
-    bad = valid_assessment(bundle, actions, ids)
-    bad["behavior_chain"][0].update(stage="defense-impairment", mitre=["T1562.001"])
-    fixed = copy.deepcopy(bad)
-    fixed["behavior_chain"][0]["mitre"] = ["T1685"]
-    calls = scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
-                                   {"tool": "submit_assessment", "assessment": bad},
-                                   {"tool": "submit_assessment", "assessment": fixed}])
+    answer = valid_assessment(bundle, actions, ids)
+    answer["behavior_chain"][0].update(stage="defense-impairment", mitre=["T1562.001", "T1027", "T9999"])
+    scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                           {"tool": "submit_assessment", "assessment": answer}])
     case = investigate_case(bundle, behavior, mappings, actions, threat)
-    assert case["mode"] == "llm" and "dùng T1685" in case["tool_trace"][1]["reason"]
-    assert "dùng T1685" in calls[2][-1]["content"]
+    assert case["mode"] == "llm"
+    assert case["assessment"]["behavior_chain"][0]["mitre"] == ["T1685"]
+    reasons = {c["from"]: c["reason"] for c in case["assessment"]["mitre_corrections"]}
+    assert reasons["T1562.001"] == "replaced_in_catalog" and reasons["T9999"] == "not_in_catalog"
+    assert reasons["T1027"].startswith("tactic_mismatch")
+
+
+def test_narrative_is_optional_but_bounded(monkeypatch, wannacry):
+    from case_agent import NARRATIVE_MAX
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+    deep = {"process_story": {"processes": [{"id": ids[0]}], "narrative": []}}
+    long = valid_assessment(bundle, actions, ids)
+    long["attack_narrative"] = [{"text": "Câu.", "evidence_ids": ids[:1], "assessment_status": "observed"}] * (NARRATIVE_MAX + 1)
+    scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                           {"tool": "submit_assessment", "assessment": long},
+                           {"tool": "submit_assessment", "assessment": valid_assessment(bundle, actions, ids)}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat, None, None, deep)
+    assert case["mode"] == "llm" and f"tối đa {NARRATIVE_MAX} câu" in case["tool_trace"][1]["reason"]
+    assert case["assessment"]["attack_narrative"] == []
+
+
+def test_transient_provider_error_is_retried(monkeypatch):
+    import responses as mock
+    from analysis_agent import _call_model, agent_settings
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr("analysis_agent.time.sleep", lambda seconds: None)
+    settings = agent_settings()
+    url = settings["endpoint"] + "/chat/completions"
+    with mock.RequestsMock() as rsps:
+        rsps.post(url, status=500)
+        rsps.post(url, json={"choices": [{"message": {"content": '{"tool": "list_actions", "args": {}}'}}]})
+        assert _call_model([{"role": "user", "content": "x"}], settings)["tool"] == "list_actions"
+
+
+def test_uncited_narrative_sentences_are_dropped_not_fatal(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+    answer = valid_assessment(bundle, actions, ids)
+    answer["attack_narrative"] = [{"text": "Có dẫn chứng.", "evidence_ids": ids[:1], "assessment_status": "observed"},
+                                  {"text": "Chưa đọc nguồn.", "evidence_ids": ids[1:2], "assessment_status": "inference"}]
+    scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                           {"tool": "submit_assessment", "assessment": answer}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert case["mode"] == "llm"
+    assert [r["text"] for r in case["assessment"]["attack_narrative"]] == ["Có dẫn chứng."]
+    assert case["assessment"]["narrative_dropped"] == 1
+
+
+def test_time_budget_stops_the_agent_before_hosting_limit(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    monkeypatch.setattr("case_agent.CASE_DEADLINE_SECONDS", -1)
+    scripted(monkeypatch, [{"tool": "list_actions", "args": {}}] * MAX_STEPS)
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert case["mode"] == "fallback" and "giới hạn thời gian" in case["tool_trace"][-1]["reason"]

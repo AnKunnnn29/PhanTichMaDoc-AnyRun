@@ -43,6 +43,17 @@ def _folder(path: str) -> str:
     return str(PureWindowsPath(*parts[:3])) if parts else path
 
 
+def encryption_markers(filenames) -> set[str]:
+    """Extensions appended to user files at least 5 times (x.docx.<marker>); no family list needed."""
+    counts = Counter()
+    for name in filenames:
+        outer = _ext(name)
+        inner = _ext(name[: -len(outer) - 1]) if outer else ""
+        if inner in USER_DATA_EXT and outer not in USER_DATA_EXT | EXECUTABLE_EXT:
+            counts[outer] += 1
+    return {m for m, n in counts.items() if n >= 5 and m not in TEMP_EXT}
+
+
 def decode_powershell(command: str) -> str:
     """Show what an -EncodedCommand actually runs (UTF-16LE base64), bounded and best-effort."""
     match = re.search(r"-e(?:nc(?:odedcommand)?)?\s+[\"']?([A-Za-z0-9+/=]{16,})", command, re.IGNORECASE)
@@ -94,7 +105,7 @@ def analyze_impact(report: dict, bundle: dict, network_profiles: dict | None = N
     # ── Data encryption: x.<user ext>.<marker> on many files means files were encrypted in place.
     double = [(d, _ext(d["filename"]), _ext(d["filename"][: -len(_ext(d["filename"])) - 1])) for d in dropped if _ext(d["filename"])]
     markers = Counter(outer for _, outer, inner in double if inner in USER_DATA_EXT and outer not in USER_DATA_EXT | EXECUTABLE_EXT)
-    enc_ext = {m for m, n in markers.items() if n >= 5 and m not in TEMP_EXT}
+    enc_ext = encryption_markers(d["filename"] for d in dropped)
     encrypted = [d for d, outer, inner in double if outer in enc_ext and inner in USER_DATA_EXT]
     notes = [d for d in dropped if RANSOM_NOTE.search(PureWindowsPath(d["filename"]).name)]
     if encrypted or (notes and "ransomware" in tags):

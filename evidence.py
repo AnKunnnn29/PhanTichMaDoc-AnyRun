@@ -7,7 +7,7 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PIPELINE_VERSION = "evidence-agent-1.9"
+PIPELINE_VERSION = "evidence-agent-2.0"
 
 
 def digest(value) -> str:
@@ -97,11 +97,23 @@ def collect_evidence(report: dict, iocs) -> dict:
         add("behavior", row.get("name"), f"/data/content/behaviors/{n}/name", context=row, observable=False)
     for n, value in enumerate(content.get("malwareConfig") or []):
         add("malware_config", value, f"/data/content/malwareConfig/{n}", observable=False)
+    for n, relation in enumerate(content.get("processRelations") or []):
+        add("process_relation", relation.get("edge"), f"/data/content/processRelations/{n}/edge",
+            context=relation, observable=False)
+    static = content.get("staticProfile") or {}
+    for n, row in enumerate(static.get("metadata") or []):
+        add("pe_metadata", row.get("value"), f"/data/content/staticProfile/metadata/{n}/value", context=row, observable=False)
+    for n, row in enumerate(static.get("trid") or []):
+        add("file_type", row.get("value"), f"/data/content/staticProfile/trid/{n}/value", context=row, observable=False)
     for collection, field, kind in [("processes", "name", "process"), ("dropped", "filename", "file"),
                                     ("registry", "key", "registry"), ("synchronization", "name", "mutex"),
                                     ("mitre", "id", "mitre")]:
         for n, row in enumerate(content.get(collection) or []):
             add(kind, row.get(field), f"/data/content/{collection}/{n}/{field}", context=row)
+            if collection == "processes":
+                for m, module in enumerate(row.get("modules") or []):
+                    add("module", module, f"/data/content/processes/{n}/modules/{m}",
+                        context={"pid": row.get("pid"), "processUuid": row.get("uuid"), "process": row.get("name")}, observable=False)
             if collection == "dropped":
                 for algo in ("md5", "sha1", "sha256"):
                     add(algo, (row.get("hashes") or {}).get(algo), f"/data/content/dropped/{n}/hashes/{algo}", context=row)

@@ -16,6 +16,7 @@ from response_policy import RESPONSE_INSTRUCTIONS, is_protected_destination, POL
 PROMPT_VERSION = "ioc-evidence-v5"
 BATCH_SIZE = 8
 BATCH_STEPS = 6
+RETRY_STATUS = {429, 500, 502, 503, 504}
 LLM_IOC_LIMIT = 120
 ROLES = {"network_destination", "sample_fingerprint", "file_artifact", "process_artifact",
          "registry_artifact", "autorun_candidate", "synchronization_artifact", "protective_service", "unclassified"}
@@ -108,7 +109,7 @@ def _call_model(messages: list, settings: dict) -> dict:
     if settings["provider"] == "ollama":
         url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/chat"
         payload = {"model": settings["model"], "messages": messages, "format": "json", "stream": False,
-                   "options": {"temperature": 0.1, "num_predict": 4096}}
+                   "options": {"temperature": 0.1, "num_predict": settings.get("max_tokens", 4096)}}
         response = requests.post(url, json=payload, timeout=(5, 120))
         response.raise_for_status()
         text = response.json()["message"]["content"]
@@ -122,15 +123,17 @@ def _call_model(messages: list, settings: dict) -> dict:
         url = settings["endpoint"].rstrip("/") + "/chat/completions"
         body = {"model": settings["model"], "messages": messages, "response_format": {"type": "json_object"},
                 **({"thinking": {"type": "disabled"}} if deepseek else {}),
-                "temperature": 0.1, "max_tokens": 4096}
-        # Free tiers allow only a few requests per minute: wait and retry on 429 instead of failing the case.
+                "temperature": 0.1, "max_tokens": settings.get("max_tokens", 4096)}
+        # Free tiers allow only a few requests per minute and providers return transient 5xx: wait and retry
+        # instead of failing the case.
         retries = int(os.getenv("AGENT_RATE_LIMIT_RETRIES", "4"))
         for attempt in range(retries + 1):
             response = requests.post(url, headers={"Authorization": "Bearer " + key}, json=body, timeout=(5, 120))
-            if response.status_code != 429 or attempt == retries:
+            if response.status_code not in RETRY_STATUS or attempt == retries:
                 break
             retry_after = response.headers.get("Retry-After", "")
-            time.sleep(min(float(retry_after), 90) if retry_after.replace(".", "", 1).isdigit() else 15 * (attempt + 1))
+            backoff = 15 * (attempt + 1) if response.status_code == 429 else 2 * (attempt + 1)
+            time.sleep(min(float(retry_after), 90) if retry_after.replace(".", "", 1).isdigit() else backoff)
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
     else:

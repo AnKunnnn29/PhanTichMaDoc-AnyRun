@@ -700,6 +700,7 @@ def build_html_report(data: dict[str, Any]) -> str:
 
 
 def _research_lines(data):
+    from deep_analysis import deep_report_lines
     agent = data.get("agent_analysis")
     if not agent:
         return ["No evidence-agent metadata in this legacy report."]
@@ -713,6 +714,7 @@ def _research_lines(data):
         lines += [f"Stage {s['stage']} ({', '.join(s['mitre'])}): {s['summary']} Evidence: {', '.join(s['evidence_ids'])}"
                   for s in a["behavior_chain"]]
         lines += [f"Action {row['action_id']}: {row['decision']} P{row['priority']} - {row['rationale']}" for row in a["action_plan"]]
+    lines += deep_report_lines(data)
     for row in agent["findings"]:
         lines += [f"{row['ioc_id']} | {row['role']} | {row['assessment_status']}", row["explanation"],
                   row["potential_impact"], row["verification_needed"], "Evidence: " + ", ".join(row["evidence_ids"])]

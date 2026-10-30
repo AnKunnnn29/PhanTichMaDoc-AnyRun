@@ -1099,6 +1099,7 @@ function renderEvidencePanel(data) {
     return el;
   };
   const impact = data.impact_analysis;
+  if (typeof renderDeepAnalysis === 'function') renderDeepAnalysis(data, root);
   if (impact) {
     const section = add(root, 'section', undefined, 'card case-agent');
     add(section, 'h3', 'Tác động và thiệt hại');
@@ -1126,6 +1127,10 @@ function renderEvidencePanel(data) {
     const sevLabel = {unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'};
     add(section, 'p', `Ảnh hưởng: ${sevLabel[a.impact.severity] || a.impact.severity} — ${a.impact.summary}`);
     for (const w of caseAgent.warnings || []) add(section, 'p', w, 'agent-warning');
+    // What the validator corrected stays visible, so the analyst knows the result was adjusted.
+    const fixes = a.mitre_corrections || [];
+    if (fixes.length) add(section, 'p', `Bộ kiểm tra đã chỉnh ${fixes.length} mã ATT&CK theo danh mục: ` + fixes.map(f => `${f.from} → ${f.to || 'bỏ'} (${f.reason})`).join('; '), 'agent-warning');
+    if (a.narrative_dropped) add(section, 'p', `Đã bỏ ${a.narrative_dropped} câu diễn biến không có bằng chứng đã đọc.`, 'agent-warning');
     add(section, 'h4', `Chuỗi hành vi (${a.behavior_chain.length} giai đoạn)`);
     const stages = add(section, 'ol');
     for (const s of a.behavior_chain) {
