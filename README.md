@@ -1,762 +1,189 @@
-# 🛡️ AnyRun Malware Incident Response Tool
+# 🛡️ IR Workspace — AI Agent hỗ trợ phân tích mã độc và phản ứng sự cố
 
-## Chạy dự án kèm Ghidra và Java — Windows x64
+Tiểu luận chuyên ngành An toàn thông tin, HCMUTE, HK1 2026–2027 · Nguyễn Thành An, Vũ Văn Thông · GVHD: ThS. Đinh Công Đoan.
 
-Sau khi clone, đứng tại thư mục repo và chạy:
+Hệ thống nhận báo cáo phân tích hành vi từ **Any.Run**, phân tích sâu từng chỉ báo (IP, domain, URL, hash, tiến trình, registry),
+rút ra **tác động cụ thể** (tệp bị mã hóa, dữ liệu bị đánh cắp, cơ chế tự khởi động, phòng thủ bị vô hiệu hóa),
+rồi sinh **biện pháp khắc phục riêng cho từng ca** theo NIST SP 800-61, kèm bằng chứng truy ngược được về báo cáo gốc.
+Hai **AI Agent** (DeepSeek, Gemini, OpenAI hoặc Ollama) diễn giải chỉ báo và điều tra hồ sơ bằng các công cụ chỉ đọc;
+mọi khuyến nghị cần chuyên viên duyệt và **không có lệnh nào được tự thực thi**.
+
+🌐 Bản web: https://ir-workspace.vercel.app
+
+---
+
+## Hệ thống làm gì
+
+```text
+Báo cáo Any.Run (Task ID / link công khai / Results.md / JSON / API key)
+   │
+   ▼ anyrun_public_report.py, analyzer.py, validation.py
+Chuẩn hóa dữ liệu: kết nối (PID, port, ASN, quốc gia, uy tín), DNS, HTTP, tiến trình, tệp,
+registry, cảnh báo Suricata, chữ ký hành vi, cấu hình mã độc trích xuất
+   │
+   ▼ evidence.py
+Evidence bundle: mỗi dữ kiện có ID ổn định, JSON Pointer và SHA256 của nguồn
+   │
+   ├──▶ network_intel.py   Hồ sơ từng IP/domain/URL + vai trò (C2 trong cấu hình, C2 theo ThreatFox,
+   │                       phát tán, quét SMB, tải payload, kill-switch, hạ tầng hợp lệ, mạng nội bộ…)
+   ├──▶ impact_analysis.py Tác động: mã hóa dữ liệu, ngăn khôi phục, đánh cắp thông tin, tự khởi động,
+   │                       vô hiệu hóa phòng thủ, lệnh PowerShell đã giải mã, tệp thả ra, C2, lây lan
+   ├──▶ remediation.py     Biện pháp riêng cho ca: đối tượng cụ thể + truy vấn xác minh trước + lệnh tham khảo
+   │
+   ├──▶ analysis_agent.py  AI Agent diễn giải từng IOC (song song theo nhóm)
+   └──▶ case_agent.py      AI Agent điều tra hồ sơ: tự chọn công cụ, dựng chuỗi hành vi ATT&CK,
+                           đánh giá ảnh hưởng, quyết định cho từng khuyến nghị
+   │
+   ▼ case_store.py
+Chuyên viên duyệt / từ chối / yêu cầu bổ sung từng khuyến nghị (SQLite, có revision)
+   │
+   ▼ reporter.py, siem_exporter.py
+Xuất PDF / HTML / Markdown / JSON và quy tắc SIEM (Splunk, Elastic, Sentinel, Sigma, Suricata, STIX, CSV)
+```
+
+### Ví dụ trên báo cáo Any.Run thật
+
+| | WannaCry (task `4a4f9f51-…`) | RedLine Stealer (task `4d6f6b46-…`) |
+|---|---|---|
+| Đích mạng | 70 đích đều là hạ tầng Microsoft/CDN hợp lệ → **không chặn IP nào** | `185.173.38.57:80` là **C2 trong cấu hình RedLine** → chặn đúng 1 IP |
+| Tác động | 61 tệp bị mã hóa (`.WNCRY`, `.HXAMTHY`), 9 ghi chú tiền chuộc, 5 scheduled task ONLOGON quyền cao nhất, Defender bị loại trừ toàn bộ hồ sơ người dùng | Chụp màn hình, cấu hình botnet `200k`, liên lạc C2 |
+| Biện pháp | `schtasks /Delete` đúng từng task, `Remove-MpPreference` đúng từng đường dẫn, cô lập máy và khôi phục từ backup ngoại tuyến | Chặn C2 sau khi xác minh, thu hồi phiên và đổi mật khẩu từ máy sạch |
+| AI (DeepSeek) | Chuỗi 5 giai đoạn ATT&CK, đồng ý không chặn mạng | Tự thêm discovery T1082 và collection T1113; hoãn reimage tới khi xác minh máy thật |
+
+---
+
+## Chạy nhanh (Windows)
 
 ```powershell
 python start.py
 ```
 
-Cần Python 3.10+; lần đầu cần Internet. Lệnh này tự chuẩn bị môi trường Python, Ghidra và JDK ngay trong
-thư mục dự án rồi mở server ở `http://127.0.0.1:5000`. Các lần sau dùng lại runtime đã có.
-Không cần đường dẫn `D:\SecureCRT\...` hay cài Ghidra/Java toàn máy.
-Xem [cấu trúc runtime và cách sao chép offline](tools/README.md).
+Cần Python 3.10+, lần đầu cần Internet. `start.py` tự chuẩn bị môi trường Python, Ghidra và JDK trong thư mục dự án,
+rồi mở `http://127.0.0.1:5000`. Xem [cấu trúc runtime và cách chép offline](tools/README.md).
 
-## Bản triển khai phục vụ tiểu luận — 29/10/2026
-
-Đã bổ sung pipeline evidence → Agent → khuyến nghị có chuyên viên xem xét, lưu quyết định bằng SQLite,
-và công cụ đánh giá trích xuất IOC. Xem [đối chiếu đề cương, hướng dẫn demo và thực nghiệm](docs/THESIS_IMPLEMENTATION.md).
+Hoặc cài thủ công:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
-$env:AGENT_PROVIDER = 'rules'
+copy .env.example .env      # rồi điền key cần dùng
 .\.venv\Scripts\python.exe app.py
 ```
 
-Mở `http://127.0.0.1:5000`. Demo là dữ liệu mô phỏng. Mặc định là rules; cấu hình Ollama trong hướng dẫn
-để chạy Agent LLM. Kiểm tra mode `llm`/`fallback` trong kết quả trước khi đánh giá AI.
-Ứng dụng tạo khuyến nghị và mẫu lệnh cần xem xét; không tự thực thi khắc phục.
+`Mo-IR-Workspace.cmd` khởi động cả Ollama trên máy và web (xem [docs/LOCAL_CHAT.md](docs/LOCAL_CHAT.md)).
+CLI: `python -X utf8 main.py --demo` hoặc `python -X utf8 main.py --report-json Results.md`.
+
+## Cấu hình `.env`
+
+| Biến | Ý nghĩa |
+|---|---|
+| `AGENT_PROVIDER` | `rules` (mặc định, không gọi AI), `deepseek`, `gemini`, `openai`, `ollama` |
+| `AI_PROVIDER` | Nhà cung cấp cho khung chat: `deepseek`, `ollama`, `openai`, `local`, `auto` |
+| `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | Key DeepSeek; model mặc định `deepseek-flash` |
+| `AISTUDIO_API_KEY` (hoặc `GEMINI_API_KEY`), `GEMINI_MODEL` | Gemini qua endpoint tương thích OpenAI; mặc định `gemini-3.5-flash` |
+| `OPENAI_API_KEY`, `OPENAI_API_BASE`, `OPENAI_MODEL` | OpenAI hoặc dịch vụ tương thích OpenAI |
+| `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Model chạy trên máy (model 3B không đủ cho agent nhiều bước) |
+| `AGENT_PARALLEL` | Số nhóm IOC gọi AI song song, mặc định 8 |
+| `AGENT_RATE_LIMIT_RETRIES` | Số lần chờ rồi thử lại khi gặp HTTP 429, mặc định 4 |
+| `MALWAREBAZAAR_AUTH_KEY` (hoặc `ABUSECH_AUTH_KEY`) | Key abuse.ch: tra MalwareBazaar trong chat, ThreatFox/URLhaus cho đích mạng |
+| `NETWORK_INTEL_LOOKUPS` | `0` để tắt tra cứu ThreatFox/URLhaus |
+| `ANYRUN_API_KEY` | Tùy chọn; chỉ ở máy chủ, không gửi xuống trình duyệt. Để trống ô nhập thì backend dùng key này |
+| `GHIDRA_HOME`, `GHIDRA_HEADLESS` | Chỉ cần khi dùng Ghidra cài ngoài dự án |
+
+Không đưa `.env` lên Git. Trên Vercel, đặt các biến này trong **Settings → Environment Variables → Production** rồi Redeploy.
+
+## Nhập dữ liệu
+
+- **Task ID hoặc link task công khai** (`app.any.run/tasks/<uuid>`): không cần API key. Ứng dụng đọc metadata công khai,
+  xác minh Task ID và quyền chia sẻ, rồi tải báo cáo HTML có cấu trúc của đúng task. Đây là giao diện công khai có thể thay đổi.
+- **Results.md / JSON** xuất từ Any.Run: luôn dùng được, kể cả tài khoản Free/Community.
+- **API key Any.Run**: lấy báo cáo qua API chính thức, gửi URL/tệp mới tới sandbox.
+- **Dữ liệu mẫu** Emotet / WannaCry / RedLine: **mô phỏng**, chỉ để trải nghiệm; không gửi đi tra threat intel.
+
+## AI Agent
+
+| | Agent diễn giải IOC (`analysis_agent.py`) | Agent điều tra hồ sơ (`case_agent.py`) |
+|---|---|---|
+| Đầu vào | Nhóm 8 IOC kèm hồ sơ mạng | Tóm tắt hồ sơ; agent tự gọi công cụ để đọc thêm |
+| Công cụ | `get_evidence`, `submit_findings` | `list_observables`, `get_evidence`, `search_evidence`, `get_process_tree`, `get_network_profiles`, `get_impact_analysis`, `get_mitre_candidates`, `lookup_mitre`, `get_family_intel`, `lookup_hash`, `list_actions`, `submit_assessment` |
+| Đầu ra | Vai trò, mức nguy cơ, ảnh hưởng, cần xác minh cho từng IOC | Chuỗi hành vi theo tactic ATT&CK, đánh giá ảnh hưởng, quyết định cho từng khuyến nghị, câu hỏi cần xác minh |
+| Giới hạn | 6 lượt mỗi nhóm, 120 IOC ưu tiên (mạng, tiến trình, registry) | 16 lượt |
+
+**Kiểm soát an toàn**
+- Chỉ công cụ chỉ đọc; công cụ ngoài danh sách cho phép không bao giờ chạy và được ghi lại.
+- Mọi nhận định phải dẫn evidence **đã đọc**; ID evidence, khuyến nghị hay IOC bịa ra đều bị từ chối.
+- Kỹ thuật ATT&CK phải còn hiệu lực trong danh mục v19.2 và đúng tactic; ID đã bị thu hồi được gợi ý ID thay thế (ví dụ T1562.001 → T1685).
+- Không đề xuất chặn domain kill-switch WannaCry hay hạ tầng hợp lệ.
+- Chuỗi trong báo cáo là dữ liệu không đáng tin; evidence giống chỉ dẫn cho AI được gắn cờ *possible prompt injection*.
+- Kết quả không hợp lệ được trả lại cho model sửa; hết lượt thì dùng chế độ quy tắc và ghi nhãn `fallback`.
+  Nhóm IOC lỗi chỉ ảnh hưởng nhóm đó (chế độ `partial`).
+
+Trường `mode` trong kết quả cho biết `llm`, `partial`, `fallback` hay `rule_based`. Chỉ dùng kết quả `llm` khi đánh giá chất lượng AI.
+
+## Cấu trúc mã nguồn
+
+| Module | Vai trò |
+|---|---|
+| `app.py` | Flask web và REST API |
+| `main.py`, `start.py` | CLI; khởi động kèm runtime Ghidra/JDK |
+| `anyrun_client.py`, `anyrun_public_client.py`, `anyrun_public_report.py` | Lấy báo cáo Any.Run (API, task công khai) và chuẩn hóa |
+| `markdown_importer.py`, `validation.py`, `analyzer.py` | Nhập Results.md/JSON, kiểm tra cấu trúc, mô hình dữ liệu |
+| `evidence.py` | Evidence bundle truy ngược nguồn; `PIPELINE_VERSION` |
+| `network_intel.py` | Hồ sơ và vai trò từng đích mạng; tra ThreatFox/URLhaus |
+| `impact_analysis.py` | Tác động cụ thể kèm evidence |
+| `remediation.py` | Biện pháp khắc phục riêng cho ca |
+| `incident_response.py`, `operational_guidance.py`, `response_policy.py` | Playbook mẫu NIST, hướng dẫn chung, ngoại lệ ứng cứu |
+| `analysis_agent.py`, `case_agent.py` | Hai AI Agent |
+| `analysis_pipeline.py` | Ghép toàn bộ pipeline, cache theo nội dung và cấu hình |
+| `mitre_mapping.py` | Danh mục ATT&CK 19.2, ánh xạ có evidence |
+| `ai_assistant.py`, `hash_lookup.py` | Chat hỗ trợ; tra MalwareBazaar |
+| `case_store.py`, `history_store.py`, `runtime_storage.py` | Quyết định duyệt (SQLite), lịch sử, lưu trữ theo trình duyệt trên Vercel |
+| `reporter.py`, `siem_exporter.py` | Xuất báo cáo và quy tắc SIEM |
+| `ghidra_analyzer.py` | Phân tích tĩnh bằng Ghidra headless + static triage |
+| `evaluation.py` | Đo trích xuất IOC (P/R/F1) theo manifest nhãn |
+
+## REST API chính
+
+| Endpoint | Chức năng |
+|---|---|
+| `POST /api/analyze` | Phân tích theo Task ID/link (API key hoặc báo cáo công khai) |
+| `POST /api/analyze/json` | Nhập Results.md / JSON |
+| `GET /api/demo/<emotet\|wannacry\|redline>` | Dữ liệu mẫu mô phỏng |
+| `GET /api/cases/<id>`, `POST /api/cases/<id>/review` | Xem hồ sơ; duyệt/từ chối/yêu cầu bổ sung khuyến nghị |
+| `POST /api/export`, `GET /api/exports/<file>` | Xuất PDF/HTML/Markdown/JSON/SIEM |
+| `POST /api/ai/remediation(/stream)` | Chat hỗ trợ (kèm tra mã băm) |
+| `GET /api/ai/status`, `GET /api/config` | Trạng thái AI; cấu hình công khai (không chứa key) |
+| `POST /api/submit/url`, `POST /api/submit/file` | Gửi mẫu tới Any.Run (cần API key) |
+| `GET /api/ghidra/status`, `POST /api/ghidra/analyze` | Phân tích tĩnh (chỉ bản chạy trên máy) |
+| `GET /api/history/local`, `POST /api/history` | Lịch sử hồ sơ; lịch sử task Any.Run |
+
+## Kiểm thử
 
 ```powershell
+.\.venv\Scripts\python.exe -m pytest          # 333 test, độ phủ 87%
 .\.venv\Scripts\python.exe evaluation.py --demo
-.\.venv\Scripts\python.exe -m pytest
 ```
 
-> Hệ thống phân tích mã độc thực tế từ **Any.Run Sandbox** và tự động sinh **Quy trình Phản ứng Sự cố (Incident Response Playbook)** theo chuẩn **NIST SP 800-61** kết hợp **MITRE ATT&CK Framework**.
+Test không gọi mạng thật (tra cứu threat intel bị tắt, model được giả lập). CI chạy trên GitHub Actions.
 
----
+## Triển khai Vercel
 
-## 📌 Mục tiêu chương trình
+Mỗi lần push lên `main`, Vercel tự deploy. `.vercelignore` loại `pyproject.toml` (chỉ chứa cấu hình lint) để Vercel cài thư viện từ
+`requirements.txt`. Bản web lưu hồ sơ tạm theo trình duyệt, không có Ghidra hay Ollama, và giới hạn mỗi request 60 giây.
+Chi tiết: [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 
-Khi một tổ chức bị nhiễm mã độc, đội ngũ bảo mật cần nhanh chóng:
-1. **Hiểu rõ mã độc** đang làm gì (hành vi, IOC, kỹ thuật tấn công)
-2. **Có ngay kế hoạch hành động** để ngăn chặn, loại bỏ và phục hồi
+## Giới hạn
 
-Chương trình lấy báo cáo Any.Run → chuẩn hóa evidence → phân tích IOC → sinh khuyến nghị IR để chuyên viên kiểm tra.
-Chạy app: run main.py
-Chạy LLM Ollama: "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" run llama3.1:8b
----
+- Dữ liệu là quan sát trong sandbox với tệp mồi: không chứng minh máy thật trong tổ chức đã nhiễm. Mọi biện pháp đều có bước xác minh trước.
+- Vai trò đích mạng và tác động được suy ra bằng quy tắc từ dữ liệu Any.Run; AI chỉ diễn giải thêm, không thay đổi verdict của sandbox.
+- Trang báo cáo công khai của Any.Run không có PPID; quan hệ cha–con suy ra từ tên tiến trình duy nhất được gắn nhãn `inferred`.
+- Kết quả AI phụ thuộc model và có thể khác nhau giữa các lần chạy; cần ghi rõ nhà cung cấp, model và ngày chạy khi báo cáo số liệu.
+- Lệnh trong khuyến nghị là mẫu tham khảo, cần chỉnh theo môi trường trước khi dùng.
 
-## 🗂️ Cấu trúc dự án
+## Tài liệu khác
 
-```
-Phan Tich Ma Doc/
-├── main.py                  # CLI entry point
-├── app.py                   # Web GUI (Flask server)
-├── anyrun_client.py         # Kết nối Any.Run API
-├── analyzer.py              # Phân tích & chuẩn hóa dữ liệu
-├── incident_response.py     # Sinh IR Playbook
-├── ghidra_analyzer.py       # Tích hợp Ghidra headless + static triage local
-├── reporter.py              # Xuất báo cáo terminal + file
-├── demo_data.py             # Dữ liệu mẫu Emotet (demo)
-├── templates/index.html     # Giao diện web
-├── static/style.css         # CSS dark theme
-├── static/app.js            # JavaScript frontend
-├── scripts/ghidra/          # Ghidra postScript export summary
-├── requirements.txt
-├── .env.example
-└── reports/                 # Thư mục báo cáo đầu ra
-```
-
----
-
-## ⚙️ Chi tiết chức năng từng module
-
-### 1. `anyrun_client.py` – Kết nối Any.Run API
-
-Module đóng vai trò **giao tiếp với Any.Run REST API**, xử lý xác thực và các loại request.
-
-| Hàm | Chức năng |
-|-----|-----------|
-| `AnyRunClient(api_key)` | Khởi tạo client, gắn API key vào header `Authorization` |
-| `get_task_report(uuid)` | Lấy báo cáo phân tích đầy đủ của một task theo UUID |
-| `get_task_iocs(uuid)` | Lấy danh sách IOC (IP, domain, hash, URL) của task |
-| `get_history(limit)` | Lấy lịch sử các task đã phân tích của tài khoản |
-| `submit_file(path)` | Upload file mẫu lên Any.Run để sandbox phân tích |
-| `submit_url(url)` | Gửi URL nghi ngờ lên Any.Run để sandbox phân tích |
-| `wait_for_task(uuid)` | Polling API đến khi task hoàn tất, trả về report |
-
-**Xử lý lỗi:** Phân biệt rõ các loại lỗi: `AnyRunAuthError` (sai API key), `AnyRunNotFoundError` (không tìm thấy task), `AnyRunRateLimitError` (vượt giới hạn tốc độ).
-
----
-
-### 2. `analyzer.py` – Phân tích & chuẩn hóa dữ liệu
-
-Module **parse JSON thô từ API** thành các data model có cấu trúc rõ ràng để các module khác sử dụng.
-
-**Data models:**
-
-| Model | Thông tin chứa |
-|-------|----------------|
-| `FileInfo` | Tên file, kích thước, MD5, SHA1, SHA256, loại file |
-| `ThreatInfo` | Verdict (Malicious/Suspicious/Clean), threat level 0-4, tên mã độc, tags, MITRE techniques |
-| `NetworkActivity` | Danh sách IP, domain, URL C2; HTTP requests; DNS queries |
-| `ProcessActivity` | Danh sách tiến trình, tiến trình bị inject, file dropped, registry keys, mutexes |
-| `IOCData` | Tổng hợp tất cả IOC: IP, domain, URL, hash, filename |
-| `MalwareAnalysisResult` | Kết hợp tất cả model trên + metadata phân tích |
-
-**Hàm chính:** `MalwareAnalyzer.parse_report(report_json, ioc_json)` → `MalwareAnalysisResult`
-
----
-
-### 3. `incident_response.py` – Sinh IR Playbook
-
-**Trung tâm** của hệ thống. Từ kết quả phân tích, module tự động tạo ra quy trình phản ứng sự cố theo **5 phase của NIST SP 800-61**.
-
-**Quy trình được sinh:**
-
-| Phase NIST | Nội dung hành động |
-|-----------|---------------------|
-| **Identification** | Xác nhận verdict, ghi lại hash, URL Any.Run |
-| **Containment** | Chặn C2 IP/domain tại firewall, kill tiến trình bị inject, vô hiệu hóa persistence |
-| **Eradication** | Xóa file dropped, dọn registry, quét Defender, kiểm tra scheduled tasks |
-| **Recovery** | Cập nhật Windows, reset credentials, bật lại bảo mật |
-| **Lessons Learned** | Viết báo cáo, cập nhật threat intel feed, cải thiện phòng thủ |
-
-**Xử lý MITRE ATT&CK tự động:** Với mỗi technique phát hiện, hệ thống thêm hành động đặc thù:
-
-| MITRE Technique | Hành động thêm |
-|-----------------|----------------|
-| T1566 – Phishing | Quarantine email, search mailbox Exchange/M365 |
-| T1055 – Process Injection | Dump memory với Volatility, procdump |
-| T1547 – Boot Persistence | Kiểm tra Autoruns, Run keys, Scheduled Tasks |
-| T1082/T1057 – Discovery | Đánh giá phạm vi xâm phạm, kiểm tra DLP logs |
-| T1486 – Ransomware | Cô lập khẩn cấp, backup memory, không tắt máy |
-
-**Mỗi `IncidentAction` bao gồm:**
-- `priority`: P1-Critical → P4-Low
-- `phase`: Phase NIST tương ứng
-- `title` + `description`: Mô tả hành động
-- `commands`: Lệnh PowerShell/CMD cụ thể để thực thi
-- `notes`: Ghi chú quan trọng
-
----
-
-### 4. `reporter.py` – Xuất báo cáo
-
-Chịu trách nhiệm **trình bày kết quả** theo 2 hình thức:
-
-**Terminal (Rich):**
-- `TerminalReporter.print_analysis()`: In bảng thông tin mã độc, MITRE, network đẹp có màu
-- `TerminalReporter.print_playbook()`: In từng bước IR theo phase, có syntax highlight cho lệnh
-
-**File:**
-- `ReportExporter.export_markdown()`: Báo cáo đầy đủ dạng `.md` (chia sẻ, in ấn)
-- `ReportExporter.export_json()`: Dữ liệu `.json` có cấu trúc (import vào SIEM/SOAR)
-
----
-
-### 5. `ghidra_analyzer.py` – Phân tích tĩnh bằng Ghidra
-
-Module này bổ sung lớp **static analysis / reverse engineering** cho kết quả dynamic analysis từ Any.Run:
-
-| Thành phần | Vai trò |
-|------------|---------|
-| Local static triage | Hash, entropy, file type, printable strings, URL/IP/domain/registry, API đáng ngờ |
-| Ghidra headless | Chạy `support/analyzeHeadless` để lấy executable format, language, function/import summary |
-| IR enrichment | Gợi ý bằng chứng và bước reverse engineering cần bổ sung vào playbook |
-
-Luồng khuyến nghị trong đồ án:
-
-```text
-Any.Run dynamic behavior  -> IOC/runtime TTP/process/network
-Ghidra static analysis    -> functions/imports/strings/entropy/static IOC
-IR Playbook               -> containment + hunting + eradication có bằng chứng sâu hơn
-```
-
-Nếu chưa cài Ghidra, endpoint vẫn trả kết quả static triage cơ bản và báo trạng thái `not_configured`.
-
----
-
-### 6. `app.py` – Web GUI (Flask Server)
-
-Backend phục vụ giao diện web. Expose các REST API endpoint:
-
-| Endpoint | Method | Chức năng |
-|----------|--------|-----------|
-| `GET /` | GET | Trả về trang web chính |
-| `/api/demo` | GET | Phân tích demo Emotet (không cần API key) |
-| `/api/analyze` | POST | Phân tích task UUID với API key |
-| `/api/submit/url` | POST | Submit URL lên Any.Run |
-| `/api/submit/file` | POST | Upload và submit file lên Any.Run |
-| `/api/ghidra/status` | GET | Kiểm tra cấu hình Ghidra headless |
-| `/api/ghidra/analyze` | POST | Phân tích tĩnh local bằng Ghidra/static triage |
-| `/api/history` | POST | Lấy lịch sử task của tài khoản |
-| `/api/export` | POST | Xuất báo cáo Markdown hoặc JSON ra file |
-
----
-
-### 7. `main.py` – CLI (Command Line Interface)
-
-Giao diện dòng lệnh với 2 chế độ: **interactive menu** và **tham số trực tiếp**.
-
-```bash
-python -X utf8 main.py                      # Interactive menu
-python -X utf8 main.py --demo               # Demo Emotet
-python -X utf8 main.py --task <UUID>        # Phân tích theo UUID
-python -X utf8 main.py --file <path>        # Submit file
-python -X utf8 main.py --url <url>          # Submit URL
-python -X utf8 main.py --history            # Xem lịch sử
-python -X utf8 main.py --no-export          # Chỉ in terminal, không lưu file
-```
-
----
-
-### 8. `demo_data.py` – Dữ liệu Demo
-
-Chứa dữ liệu JSON mô phỏng phân tích mã độc **Emotet** thực tế, bao gồm:
-- 12 MITRE ATT&CK techniques (T1566, T1055, T1547, T1486…)
-- 4 C2 IP addresses + 4 malicious domains
-- 3 HTTP C2 requests
-- 4 tiến trình (2 bị inject: `rundll32.exe`, `svchost.exe`)
-- 3 file dropped (payload DLL, giả svchost, LNK startup)
-- 3 registry persistence keys
-
----
-
-## 🖥️ Giao diện Web GUI
-
-Truy cập tại `http://localhost:5000` sau khi chạy `python app.py`.
-
-### Các trang chính:
-
-| Trang | Chức năng |
-|-------|-----------|
-| **Trang chủ** | Landing page giới thiệu luồng Any.Run + Ghidra + IR |
-| **Kết quả** | Dashboard hiển thị threat level, MITRE techniques, thông tin file, network activity, process tree |
-| **Phân tích** | Form nhập API key, chọn chế độ: Task UUID / Import Report / Submit URL / Submit File / Ghidra Local / Demo |
-| **IR Playbook** | Hiển thị toàn bộ quy trình IR theo phase, có lệnh thực thi copy-paste, nút export |
-| **IOC Blocklist** | Hiển thị tất cả IOC theo loại (IP/domain/hash/URL), có firewall block rules tự sinh |
-| **Lịch sử** | Xem danh sách các task đã phân tích trên tài khoản Any.Run |
-
----
-
-## 🚀 Cài đặt & Chạy
-
-### 1. Cài Python packages
-
-Yêu cầu:
-
-- Python 3.10+.
-- Git.
-- Ollama nếu muốn dùng AI Agent local.
-
-Windows PowerShell:
-
-```powershell
-git clone <repo-url>
-cd "Phan Tich Ma Doc"
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-CMD:
-
-```cmd
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-Linux/macOS:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 2. Tạo file cấu hình
-
-```bash
-cp .env.example .env
-```
-
-Trên Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Sửa `.env`:
-
-```env
-ANYRUN_API_KEY=your_anyrun_api_key_here
-AI_PROVIDER=ollama
-OLLAMA_ENABLED=1
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-OLLAMA_TIMEOUT=120
-OLLAMA_NUM_PREDICT=500
-```
-
-Không commit file `.env` lên GitHub.
-
-### 3. Cài Ghidra để phân tích tĩnh local (tùy chọn)
-
-Luồng khuyến nghị trên Windows: `python start.py`. Ghidra được chuẩn bị tại
-`tools/ghidra/ghidra_12.1.4_PUBLIC`, JDK tại `tools/java/jdk-21` và được ưu tiên tự nhận.
-Các cấu hình bên dưới chỉ cần khi muốn dùng một bộ Ghidra ngoài dự án.
-
-Tải Ghidra từ GitHub chính thức của NSA: https://github.com/NationalSecurityAgency/ghidra/releases
-
-Giải nén Ghidra, sau đó cấu hình `.env`:
-
-```env
-GHIDRA_HOME=C:\Tools\ghidra_<version>_PUBLIC
-GHIDRA_TIMEOUT=180
-```
-
-Hoặc trỏ trực tiếp tới headless launcher:
-
-```env
-GHIDRA_HEADLESS=C:\Tools\ghidra_<version>_PUBLIC\support\analyzeHeadless.bat
-```
-
-Trong Web GUI, vào **Phân tích → Ghidra Local**, upload mẫu cần reverse. Nếu Ghidra chưa cấu hình, hệ thống vẫn chạy static triage cơ bản để lấy hash, entropy, strings, URL/domain/IP/registry và API đáng ngờ.
-
-### 4. Cài Ollama model cho AI Agent
-
-Cài Ollama từ: https://ollama.com/download
-
-Sau đó pull model:
-
-```powershell
-ollama pull llama3.1:8b
-```
-
-Nếu Windows chưa nhận lệnh `ollama`, dùng đường dẫn đầy đủ:
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" pull llama3.1:8b
-```
-
-Máy yếu có thể dùng model nhẹ hơn:
-
-```powershell
-ollama pull llama3.2:3b
-```
-
-và đổi `.env`:
-
-```env
-OLLAMA_MODEL=llama3.2:3b
-```
-
-### 5. Train hoặc dùng sẵn model ML
-
-Repo có thể chứa sẵn `models/rf_threat_model.pkl`. Nếu chưa có, train lại:
-
-```bash
-python -X utf8 train_ml.py --synthetic 60
-```
-
-### 6. Chạy app
-
-```bash
-python app.py
-```
-
-Mở:
-
-```text
-http://localhost:5000
-```
-
-Chạy CLI demo:
-
-```bash
-python -X utf8 main.py --demo
-```
-
----
-
-## 🔑 Lấy API Key
-
-1. Đăng ký tại [app.any.run](https://app.any.run/)
-2. Vào **Profile → API and Limits**
-3. Copy API key → dán vào Web GUI hoặc file `.env`
-
-> Gói **Free** có giới hạn số task/tháng. Không cần key để chạy **Demo mode**.
-
----
-
-## 📤 Output
-
-Mỗi lần phân tích tạo ra 2 file trong `reports/`:
-
-| File | Mô tả |
-|------|-------|
-| `IR_Report_YYYYMMDD_HHMMSS.md` | Báo cáo Markdown đầy đủ, có thể in |
-| `IR_Report_YYYYMMDD_HHMMSS.json` | Dữ liệu JSON, import vào SIEM/SOAR |
-
----
-
-## 🔄 Luồng hoạt động tổng thể
-
-```
-[Any.Run Sandbox]
-      │ JSON (report + IOC)
-      ▼
-[anyrun_client.py]  ──fetch──►  Any.Run REST API
-      │
-      ▼
-[analyzer.py]       ──parse──►  MalwareAnalysisResult
-      │
-      ▼
-[incident_response.py] ──gen──► IncidentResponsePlaybook
-      │                          (NIST phases + MITRE mapping)
-      ├──► [reporter.py]   ──►  Terminal (Rich) + File (.md/.json)
-      └──► [app.py / JS]   ──►  Web Dashboard
-```
-
----
-
-*Dựa trên: NIST SP 800-61 Rev.2 | MITRE ATT&CK v14 | Any.Run Sandbox API v1*
-
-Viewed README.md:39-85
-
-Dưới đây là kịch bản thực tế chi tiết khi đã có API key:
-
----
-
-## 🎬 Kịch bản: Phát hiện email nghi ngờ chứa file độc hại
-
-### Bối cảnh
-> Nhân viên công ty nhận được email có file đính kèm `Invoice_Q4.doc`. SOC nhận alert → cần phân tích ngay.
-
----
-
-### Bước 1 – Chuẩn bị
-
-```bash
-# Chạy web GUI
-python app.py
-# Mở trình duyệt → http://localhost:5000
-```
-
-Hoặc dùng CLI:
-```bash
-python -X utf8 main.py
-```
-
----
-
-### Bước 2 – Nhập API Key
-
-**Trên Web:**
-1. Vào trang **Phân tích** (sidebar trái)
-2. Dán API key vào ô **Any.Run API Key**
-3. Nhấn **Lưu Key** (key được lưu vào localStorage, không cần nhập lại lần sau)
-
-**Hoặc dùng `.env`:**
-```bash
-copy .env.example .env
-# Mở .env, sửa:
-ANYRUN_API_KEY=abc123xyz_your_real_key
-```
-
----
-
-### Bước 3 – Lựa chọn cách phân tích
-
-#### Tình huống A: Đã có Task UUID (ai đó đã chạy trên Any.Run)
-
-**Web:** Tab **Task UUID** → dán UUID → **Phân tích**
-
-```bash
-# CLI:
-python -X utf8 main.py --task 550e8400-e29b-41d4-a716-446655440000
-```
-
-#### Tình huống B: Có file mẫu cần phân tích (phổ biến nhất)
-
-**Web:** Tab **Submit File** → kéo thả `Invoice_Q4.doc` → **▶ Submit & Phân tích ngay**
-
-→ Progress bar hiện lên, chờ 1-3 phút, kết quả tự hiện.
-
-```bash
-# CLI:
-python -X utf8 main.py --file "C:\Quarantine\Invoice_Q4.doc"
-```
-
-#### Tình huống C: Có URL nghi ngờ trong log
-
-**Web:** Tab **Submit URL** → nhập URL → **▶ Submit & Phân tích ngay**
-
-```bash
-# CLI:
-python -X utf8 main.py --url "http://evil-site.ru/download/payload.exe"
-```
-
-#### Tình huống D: Xem lại các task đã phân tích gần đây
-
-**Web:** Trang **Lịch sử** → nhấn **Xem lịch sử** → click **Phân tích** trên task bất kỳ
-
-```bash
-# CLI:
-python -X utf8 main.py --history
-```
-
----
-
-### Bước 4 – Đọc kết quả trên Dashboard
-
-Sau khi phân tích xong, dashboard hiện:
-
-| Thẻ | Thông tin cần chú ý |
-|-----|---------------------|
-| **Threat Assessment** | Verdict `Malicious`, Threat Level `2/4`, tên mã độc `Emotet` |
-| **Thông tin File** | SHA256 → copy paste kiểm tra VirusTotal |
-| **MITRE ATT&CK** | Xem kỹ các technique như T1055 (Injection), T1486 (Ransomware) |
-| **Hoạt động mạng** | Tab **IPs** → danh sách C2 cần chặn ngay |
-| **Tiến trình** | File nào bị drop, registry key nào bị thêm |
-
----
-
-### Bước 5 – Thực hiện IR Playbook
-
-Vào trang **IR Playbook**:
-
-1. Đọc **tóm tắt mức độ** và **biện pháp ưu tiên** ở đầu trang
-2. Mở từng **Phase** (click để mở/đóng)
-3. **Copy lệnh** từ code block → chạy trực tiếp trên máy bị nhiễm
-
-Ví dụ lệnh được sinh tự động:
-```powershell
-# Phase Containment - Chặn C2:
-netsh advfirewall firewall add rule name="Block_185.220.101.45" dir=out action=block remoteip=185.220.101.45
-
-# Phase Eradication - Xóa file độc:
-Remove-Item -Force "C:\Users\Admin\AppData\Local\Temp\payload.dll"
-
-# Phase Eradication - Xóa persistence key:
-reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WindowsUpdater" /f
-```
-
----
-
-### Bước 6 – Lấy IOC để chặn toàn mạng
-
-Vào trang **IOC Blocklist**:
-
-- Nhấn **📋 Copy tất cả** → dán vào firewall/SIEM
-- Dùng block **Firewall Rules** được sinh sẵn để chặn hàng loạt
-- Nhấn **⬇ Export JSON** → import vào SIEM (Splunk, ELK, Wazuh...)
-
----
-
-### Bước 7 – Xuất báo cáo
-
-Trên trang **IR Playbook**:
-- **⬇ Markdown** → gửi email cho quản lý / lưu hồ sơ
-- **⬇ JSON** → import vào hệ thống SOAR
-- **📁 Mở Folder** → mở thư mục `reports/` xem file vừa xuất
-
-```bash
-# CLI - xuất cả 2 định dạng tự động:
-python -X utf8 main.py --task <UUID>
-# → Tạo reports/IR_Report_20260507_135400.md
-# → Tạo reports/IR_Report_20260507_135400.json
-```
-
----
-
-### Sơ đồ tóm tắt kịch bản
-
-```
-Phát hiện file nghi ngờ
-        │
-        ▼
-  Chọn phương thức
-  ┌─────┬──────┬─────┐
-  │UUID │ File │ URL │
-  └──┬──┴──┬───┴──┬──┘
-     │     │      │
-     └──────▼──────┘
-    Any.Run Sandbox
-    (1-3 phút phân tích)
-        │
-        ▼
-   Dashboard kết quả
-   ├─ Threat level
-   ├─ MITRE ATT&CK
-   └─ C2 IP/Domain
-        │
-        ▼
-   IR Playbook
-   ├─ Containment → Chặn C2
-   ├─ Eradication → Xóa malware
-   └─ Recovery → Hardening
-        │
-        ▼
-   Export báo cáo (.md / .json)
-   → Gửi quản lý / nạp SIEM
-```
-
-> **Lưu ý thực tế:** Any.Run gói Free giới hạn ~14 task/tháng. Để demo không giới hạn → dùng nút **Demo Emotet** (không tốn quota).
-
----
-
-## Luu y quan trong cho tai khoan Any.Run Free/Community
-
-Luong API trong chuong trinh duoc giu nhu mot che do nang cao. Voi tai khoan Any.Run Free/Community, cach bam de va kha thi hon la:
-
-1. Phan tich file/URL truc tiep tren giao dien web Any.Run.
-2. Ghi lai public task URL, verdict, IOC, MITRE ATT&CK, process/network behavior.
-3. Tai file Results `.md`. Neu tai khoan cho phep export JSON summary/IOC thi co the dung JSON.
-4. Import vao tool bang:
-
-```bash
-python -X utf8 main.py --report-json Results.md
-```
-
-Hoac dung Web GUI -> tab **Import Report**.
-
-Neu Any.Run chi cho copy IOC/hash tren giao dien, dan phan do vao o **Thong tin copy them tu Any.Run** khi import. CLI co the luu phan copy vao file `.txt` va chay:
-
-```bash
-python -X utf8 main.py --report-json Results.md --notes copied_iocs.txt
-```
-
-Neu khong co IOC JSON rieng, chuong trinh se tu suy ra IOC tu Results markdown/JSON summary: network connections, HTTP/DNS, hash, filename va MITRE ID neu co. File Get Sample `.bin` la mau ma doc/doi tuong phan tich, khong dung de import vao tool nay va khong nen mo/chay tren may that. Xem them tai lieu dinh huong do an tai `DO_AN_FREE_ANYRUN_IR.md`.
-
----
-
-## Train ML khi tai khoan Any.Run bi gioi han
-
-`train_ml.py` khong con chi tao du lieu gia lap. Script se gom du lieu theo thu tu:
-
-1. `data/ml_training_seed.json`: seed dataset da chuan hoa 11 feature hanh vi.
-2. Demo Any.Run noi bo: Emotet, WannaCry, RedLine.
-3. `reports/analysis_history.json`: cac lan import/phan tich that ma app da luu.
-4. `--synthetic N`: du lieu synthetic bo sung neu can can bang lop.
-
-Train model:
-
-```bash
-python -X utf8 train_ml.py --synthetic 60
-```
-
-Output:
-
-```text
-models/rf_threat_model.pkl
-models/rf_threat_model.meta.json
-```
-
-Luu y: dataset seed nay la bootstrap cho do an va demo IR, khong phai benchmark hoc thuat. Khi co them Any.Run Results `.md`/JSON public hoac report tu lich su local, hay import vao app de `analysis_history.json` lon dan roi train lai.
-
----
-
-## Cau hinh AI Agent voi Ollama
-
-AI Agent chi tra loi trong pham vi Incident Response/malware. Cau hoi ngoai pham vi se bi chan boi scope guardrail.
-
-Neu muon dung Ollama local:
-
-```bash
-ollama pull llama3.1:8b
-```
-
-Trong `.env`:
-
-```env
-AI_PROVIDER=ollama
-AI_TEMPERATURE=0.25
-AI_MAX_TOKENS=1100
-AI_TIMEOUT=45
-AI_RETRIES=2
-AI_CONTEXT_LIMIT=12000
-OLLAMA_ENABLED=1
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-OLLAMA_TIMEOUT=120
-OLLAMA_NUM_PREDICT=700
-```
-
-Neu muon dung OpenAI hoac endpoint OpenAI-compatible:
-
-```env
-AI_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_API_BASE=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
-```
-
-Backend co endpoint `GET /api/ai/status` de kiem tra provider, model, context limit va retry config ma khong lo lo API key. Khi LLM that loi hoac timeout, app tu fallback ve Local assistant de demo khong bi dung dot ngot.
-
-Sau khi doi `.env`, restart Flask server de app nhan cau hinh moi.
-
----
-
-## Checklist phat trien prototype do an
-
-Trang thai uu tien hien tai: tap trung lam luong demo chay tot, co dau ra ro rang de trinh bay.
-
-### Luong demo nen dung khi bao cao
-
-1. Chay server:
-
-```powershell
-python app.py
-```
-
-2. Mo Web GUI tai `http://127.0.0.1:5000`.
-3. Bam **Demo Emotet**, **Demo WannaCry** hoac **Demo RedLine** neu khong muon ton quota Any.Run.
-4. Kiem tra cac trang:
-   - **Tong quan**: threat level, MITRE, file, network, process.
-   - **IR Playbook**: cac buoc phan ung su co theo NIST.
-   - **IOC Blocklist**: IOC va lenh chan nhanh.
-5. Xuat bao cao:
-   - `Markdown`, `HTML`, `PDF`, `JSON` cho bao cao.
-   - `IOC CSV`, `Splunk SPL`, `Elastic KQL`, `Sigma` cho SIEM/hunting.
-6. Mo thu muc `reports/` de lay file dau ra.
-
-### SIEM export prototype
-
-Tinh nang SIEM trong ban prototype khong ket noi truc tiep den Splunk/ELK. Thay vao do, tool sinh cac artifact co the copy/import vao he thong:
-
-| Dinh dang | File | Muc dich |
-|-----------|------|----------|
-| IOC CSV | `SIEM_csv_*.csv` | Feed IOC don gian cho Excel, SIEM, SOAR hoac script noi bo |
-| Splunk SPL | `SIEM_splunk_*.spl` | Cau lenh search/hunt tren Splunk |
-| Elastic KQL | `SIEM_elastic_*.kql` | Cau query cho Kibana/Elastic Security |
-| Sigma | `SIEM_sigma_*.yml` | Rule hunting experimental co the chuyen doi sang SIEM khac |
-
-Day la cach phu hop voi do an/prototype: de demo, de kiem thu, khong phu thuoc moi truong Splunk/ELK that.
-
-### Lenh kiem thu truoc khi nop/demo
-
-```powershell
-python -m black reporter.py app.py siem_exporter.py tests
-python -m flake8 validation.py anyrun_client.py app.py reporter.py siem_exporter.py tests
-python -m pytest
-```
-
-Neu tat ca test pass, prototype da du on de demo luong chinh.
-
-### Huong phat trien tiep theo
-
-- Luu lich su bang SQLite thay cho `reports/analysis_history.json`.
-- Them bo ngon ngu `vi/en` cho label giao dien va report.
-- Tao Dockerfile de chay nhanh tren may khac.
-- Ket noi that den Splunk/Elastic bang API sau khi da co moi truong SIEM.
-- Bo sung them report mau benign/suspicious de demo truong hop it du lieu.
+- [docs/THESIS_IMPLEMENTATION.md](docs/THESIS_IMPLEMENTATION.md): đối chiếu đề cương, hướng dẫn demo và thực nghiệm
+- [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md): bản web và phạm vi
+- [docs/LOCAL_CHAT.md](docs/LOCAL_CHAT.md): chat AI chạy trên máy với Ollama
+- [docs/HASH_LOOKUP.md](docs/HASH_LOOKUP.md): tra cứu mã băm trong chat
+- [tools/README.md](tools/README.md): runtime Ghidra/JDK trong dự án
