@@ -34,6 +34,7 @@ async function refreshChatStatus() {
       const status=await (await fetch('/api/ai/local-status')).json();
       el.textContent=status.data.ready?'AI trên máy · '+j.data.ollama_model:'AI trên máy chưa sẵn sàng · Kiểm tra Ollama';
     } else el.textContent=j.data.provider==='local'||!j.data.openai_configured?'Hỗ trợ theo quy tắc · Chưa có mô hình AI kết nối':'AI đã cấu hình · '+j.data.openai_model;
+    if(j.data.hash_lookup_configured)el.textContent+=' · Có tra cứu mã băm';
   } catch(_){el.textContent='Chưa kiểm tra được kết nối AI';}
 }
 function clearChat() {stopAI(false);chatCaseId=null;if(G.data)updateChatCase(G.data);else document.getElementById('chat-messages').innerHTML='<div id="ai-answer" class="chat-welcome">Mở một hồ sơ để hỏi về kết quả và biện pháp xử lý.</div>';}

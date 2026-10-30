@@ -719,7 +719,8 @@ def ai_remediation():
     body = _json_body()
     question = body.get("question", "")
     data = chat_payload(body)
-    if not data:
+    from hash_lookup import lookup_requested
+    if not data and not lookup_requested(question):
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
     try:
         return jsonify({"ok": True, **answer_remediation(question, data)})
@@ -733,7 +734,8 @@ def ai_remediation_stream():
     body = _json_body()
     question = body.get("question", "")
     data = chat_payload(body)
-    if not data:
+    from hash_lookup import lookup_requested
+    if not data and not lookup_requested(question):
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
 
     def generate():

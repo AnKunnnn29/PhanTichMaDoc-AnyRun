@@ -19,6 +19,6 @@ Giao diện hướng người dùng qua bốn bước: nhập dữ liệu, đọ
 
 `vercel.json` dùng Flask, Python 3.12 và giới hạn mỗi request 60 giây. `.vercelignore` loại dữ liệu cá nhân, mẫu, runtime local và các tệp kiểm thử. Cấu hình môi trường riêng từng project; không đưa `.env` lên hosting.
 
-Bản đầu được đóng gói từ các module Python, `static/`, `templates/` và `data/` vào thư mục riêng trước khi triển khai bằng Vercel CLI. Mã nguồn trong workspace chưa được đẩy lên GitHub. Thay đổi trong workspace không tự xuất hiện trên Vercel cho đến lần deploy tiếp theo.
+Bản triển khai được đóng gói từ các module Python, `static/`, `templates/` và `data/` vào thư mục riêng trước khi triển khai bằng Vercel CLI. Mã nguồn được lưu trên nhánh `main` của GitHub. Việc đẩy mã nguồn lên GitHub chưa tự triển khai lên Vercel; thay đổi chỉ xuất hiện trên website sau lần deploy tiếp theo.
 
 Để triển khai sử dụng thực tế lâu dài, cần thay SQLite/JSON/thư mục tạm bằng cơ sở dữ liệu và object storage bền vững, cùng đăng nhập và phân quyền. Ghidra cần worker hoặc máy chủ riêng.

@@ -1237,7 +1237,9 @@ function stopAI(showToast = true) {
 }
 
 async function askAI(question = '') {
-  if (!G.data) return toast('Chưa có dữ liệu phân tích để hỏi AI', 'err');
+  const questionText=(question || document.getElementById('ai-question').value || '').trim();
+  const hasHash=/(?:^|[^a-z0-9])(?:[a-f0-9]{64}|[a-f0-9]{40}|[a-f0-9]{32})(?![a-z0-9])/i.test(questionText);
+  if (!G.data && !hasHash) return toast('Mở hồ sơ hoặc nhập SHA256, SHA1 hay MD5 để tra cứu.', 'err');
   stopAI(false);
   const requestId = ++G.aiRequestId;
   const controller = new AbortController();
@@ -1254,6 +1256,7 @@ async function askAI(question = '') {
   answerEl.innerHTML = '<div class="ai-bubble"><span class="typing-dots"><span></span><span></span><span></span></span>AI đang phân tích dữ liệu sự cố...</div>';
 
   const modeLabel = {
+    hash_lookup: 'Tra cứu mã băm',
     deepseek: 'DeepSeek',
     openai: 'OpenAI',
     ollama: 'AI trên máy · Ollama',
@@ -1268,7 +1271,11 @@ async function askAI(question = '') {
     if (G.aiRequestId !== requestId) return;
     const label = modeLabel[meta.mode] || 'Local assistant';
     const warningHtml = meta.warning ? `<div class="ai-warning">${esc(meta.warning)}</div>` : '';
-    answerEl.innerHTML = `<div class="ai-mode">${label}${latencyMs === undefined ? ' · Đang trả lời' : ''}</div>${warningHtml}<div class="ai-bubble ai-prose">${formatAssistantAnswer(answer || 'Đang chuẩn bị câu trả lời...')}</div>`;
+    const sources=(Array.isArray(meta.sources)?meta.sources:[]).slice(0,3).filter(url=>typeof url==='string' && safeLink(url)!=='#');
+    const sourceHtml=sources.map(url=>`<p><a href="${safeLink(url)}" target="_blank" rel="noopener noreferrer">Xem bản ghi nguồn ↗</a></p>`).join('');
+    const lookupHash=meta.lookup_hash||meta.lookup?.hash||'';
+    const hashHtml=meta.mode==='hash_lookup' && /^[a-f0-9]{32,64}$/i.test(lookupHash)?`<p style="overflow-wrap:anywhere;font-size:12px">Mã băm tra cứu: ${esc(lookupHash)}</p>`:'';
+    answerEl.innerHTML = `<div class="ai-mode">${label}${latencyMs === undefined ? ' · Đang trả lời' : ''}</div>${hashHtml}${warningHtml}<div class="ai-bubble ai-prose">${formatAssistantAnswer(answer || 'Đang chuẩn bị câu trả lời...')}</div>${sourceHtml}`;
     answerEl.dataset.answer = answer;
     const messages=document.getElementById('chat-messages');
     messages.scrollTop=messages.scrollHeight;

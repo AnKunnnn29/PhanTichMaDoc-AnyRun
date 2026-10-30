@@ -324,7 +324,9 @@ class LLMConfig:
 
 def get_ai_status() -> dict[str, Any]:
     config = _llm_config()
+    from hash_lookup import configured
     return {
+        "hash_lookup_configured": configured(),
         "provider": config.provider,
         "openai_configured": bool(config.openai_api_key),
         "openai_model": config.openai_model,
@@ -1508,6 +1510,10 @@ def answer_remediation(question: str, analysis_payload: dict[str, Any]) -> dict[
     if not question:
         question = "Hãy chủ động đánh giá sự cố này và đề xuất bước xử lý tiếp theo."
 
+    from hash_lookup import lookup_requested, answer_lookup
+    if lookup_requested(question):
+        return {**answer_lookup(question,analysis_payload),'latency_ms':int((time.perf_counter()-started)*1000)}
+
     if not _is_ir_question(question):
         return {
             "mode": "guardrail",
@@ -1559,6 +1565,14 @@ def answer_remediation_stream(question: str, analysis_payload: dict[str, Any]) -
     question = (question or "").strip()
     if not question:
         question = "HĂ£y chá»§ Ä‘á»™ng Ä‘Ă¡nh giĂ¡ sá»± cá»‘ nĂ y vĂ  Ä‘á» xuáº¥t bÆ°á»›c xá»­ lĂ½ tiáº¿p theo."
+
+    from hash_lookup import lookup_requested, answer_lookup
+    if lookup_requested(question):
+        result=answer_lookup(question,analysis_payload)
+        yield {'event':'meta','mode':result['mode'],'model':result['model'],'sources':result['sources'],'lookup_status':result['lookup']['status'],'lookup_hash':result['lookup']['hash']}
+        yield {'event':'delta','text':result['answer']}
+        yield {'event':'done','latency_ms':int((time.perf_counter()-started)*1000)}
+        return
 
     if not _is_ir_question(question):
         yield from _stream_result("guardrail", "scope-guardrail", started, iter([_out_of_scope_answer(question)]))

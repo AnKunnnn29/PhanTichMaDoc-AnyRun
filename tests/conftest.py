@@ -33,6 +33,7 @@ def isolate_runtime_state(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_PROVIDER", "rules")
     monkeypatch.setenv("AI_PROVIDER", "local")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-placeholder")
+    monkeypatch.delenv("MALWAREBAZAAR_AUTH_KEY", raising=False)
 
 
 @pytest.fixture
