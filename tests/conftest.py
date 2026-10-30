@@ -34,6 +34,9 @@ def isolate_runtime_state(monkeypatch, tmp_path):
     monkeypatch.setenv("AI_PROVIDER", "local")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-placeholder")
     monkeypatch.delenv("MALWAREBAZAAR_AUTH_KEY", raising=False)
+    monkeypatch.delenv("ABUSECH_AUTH_KEY", raising=False)
+    # CLI tests start main.py, which reloads .env; this keeps them off the network.
+    monkeypatch.setenv("NETWORK_INTEL_LOOKUPS", "0")
 
 
 @pytest.fixture

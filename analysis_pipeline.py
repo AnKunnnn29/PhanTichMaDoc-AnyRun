@@ -14,6 +14,7 @@ from validation import validate_report
 from mitre_mapping import map_evidence, catalogue
 from response_policy import exclusions
 from operational_guidance import apply_guidance
+from network_intel import build_network_profiles, enrich_network_profiles
 
 
 def analysis_key(report, iocs) -> str:
@@ -71,7 +72,10 @@ def run_pipeline(report, iocs, source="manual"):
     result.iocs.urls = [o["value"] for o in valid if o["type"] == "url"]
     result.iocs.file_hashes = [{o["type"]: o["value"]} for o in valid if o["type"] in {"md5", "sha1", "sha256"}]
     result.iocs.filenames = [o["value"] for o in valid if o["type"] == "file"]
-    agent = investigate(bundle)
+    network_profiles = build_network_profiles(bundle)
+    # Simulated demo indicators are not worth (or safe to imply as) real intel lookups.
+    threat_intel = enrich_network_profiles(network_profiles, enabled=not str(source).startswith("demo"))
+    agent = investigate(bundle, network_profiles)
     behavior = build_behavior(bundle)
     mappings, catalog_meta = map_evidence(bundle)
     result.threat_info.mitre_techniques = [{"id": m["technique_id"], "name": m["name"],
@@ -79,6 +83,15 @@ def run_pipeline(report, iocs, source="manual"):
         for m in {m["technique_id"]: m for m in mappings if m["catalog_validation"] == "active"}.values()]
     playbook = IncidentResponseGenerator().generate(result)
     excluded = exclusions(bundle)
+    listed = {row["value"] for row in excluded}
+    # Whitelisted OS/CDN traffic and sandbox-local addresses are context, not blocking targets.
+    # Unrated destinations are watched in logs, not blocked, until there is evidence of their role.
+    excluded += [{"type": p["type"], "value": p["value"],
+                  "reason": p["meaning"] + (" Theo dõi trong log; chưa đủ bằng chứng để chặn." if p["response"] == "monitor"
+                                            else " Không đưa vào danh sách chặn."),
+                  "evidence_ids": p["evidence_ids"], "source_url": ""}
+                 for p in network_profiles.values()
+                 if p["response"] in {"do_not_block", "ignore", "monitor"} and p["value"] not in listed]
     for field, kind in (("ip_addresses", "ip"), ("domains", "domain"), ("urls", "url")):
         denied = {o["value"] for o in excluded if o["type"] == kind}
         playbook.ioc_blocklist[field] = [v for v in playbook.ioc_blocklist.get(field, []) if v not in denied]
@@ -111,12 +124,13 @@ def run_pipeline(report, iocs, source="manual"):
     case_agent = investigate_case(bundle, behavior, mappings, [
         {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
          "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids}
-        for a in playbook.actions], threat)
+        for a in playbook.actions], threat, network_profiles)
     apply_case_plan(playbook.actions, case_agent)
     result.research = {
         "case_id": "case-" + uuid.uuid4().hex, "analysis_fingerprint": analysis_key(report, iocs),
         "pipeline_version": PIPELINE_VERSION, "source": source,
-        "evidence_bundle": bundle, "agent_analysis": agent, "case_agent": case_agent, "behavior_chain": behavior, "mitre_mappings": mappings,
+        "evidence_bundle": bundle, "agent_analysis": agent, "case_agent": case_agent, "behavior_chain": behavior,
+        "network_profiles": network_profiles, "threat_intel_status": threat_intel, "mitre_mappings": mappings,
         "mitre_catalog": catalog_meta,
         "response_exclusions": excluded,
         "analysis_status": "insufficient_data" if result.threat_info.verdict == "Unknown" else "completed_with_review_required",
@@ -144,6 +158,14 @@ def research_markdown(payload: dict) -> str:
              "| IOC ID | Vai trò dự kiến | Nguy cơ giả định | Diễn giải | Ảnh hưởng | Cần xác minh | Evidence |", "|---|---|---|---|---|---|---|"]
     for row in agent["findings"]:
         lines.append("| " + " | ".join(safe(row[k]) for k in ("ioc_id", "role", "severity", "explanation", "potential_impact", "verification_needed", "evidence_ids")) + " |")
+    profiles = [p for p in (payload.get("network_profiles") or {}).values()
+                if p["role"] not in {"benign_infrastructure", "local_network"}]
+    if payload.get("network_profiles"):
+        lines += ["", "### Phân tích đích mạng", "",
+                  f"{len(payload['network_profiles']) - len(profiles)} đích là hạ tầng hợp lệ/mạng nội bộ sandbox, không đưa vào danh sách chặn.",
+                  "", "| Đích | Vai trò | Mức | Diễn giải | Ảnh hưởng | Cần xác minh |", "|---|---|---|---|---|---|"]
+        for p in profiles:
+            lines.append("| " + " | ".join(safe(p[k]) for k in ("value", "role", "severity", "summary", "impact", "verify")) + " |")
     case = payload.get("case_agent")
     if case:
         a = case["assessment"]

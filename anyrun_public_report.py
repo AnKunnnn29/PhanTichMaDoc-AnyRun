@@ -418,8 +418,18 @@ def _normalize_threat_classes(general: dict) -> list[dict]:
 
 
 def _normalize_malware_config(config: dict) -> list[str]:
-    # Extracted configs vary by family; keep them as bounded JSON text for evidence and the agent.
-    return [json.dumps(item, ensure_ascii=False)[:4000] for item in (config or {}).get("familiesMalconfs", []) or []][:10]
+    """Extracted configs (C2, botnet, keys) as bounded JSON text; the bulky process block is dropped."""
+    rows = []
+    for family in (config or {}).get("familiesMalconfs", []) or []:
+        if not isinstance(family, dict):
+            continue
+        nested = [c for pm in family.get("processesMalconfs", []) or [] if isinstance(pm, dict)
+                  for c in pm.get("malconfs", []) or [] if isinstance(c, dict)]
+        for item in nested or [family]:
+            rows.append(json.dumps({"family": item.get("family") or family.get("family", ""), "pid": item.get("processPID"),
+                                    "config": item.get("config", {k: v for k, v in item.items() if k != "processesMalconfs"})},
+                                   ensure_ascii=False)[:4000])
+    return rows[:10]
 
 
 def _behavior_to_mitre(groups: list[dict]) -> list[dict]:

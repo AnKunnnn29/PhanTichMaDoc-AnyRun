@@ -30,6 +30,7 @@ STAGE_ORDER = ["initial-access", "execution", "persistence", "privilege-escalati
                "defense-impairment", "credential-access", "discovery", "lateral-movement", "collection",
                "command-and-control", "exfiltration", "impact"]
 DECISIONS = {"recommend", "defer", "not_applicable"}
+C2_ROLES = {"config_c2", "known_c2", "malware_distribution", "malicious_reported", "payload_download", "unverified_destination"}
 SEVERITIES = {"unknown", "low", "medium", "high", "critical"}
 INJECTION_RE = re.compile(r"ignore (all |the )?(previous|above) instructions|system prompt|submit_assessment|"
                           r"bỏ qua (mọi |các )?(hướng dẫn|chỉ dẫn)|you are now|<\s*/?\s*tool|\"tool\"\s*:", re.IGNORECASE)
@@ -43,6 +44,7 @@ TOOLS_HELP = {
     "get_family_intel": "args {name: tên họ mã độc} - ghi chú tham khảo nội bộ, không phải evidence",
     "lookup_hash": "args {hash: md5/sha1/sha256 có trong hồ sơ} - tra cứu bên ngoài chỉ đọc, không phải evidence",
     "list_actions": "args {} - các khuyến nghị playbook cần đánh giá",
+    "get_network_profiles": "args {role?: vai trò, limit?: <=20} - hồ sơ từng IP/domain/URL: tiến trình, port, uy tín, threat intel, vai trò",
     "submit_assessment": "args {assessment: {...}} - nộp kết quả cuối cùng",
 }
 ASSESSMENT_SCHEMA = {
@@ -69,8 +71,9 @@ def _clip(value, limit=600):
 class CaseTools:
     """Read-only views of one case. Records which evidence the model has actually read."""
 
-    def __init__(self, bundle, behavior, mappings, actions, threat):
+    def __init__(self, bundle, behavior, mappings, actions, threat, profiles=None):
         self.bundle, self.behavior, self.mappings, self.actions, self.threat = bundle, behavior, mappings, actions, threat
+        self.profiles = profiles or {}
         self.evidence = {e["id"]: e for e in bundle["evidence"]}
         self.observables = [o for o in bundle["observables"] if o["type"] != "mitre"]
         self.hashes = {o["value"] for o in self.observables if o["type"] in {"md5", "sha1", "sha256"} and o["valid"]}
@@ -147,6 +150,19 @@ class CaseTools:
             self.external.append({"tool": "lookup_hash", "hash": value, "status": result["status"],
                                   "source_url": result.get("source_url", "")})
             return {"reference_only": True, **{k: v for k, v in result.items() if k != "retrieved_at"}}
+        if name == "get_network_profiles":
+            role, limit = args.get("role"), min(int(args.get("limit", 20)), 20)
+            rows = [p for p in self.profiles.values() if not role or p["role"] == role]
+            rows.sort(key=lambda p: (p["role"] in {"benign_infrastructure", "local_network"}, p["role"]))
+            counts = {}
+            for p in self.profiles.values():
+                counts[p["role"]] = counts.get(p["role"], 0) + 1
+            return {"role_counts": counts, "profiles": [
+                {**{k: p[k] for k in ("ioc_id", "type", "value", "role", "summary", "ports", "processes", "reputation", "response")},
+                 "threat_intel": [i for i in p["threat_intel"] if i.get("found")],
+                 # A few source rows come with each profile so the agent can cite what it actually read.
+                 "evidence": [self._row(self.evidence[i]) for i in p["evidence_ids"][:2] if i in self.evidence]}
+                for p in rows[:max(limit, 1)]]}
         if name == "list_actions":
             return {"actions": [{k: a.get(k) for k in ("id", "title", "phase", "category", "priority", "response_profile", "objective")}
                                 for a in self.actions]}
@@ -253,10 +269,18 @@ def baseline_assessment(tools: CaseTools) -> dict:
         row["evidence_ids"] += [i for i in m["evidence_ids"] if i not in row["evidence_ids"]]
         if m["origin"] == "source_report":
             row["assessment_status"] = "reported"
-    network = [e["id"] for e in tools.bundle["evidence"] if e["type"] in {"ip", "domain", "url"}
-               and not is_protected_destination(e["value"])][:5]
-    if network and "command-and-control" not in chain:
-        chain["command-and-control"] = {"stage": "command-and-control", "summary": "", "evidence_ids": network,
+    if tools.profiles:
+        # Only destinations whose role points at attacker infrastructure feed the C2 stage.
+        c2 = [i for p in tools.profiles.values() if p["role"] in C2_ROLES for i in p["evidence_ids"][:2]][:10]
+        spread = [i for p in tools.profiles.values() if p["role"] == "smb_propagation" for i in p["evidence_ids"][:1]][:10]
+        if spread and "lateral-movement" not in chain:
+            chain["lateral-movement"] = {"stage": "lateral-movement", "summary": "", "evidence_ids": spread,
+                                         "mitre": [], "assessment_status": "hypothesis"}
+    else:
+        c2 = [e["id"] for e in tools.bundle["evidence"] if e["type"] in {"ip", "domain", "url"}
+              and not is_protected_destination(e["value"])][:5]
+    if c2 and "command-and-control" not in chain:
+        chain["command-and-control"] = {"stage": "command-and-control", "summary": "", "evidence_ids": c2,
                                         "mitre": [], "assessment_status": "hypothesis"}
     for row in chain.values():
         row["summary"] = (f"{len(row['evidence_ids'])} evidence liên quan giai đoạn {row['stage']}"
@@ -300,7 +324,9 @@ def _opening(tools: CaseTools):
                      "threat_level": tools.threat.get("threat_level"), "tags": tools.threat.get("tags", [])[:10]},
             "observable_counts": counts, "observable_types": sorted(OBSERVABLE_TYPES), "action_count": len(tools.actions),
             "mitre_candidate_count": len(tools.mappings),
-            "hint": "Bắt đầu bằng list_actions, get_mitre_candidates hoặc get_process_tree rồi đọc evidence cần thiết."}
+            "network_role_counts": {r: sum(1 for p in tools.profiles.values() if p["role"] == r)
+                                    for r in sorted({p["role"] for p in tools.profiles.values()})},
+            "hint": "Bắt đầu bằng list_actions, get_network_profiles, get_mitre_candidates hoặc get_process_tree rồi đọc evidence cần thiết."}
 
 
 def _trace_args(args):
@@ -308,11 +334,11 @@ def _trace_args(args):
             for k, v in (args or {}).items() if k != "assessment"} if isinstance(args, dict) else {}
 
 
-def investigate_case(bundle, behavior, mappings, actions, threat) -> dict:
+def investigate_case(bundle, behavior, mappings, actions, threat, network_profiles=None) -> dict:
     """actions: list of dicts with id/title/phase/category/priority/response_profile/objective/evidence_ids."""
     started = time.perf_counter()
     settings = agent_settings()
-    tools = CaseTools(bundle, behavior, mappings, actions, threat)
+    tools = CaseTools(bundle, behavior, mappings, actions, threat, network_profiles)
     trace, warnings, mode = [], [], "rule_based"
     assessment = None
     if settings["provider"] != "rules":

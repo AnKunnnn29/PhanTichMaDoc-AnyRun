@@ -69,13 +69,14 @@ def run_analysis_pipeline(
     ioc_json: dict,
     output_dir: str = "reports",
     export: bool = True,
+    source: str = "cli",
 ) -> None:
     """Pipeline chính: phân tích → tạo playbook → in + xuất file."""
     terminal   = TerminalReporter()
     exporter   = ReportExporter(output_dir)
 
     console.print("[bold green]▶ Đang phân tích dữ liệu...[/bold green]")
-    result, playbook = run_pipeline(report_json, ioc_json, source="cli")
+    result, playbook = run_pipeline(report_json, ioc_json, source=source)
 
     console.print("[bold green]▶ Đang tạo quy trình phản ứng sự cố...[/bold green]")
 
@@ -107,7 +108,7 @@ def run_demo(output_dir: str, export: bool) -> None:
         "Để phân tích task thực, cung cấp API key và dùng tham số --task <UUID>",
         border_style="yellow",
     ))
-    run_analysis_pipeline(DEMO_REPORT, DEMO_IOC, output_dir, export)
+    run_analysis_pipeline(DEMO_REPORT, DEMO_IOC, output_dir, export, source="demo:cli")
 
 
 def run_report_import(report_path: str, ioc_path: str, notes_path: str, output_dir: str, export: bool) -> None:

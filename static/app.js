@@ -1118,6 +1118,33 @@ function renderEvidencePanel(data) {
     }
     if (!caseAgent.tool_trace.length) add(trace, 'p', 'Chế độ quy tắc không gọi công cụ. Đặt AGENT_PROVIDER để Agent tự điều tra.');
   }
+  const profiles = Object.values(data.network_profiles || {});
+  const netRoleLabels = {config_c2:'C2 trong cấu hình mã độc',known_c2:'C2 (threat intel)',malware_distribution:'Phát tán mã độc',smb_propagation:'Quét/lây lan SMB',payload_download:'Tải payload',malicious_reported:'ANY.RUN: độc hại',unverified_destination:'Chưa xếp loại',dns_only:'Chỉ phân giải DNS',kill_switch:'Kill-switch (không chặn)',benign_infrastructure:'Hạ tầng hợp lệ (whitelisted)',local_network:'Mạng nội bộ sandbox'};
+  if (profiles.length) {
+    const net = add(root, 'section', undefined, 'card case-agent');
+    add(net, 'h3', 'Phân tích đích mạng');
+    const counts = {};
+    for (const p of profiles) counts[p.role] = (counts[p.role] || 0) + 1;
+    add(net, 'p', Object.entries(counts).map(([r, n]) => `${netRoleLabels[r] || r}: ${n}`).join(' · '));
+    const ti = data.threat_intel_status;
+    if (ti) add(net, 'p', ti.enabled ? `Đã tra ThreatFox/URLhaus cho ${ti.looked_up} đích đáng ngờ${ti.errors ? ` (${ti.errors} lỗi)` : ''}. ${ti.note}` : 'Chưa tra threat intel (chưa cấu hình key abuse.ch hoặc là dữ liệu mẫu).');
+    const notable = profiles.filter(p => !['benign_infrastructure', 'local_network'].includes(p.role));
+    if (!notable.length) add(net, 'p', 'Không có đích mạng đáng ngờ: toàn bộ lưu lượng là hạ tầng hợp lệ hoặc mạng nội bộ của sandbox, nên không đưa vào danh sách chặn.');
+    for (const p of notable) {
+      const item = add(net, 'details', undefined, 'action-card');
+      if (notable.length <= 3) item.open = true;
+      add(item, 'summary', `${p.value} · ${netRoleLabels[p.role] || p.role}`);
+      add(item, 'p', p.summary);
+      add(item, 'p', `Ảnh hưởng: ${p.impact}`);
+      add(item, 'p', `Cần xác minh: ${p.verify}`);
+      for (const hit of (p.threat_intel || []).filter(i => i.found)) {
+        const line = add(item, 'p', `${hit.source}: ${[hit.malware, hit.threat_type].filter(Boolean).join(' · ')} `);
+        if (hit.reference && safeLink(hit.reference) !== '#') {
+          const a = add(line, 'a', 'Xem bản ghi ↗'); a.href = safeLink(hit.reference); a.target = '_blank'; a.rel = 'noopener noreferrer';
+        }
+      }
+    }
+  }
   const card = add(root, 'section', undefined, 'card');
   add(card, 'h3', 'Chỉ báo & bằng chứng');
   const agent = data.agent_analysis;
@@ -1145,7 +1172,7 @@ function renderEvidencePanel(data) {
     for (const f of rows.slice(0, visibleCount)) {
       const item = values.get(f.ioc_id) || {};
       const details = add(list, 'details', undefined, 'action-card');
-      add(details, 'summary', `${item.value} · ${roleLabels[f.role] || 'Chưa phân loại'}`);
+      add(details, 'summary', `${item.value} · ${f.network_role ? netRoleLabels[f.network_role] || f.network_role : roleLabels[f.role] || 'Chưa phân loại'}`);
       add(details, 'p', f.explanation);
       add(details, 'p', `Mức nguy cơ: ${{unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'}[f.severity] || 'Chưa xác định'}`);
       add(details, 'p', `Ảnh hưởng: ${f.potential_impact}`);
