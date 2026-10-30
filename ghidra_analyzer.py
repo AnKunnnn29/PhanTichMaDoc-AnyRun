@@ -95,23 +95,6 @@ SUSPICIOUS_APIS = [
 ]
 
 
-def _find_java_home() -> str:
-    """Find a local JDK suitable for Ghidra headless without prompting."""
-    candidates = [
-        os.environ.get("JAVA_HOME", ""),
-        r"C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot",
-        r"C:\Program Files\Java\jdk-25.0.2",
-        r"C:\Program Files\Java\jdk-24",
-    ]
-    java_on_path = shutil.which("java")
-    if java_on_path:
-        candidates.append(str(Path(java_on_path).resolve().parents[1]))
-    for candidate in candidates:
-        if candidate and (Path(candidate) / "bin" / "java.exe").exists():
-            return str(Path(candidate))
-    return ""
-
-
 def find_analyze_headless() -> str:
     """Return an analyzeHeadless executable path if Ghidra is configured."""
     name = 'analyzeHeadless.bat' if os.name == 'nt' else 'analyzeHeadless'

@@ -28,7 +28,7 @@ def test_cloud_hides_server_keys_and_disables_local_jobs(monkeypatch):
     from app import app
     client = app.test_client()
     config = client.get('/api/config').json['data']
-    assert config['cloud_mode'] and config['api_key'] == ''
+    assert config['cloud_mode'] and 'api_key' not in config and not config['has_api_key']
     for path in ('/api/submit_analyze/url', '/api/submit_analyze/file'):
         result = client.post(path, json={})
         assert result.status_code == 400

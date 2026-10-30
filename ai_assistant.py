@@ -1564,7 +1564,7 @@ def answer_remediation_stream(question: str, analysis_payload: dict[str, Any]) -
     started = time.perf_counter()
     question = (question or "").strip()
     if not question:
-        question = "HĂ£y chá»§ Ä‘á»™ng Ä‘Ă¡nh giĂ¡ sá»± cá»‘ nĂ y vĂ  Ä‘á» xuáº¥t bÆ°á»›c xá»­ lĂ½ tiáº¿p theo."
+        question = "Hãy chủ động đánh giá sự cố này và đề xuất bước xử lý tiếp theo."
 
     from hash_lookup import lookup_requested, answer_lookup
     if lookup_requested(question):

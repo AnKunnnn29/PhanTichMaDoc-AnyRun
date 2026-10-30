@@ -68,3 +68,18 @@ def test_invalid_hash_and_missing_key_do_not_call_service(monkeypatch):
     assert lookup_hash('not-a-hash')['status']=='invalid_hash'
     monkeypatch.delenv('MALWAREBAZAAR_AUTH_KEY')
     assert lookup_hash(SHA)['status']=='not_configured'
+
+@pytest.mark.parametrize('question,expected',[
+    (SHA,True),
+    ('Tra cứu '+SHA,True),
+    ('sha256: '+SHA+' ?',True),
+    ('Tra cứu mã băm của tệp trong hồ sơ này',True),
+    ('Tệp này là mã độc gì?',True),
+    ('Cần tra cứu thêm log nào trên EDR?',False),
+    ('Hash này đã xuất hiện trên máy nào, cần cô lập không?',False),
+    ('Hash '+SHA+' đã xuất hiện trên máy nào, cần cô lập không?',False),
+    ('Tôi nên xử lý theo thứ tự ưu tiên nào?',False),
+])
+def test_lookup_only_for_explicit_requests(question,expected):
+    from hash_lookup import lookup_requested
+    assert lookup_requested(question) is expected
