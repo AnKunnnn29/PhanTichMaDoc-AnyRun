@@ -253,7 +253,93 @@ def test_uncited_narrative_sentences_are_dropped_not_fatal(monkeypatch, wannacry
 
 def test_time_budget_stops_the_agent_before_hosting_limit(monkeypatch, wannacry):
     bundle, behavior, mappings, actions, threat, _ = wannacry
-    monkeypatch.setattr("case_agent.CASE_DEADLINE_SECONDS", -1)
+    import time
     scripted(monkeypatch, [{"tool": "list_actions", "args": {}}] * MAX_STEPS)
-    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    case = investigate_case(bundle, behavior, mappings, actions, threat, deadline=time.monotonic() - 1)
     assert case["mode"] == "fallback" and "giới hạn thời gian" in case["tool_trace"][-1]["reason"]
+
+
+def test_model_call_timeout_never_exceeds_the_deadline(monkeypatch):
+    import time
+    import requests
+    from analysis_agent import _call_model, agent_settings
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    seen = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen["timeout"] = timeout
+        raise requests.Timeout("slow provider")
+    monkeypatch.setattr("analysis_agent.requests.post", fake_post)
+    settings = {**agent_settings(), "deadline": time.monotonic() + 8}
+    with pytest.raises(requests.Timeout):
+        _call_model([{"role": "user", "content": "x"}], settings)
+    assert seen["timeout"][1] <= 8
+    with pytest.raises(ValueError, match="Hết thời gian"):
+        _call_model([{"role": "user", "content": "x"}], {**settings, "deadline": time.monotonic() + 0.5})
+
+
+def test_no_retry_wait_past_the_deadline(monkeypatch):
+    import time
+    import requests
+    import responses as mock
+    from analysis_agent import _call_model, agent_settings
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    monkeypatch.setattr("analysis_agent.time.sleep", lambda s: pytest.fail("must not wait past the deadline"))
+    settings = {**agent_settings(), "deadline": time.monotonic() + 10}
+    with mock.RequestsMock() as rsps:
+        rsps.post(settings["endpoint"] + "/chat/completions", status=429, headers={"Retry-After": "30"})
+        with pytest.raises(requests.HTTPError):
+            _call_model([{"role": "user", "content": "x"}], settings)
+        assert len(rsps.calls) == 1
+
+
+def test_pipeline_gives_both_agents_one_deadline(monkeypatch, wannacry_report, wannacry_ioc):
+    import analysis_pipeline
+    seen = []
+    real_ioc, real_case = analysis_pipeline.investigate, analysis_pipeline.investigate_case
+    monkeypatch.setattr(analysis_pipeline, "investigate", lambda b, p, d: seen.append(d) or real_ioc(b, p, d))
+    monkeypatch.setattr(analysis_pipeline, "investigate_case", lambda *a: seen.append(a[-1]) or real_case(*a))
+    run_pipeline(wannacry_report, wannacry_ioc, source="test")
+    assert len(seen) == 2 and seen[0] == seen[1] and seen[0] is not None
+
+
+def test_extra_unread_citations_are_trimmed_but_one_read_source_is_required(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+    answer = valid_assessment(bundle, actions, ids)
+    answer["behavior_chain"][0]["evidence_ids"] = ids[:2]          # ids[1] is never read
+    scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                           {"tool": "submit_assessment", "assessment": answer}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert case["mode"] == "llm"
+    assert case["assessment"]["behavior_chain"][0]["evidence_ids"] == ids[:1]
+    assert case["assessment"]["citations_dropped"] == 1
+
+
+def test_local_and_vercel_deadlines_differ(monkeypatch):
+    import time
+    from analysis_agent import pipeline_deadline
+    monkeypatch.delenv("PIPELINE_DEADLINE_SECONDS", raising=False)
+    monkeypatch.setenv("VERCEL", "1")
+    assert 44 <= pipeline_deadline() - time.monotonic() <= 45
+    monkeypatch.delenv("VERCEL")
+    assert pipeline_deadline() - time.monotonic() > 100
+
+
+def test_unread_refs_on_deferred_decisions_are_counted(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+    answer = valid_assessment(bundle, actions, ids)
+    answer["action_plan"][1]["evidence_ids"] = ids[1:3]           # deferred decision citing two unread sources
+    scripted(monkeypatch, [{"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}},
+                           {"tool": "submit_assessment", "assessment": answer}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    deferred = next(r for r in case["assessment"]["action_plan"] if r["decision"] == "defer")
+    assert deferred["evidence_ids"] == [] and case["assessment"]["citations_dropped"] == 2
+
+
+def test_case_prompt_version_is_part_of_the_cache_key(monkeypatch, emotet_report):
+    import analysis_pipeline
+    before = analysis_pipeline.analysis_key(emotet_report, {})
+    monkeypatch.setattr(analysis_pipeline, "CASE_PROMPT_VERSION", "other")
+    assert analysis_pipeline.analysis_key(emotet_report, {}) != before

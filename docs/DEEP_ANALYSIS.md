@@ -38,7 +38,8 @@ Kiểm tra với DeepSeek thật trên hai báo cáo (30/10/2026): agent điều
 
 - `attack_narrative` không bắt buộc, tối đa 6 câu. Câu dẫn evidence chưa đọc hoặc không tồn tại bị bỏ (đếm ở `narrative_dropped`), không làm hỏng cả assessment.
 - Mã ATT&CK được đối chiếu danh mục: ID bị thu hồi được thay nếu ID mới đúng tactic (ví dụ T1562.001 → T1685), ID sai tactic hoặc không có bị bỏ. Mọi chỉnh sửa ghi ở `mitre_corrections` và hiện trên giao diện.
-- Agent được nhắc nộp sau 35 giây và dừng ở 50 giây (`CASE_AGENT_NUDGE_SECONDS`, `CASE_AGENT_DEADLINE_SECONDS`); lỗi 5xx tạm thời của nhà cung cấp được thử lại.
+- Hạn chót chung cho một lượt phân tích (`PIPELINE_DEADLINE_SECONDS`, tính từ lúc bắt đầu pipeline: mặc định 45 giây trên Vercel, 110 giây khi chạy trên máy) áp cho cả agent điều tra và agent IOC chạy song song. Timeout của **từng lần gọi AI** bị giới hạn bởi thời gian còn lại; không thử lại (429/5xx) nếu thời gian chờ vượt hạn chót. Agent điều tra được nhắc nộp khi còn khoảng 12 giây. Hết hạn thì phần đó dùng quy tắc (`fallback`/`partial`).
+- Trong chuỗi hành vi, phần ảnh hưởng và quyết định khuyến nghị, mã evidence agent dẫn nhưng chưa đọc bị lược; nhận định cần ít nhất một nguồn đã đọc, nếu không vẫn bị từ chối. Tổng số mã bị lược ghi ở `citations_dropped` và hiện trên giao diện; nên báo cáo chỉ số này trong thực nghiệm. Khi chạy thực nghiệm, ghi lại `PIPELINE_DEADLINE_SECONDS` vì thời gian cho phép ảnh hưởng tỷ lệ hoàn thành bằng AI.
 - Chỉ các DLL có ý nghĩa phân tích (`NOTABLE_MODULES` trong `report_context.py`) được giữ làm evidence; các DLL còn lại chỉ đếm (`moduleCount`). Hồ sơ WannaCry thật giảm từ 5,88 MB xuống 4,33 MB, dưới giới hạn response 4,5 MB của Vercel.
 
 JSON giữ toàn bộ cấu trúc; Markdown/HTML/PDF có phần diễn biến và phân tích sâu. Không thay verdict nguồn và không tự thực thi khắc phục.

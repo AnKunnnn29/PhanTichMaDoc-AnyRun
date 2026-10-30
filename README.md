@@ -84,6 +84,7 @@ CLI: `python -X utf8 main.py --demo` hoặc `python -X utf8 main.py --report-jso
 | `OPENAI_API_KEY`, `OPENAI_API_BASE`, `OPENAI_MODEL` | OpenAI hoặc dịch vụ tương thích OpenAI |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Model chạy trên máy (model 3B không đủ cho agent nhiều bước) |
 | `AGENT_PARALLEL` | Số nhóm IOC gọi AI song song, mặc định 8 |
+| `PIPELINE_DEADLINE_SECONDS` | Hạn chót cho cả lượt phân tích (mọi lần gọi AI); mặc định 45 giây trên Vercel, 110 giây trên máy |
 | `AGENT_RATE_LIMIT_RETRIES` | Số lần chờ rồi thử lại khi gặp HTTP 429, mặc định 4 |
 | `MALWAREBAZAAR_AUTH_KEY` (hoặc `ABUSECH_AUTH_KEY`) | Key abuse.ch: tra MalwareBazaar trong chat, ThreatFox/URLhaus cho đích mạng |
 | `NETWORK_INTEL_LOOKUPS` | `0` để tắt tra cứu ThreatFox/URLhaus |

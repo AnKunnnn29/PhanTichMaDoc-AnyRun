@@ -1131,6 +1131,7 @@ function renderEvidencePanel(data) {
     const fixes = a.mitre_corrections || [];
     if (fixes.length) add(section, 'p', `Bộ kiểm tra đã chỉnh ${fixes.length} mã ATT&CK theo danh mục: ` + fixes.map(f => `${f.from} → ${f.to || 'bỏ'} (${f.reason})`).join('; '), 'agent-warning');
     if (a.narrative_dropped) add(section, 'p', `Đã bỏ ${a.narrative_dropped} câu diễn biến không có bằng chứng đã đọc.`, 'agent-warning');
+    if (a.citations_dropped) add(section, 'p', `Đã lược ${a.citations_dropped} mã evidence agent dẫn nhưng chưa đọc; mỗi nhận định vẫn giữ ít nhất một nguồn đã đọc.`, 'agent-warning');
     add(section, 'h4', `Chuỗi hành vi (${a.behavior_chain.length} giai đoạn)`);
     const stages = add(section, 'ol');
     for (const s of a.behavior_chain) {

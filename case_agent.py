@@ -18,15 +18,14 @@ from pathlib import Path
 
 import requests
 
-from analysis_agent import _call_model, agent_settings
+from analysis_agent import _call_model, agent_settings, pipeline_deadline
 from mitre_mapping import catalogue, replacement
 from response_policy import RESPONSE_INSTRUCTIONS, is_protected_destination
 
-CASE_PROMPT_VERSION = "case-agent-v2-process-context"
+CASE_PROMPT_VERSION = "case-agent-v3-deadline-trim"
 MAX_STEPS = 16
 NARRATIVE_MAX = 6
-CASE_NUDGE_SECONDS = float(os.getenv("CASE_AGENT_NUDGE_SECONDS", "35"))
-CASE_DEADLINE_SECONDS = float(os.getenv("CASE_AGENT_DEADLINE_SECONDS", "50"))
+CASE_NUDGE_REMAINING = 12  # seconds left before the deadline when the agent is asked to submit
 CASE_MAX_TOKENS = 8192  # the assessment plus a narrative can exceed the default 4,096-token reply
 MAX_TOOL_CHARS = 12000
 MAX_HASH_LOOKUPS = 2
@@ -244,6 +243,24 @@ def validate_assessment(assessment, tools: CaseTools) -> dict:
     catalog = catalogue()["techniques"]
     action_by_id = {a["id"]: a for a in tools.actions}
 
+    dropped_refs = [0]
+
+    def supported(ids, field):
+        """Keep the read citations of a stage/impact and drop extra ones; at least one read source must remain."""
+        ids = _evidence_list(ids, field)
+        read = [i for i in ids if i in tools.seen]
+        if ids and not read:
+            return cited(ids, field)  # raises with the precise reason
+        dropped_refs[0] += len(ids) - len(read)
+        return cited(read, field)
+
+    def optional_refs(ids, field):
+        """Deferred/not-applicable decisions need no evidence; unread ones are dropped and counted like elsewhere."""
+        ids = _evidence_list(ids, field)
+        read = [i for i in ids if i in tools.seen]
+        dropped_refs[0] += len(ids) - len(read)
+        return cited(read, field, False)
+
     def cited(ids, field, required=True):
         ids = _evidence_list(ids, field)
         if required and not ids:
@@ -266,7 +283,8 @@ def validate_assessment(assessment, tools: CaseTools) -> dict:
         raise ValueError("impact.severity phải là một trong unknown, low, medium, high, critical")
     clean = {"summary": text(assessment.get("summary"), "summary", 600),
              "impact": {"severity": impact["severity"], "summary": text(impact.get("summary"), "impact.summary", 600),
-                        "evidence_ids": cited(impact.get("evidence_ids", []), "impact", impact["severity"] != "unknown")},
+                        "evidence_ids": supported(impact.get("evidence_ids", []), "impact") if impact["severity"] != "unknown"
+                        else cited(impact.get("evidence_ids", []), "impact", False)},
              "behavior_chain": [], "action_plan": [], "open_questions": []}
     # Optional: requiring it pushed real runs past the step budget; when present every sentence still needs evidence.
     narrative = assessment.get("attack_narrative") or []
@@ -316,7 +334,7 @@ def validate_assessment(assessment, tools: CaseTools) -> dict:
                 continue
             kept.append(tid)
         clean["behavior_chain"].append({"stage": stage["stage"], "summary": text(stage.get("summary"), f"behavior_chain[{n}].summary", 400),
-                                        "evidence_ids": cited(stage.get("evidence_ids"), f"behavior_chain[{n}]"),
+                                        "evidence_ids": supported(stage.get("evidence_ids"), f"behavior_chain[{n}]"),
                                         "mitre": list(dict.fromkeys(kept)), "assessment_status": stage["assessment_status"]})
     clean["behavior_chain"].sort(key=lambda s: STAGE_ORDER.index(s["stage"]))
     plan = assessment.get("action_plan", [])
@@ -330,7 +348,8 @@ def validate_assessment(assessment, tools: CaseTools) -> dict:
             raise ValueError(f"action_plan[{n}].decision không hợp lệ")
         if type(row.get("priority")) is not int or not 1 <= row["priority"] <= 4:
             raise ValueError(f"action_plan[{n}].priority phải là số nguyên 1-4")
-        ids = cited(row.get("evidence_ids", []), f"action_plan[{n}]", row["decision"] == "recommend")
+        ids = (supported(row.get("evidence_ids", []), f"action_plan[{n}]") if row["decision"] == "recommend"
+               else optional_refs(row.get("evidence_ids", []), f"action_plan[{n}]"))
         action = action_by_id[row["action_id"]]
         if row["decision"] == "recommend" and action.get("response_profile") == "network":
             protected = [i for i in ids if tools.evidence[i]["type"] in {"domain", "url"} and is_protected_destination(tools.evidence[i]["value"])]
@@ -343,6 +362,7 @@ def validate_assessment(assessment, tools: CaseTools) -> dict:
     if not isinstance(questions, list) or len(questions) > 8:
         raise ValueError("open_questions tối đa 8 câu")
     clean["open_questions"] = [text(q, "open_questions", 300) for q in questions]
+    clean["citations_dropped"] = dropped_refs[0]
     return clean
 
 
@@ -467,7 +487,8 @@ def _visible_source_ids(value, payload):
     return found
 
 
-def investigate_case(bundle, behavior, mappings, actions, threat, network_profiles=None, impact=None, deep=None) -> dict:
+def investigate_case(bundle, behavior, mappings, actions, threat, network_profiles=None, impact=None, deep=None,
+                     deadline=None) -> dict:
     """actions: list of dicts with id/title/phase/category/priority/response_profile/objective/evidence_ids."""
     started = time.perf_counter()
     settings = {**agent_settings(), "max_tokens": CASE_MAX_TOKENS}
@@ -478,18 +499,19 @@ def investigate_case(bundle, behavior, mappings, actions, threat, network_profil
         messages = [{"role": "system", "content": _system_prompt()},
                     {"role": "user", "content": json.dumps(_opening(tools), ensure_ascii=False)}]
         try:
-            loop_started, nudged = time.perf_counter(), False
+            deadline = pipeline_deadline() if deadline is None else deadline
+            call_settings, nudged = {**settings, "deadline": deadline}, False
             for step in range(1, MAX_STEPS + 1):
-                elapsed = time.perf_counter() - loop_started
-                # Hosting allows 60 s per request: ask for the answer early, and stop before the limit.
-                if elapsed > CASE_DEADLINE_SECONDS:
-                    raise ValueError(f"Agent vượt giới hạn thời gian {CASE_DEADLINE_SECONDS} giây")
-                if elapsed > CASE_NUDGE_SECONDS and not nudged:
+                left = deadline - time.monotonic()
+                # Each model call is also bounded by this deadline, so the request stays under the hosting limit.
+                if left <= 2:
+                    raise ValueError("Agent vượt giới hạn thời gian của lượt phân tích")
+                if left < CASE_NUDGE_REMAINING and not nudged:
                     nudged = True
                     messages.append({"role": "user", "content": "Sắp hết thời gian. Nộp submit_assessment ngay, chỉ dẫn evidence đã đọc; "
                                                                 "bỏ câu attack_narrative chưa có evidence."})
                 try:
-                    answer = _call_model(messages, settings)
+                    answer = _call_model(messages, call_settings)
                 except json.JSONDecodeError:
                     trace.append({"step": step, "tool": "model_output", "status": "invalid_json"})
                     messages.append({"role": "user", "content": "Output không phải JSON hợp lệ. Trả đúng một JSON object."})

@@ -8,7 +8,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 from analyzer import MalwareAnalyzer
-from analysis_agent import agent_settings, investigate
+from analysis_agent import agent_settings, investigate, pipeline_deadline
 from case_agent import CASE_PROMPT_VERSION, apply_case_plan, investigate_case
 from evidence import PIPELINE_VERSION, collect_evidence, digest, validate_bundle
 from incident_response import IncidentResponseGenerator
@@ -74,6 +74,7 @@ def build_behavior(bundle):
 
 def run_pipeline(report, iocs, source="manual"):
     started = time.perf_counter()
+    deadline = pipeline_deadline()  # shared by both agents, counted from the start of the analysis
     validate_report(report, iocs)
     report, iocs = copy.deepcopy(report), copy.deepcopy(iocs)
     result = MalwareAnalyzer().parse_report(report, iocs)
@@ -92,7 +93,7 @@ def run_pipeline(report, iocs, source="manual"):
     threat_intel = enrich_network_profiles(network_profiles, enabled=not str(source).startswith("demo"))
     # The per-IOC agent does not feed the playbook or the case agent, so it runs alongside them.
     ioc_pool = ThreadPoolExecutor(max_workers=1)
-    ioc_future = ioc_pool.submit(investigate, bundle, network_profiles)
+    ioc_future = ioc_pool.submit(investigate, bundle, network_profiles, deadline)
     impact = analyze_impact(report, bundle, network_profiles)
     behavior = build_behavior(bundle)
     mappings, catalog_meta = map_evidence(bundle)
@@ -153,7 +154,7 @@ def run_pipeline(report, iocs, source="manual"):
     case_agent = investigate_case(bundle, behavior, mappings, [
         {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
          "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids, "origin": a.origin}
-        for a in playbook.actions], threat, network_profiles, impact, deep)
+        for a in playbook.actions], threat, network_profiles, impact, deep, deadline)
     apply_case_plan(playbook.actions, case_agent)
     try:
         agent = ioc_future.result()

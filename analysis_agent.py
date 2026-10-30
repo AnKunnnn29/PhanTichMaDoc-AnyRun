@@ -104,13 +104,31 @@ def validate_findings(findings, bundle: dict, expected_ids: set[str]) -> None:
                 raise ValueError(f"Trường Agent không hợp lệ: {key}")
 
 
+def pipeline_deadline() -> float:
+    """Absolute monotonic deadline for every model call of one analysis (hosting allows 60 s per request)."""
+    # 45 s leaves room for fetching the report inside Vercel's 60 s request limit; local runs have no such limit.
+    default = "45" if os.getenv("VERCEL") == "1" else "110"
+    return time.monotonic() + float(os.getenv("PIPELINE_DEADLINE_SECONDS", default))
+
+
+def _timeout(settings: dict) -> tuple[float, float]:
+    """Connect/read timeout bounded by the analysis deadline; the provider answers in one body (no streaming)."""
+    deadline = settings.get("deadline")
+    if deadline is None:
+        return (5, 120)
+    left = deadline - time.monotonic()
+    if left <= 1:
+        raise ValueError("Hết thời gian phân tích cho lượt gọi AI")
+    return (min(5, left), min(120, left))
+
+
 def _call_model(messages: list, settings: dict) -> dict:
     # Explicitly configured providers only. No implicit cloud fallback.
     if settings["provider"] == "ollama":
         url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/chat"
         payload = {"model": settings["model"], "messages": messages, "format": "json", "stream": False,
                    "options": {"temperature": 0.1, "num_predict": settings.get("max_tokens", 4096)}}
-        response = requests.post(url, json=payload, timeout=(5, 120))
+        response = requests.post(url, json=payload, timeout=_timeout(settings))
         response.raise_for_status()
         text = response.json()["message"]["content"]
     elif settings["provider"] in {"openai", "deepseek", "gemini"}:
@@ -128,12 +146,15 @@ def _call_model(messages: list, settings: dict) -> dict:
         # instead of failing the case.
         retries = int(os.getenv("AGENT_RATE_LIMIT_RETRIES", "4"))
         for attempt in range(retries + 1):
-            response = requests.post(url, headers={"Authorization": "Bearer " + key}, json=body, timeout=(5, 120))
+            response = requests.post(url, headers={"Authorization": "Bearer " + key}, json=body, timeout=_timeout(settings))
             if response.status_code not in RETRY_STATUS or attempt == retries:
                 break
             retry_after = response.headers.get("Retry-After", "")
             backoff = 15 * (attempt + 1) if response.status_code == 429 else 2 * (attempt + 1)
-            time.sleep(min(float(retry_after), 90) if retry_after.replace(".", "", 1).isdigit() else backoff)
+            wait = min(float(retry_after), 90) if retry_after.replace(".", "", 1).isdigit() else backoff
+            if settings.get("deadline") is not None and time.monotonic() + wait + 1 >= settings["deadline"]:
+                break  # no time left to wait and retry; report the provider error instead
+            time.sleep(wait)
         response.raise_for_status()
         text = response.json()["choices"][0]["message"]["content"]
     else:
@@ -154,7 +175,7 @@ def _llm_priority(item: dict, profiles: dict) -> int:
     return {"process": 1, "registry": 2, "mutex": 3}.get(item["type"], 5)
 
 
-def investigate(bundle: dict, profiles: dict | None = None) -> dict:
+def investigate(bundle: dict, profiles: dict | None = None, deadline: float | None = None) -> dict:
     started = time.perf_counter()
     settings = agent_settings()
     profiles = profiles or {}
@@ -194,7 +215,7 @@ def investigate(bundle: dict, profiles: dict | None = None) -> dict:
                 inspected = set()
                 for _ in range(BATCH_STEPS):
                     try:
-                        answer = _call_model(messages, settings)
+                        answer = _call_model(messages, {**settings, "deadline": deadline})
                     except json.JSONDecodeError:
                         local.append({"tool": "model_output", "status": "invalid_json"})
                         messages.append({"role": "user", "content": "JSON chưa hoàn chỉnh. Trả submit_findings cho toàn bộ batch, mỗi trường văn bản tối đa 160 ký tự, không thêm markdown."})
