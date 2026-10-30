@@ -22,11 +22,13 @@
     const items = state.items;
     const refs = new Set();
     items.forEach(i => (i.summary?.observable_ids || (i.payload?.evidence_bundle?.observables || []).map(o=>o.id)).forEach(id => refs.add(id)));
-    const pending = items.filter(i => ['Chờ xem xét','Cần bổ sung'].includes(review(i))).length;
+    // Count recommendations awaiting a decision; nearly every case has at least one, so a case count says little.
+    const pending = items.reduce((sum, i) => sum + (i.summary?.action_statuses || (i.payload?.playbook?.actions || []).map(a => a.status))
+      .filter(status => ['pending', 'changes_requested'].includes(status)).length, 0);
     const urgent = items.filter(i => ['critical','high'].includes(priority(i))).length;
     byId('overview-stats').innerHTML = [
       ['Hồ sơ đã lưu',items.length,'Trong lịch sử hiện có'],
-      ['Chờ xem xét',pending,'Hồ sơ còn khuyến nghị cần xử lý'],
+      ['Khuyến nghị chờ duyệt',pending,'Tổng số khuyến nghị chưa duyệt hoặc cần bổ sung trong mọi hồ sơ'],
       ['Chỉ báo duy nhất',refs.size,'Đối chiếu từ các hồ sơ có evidence'],
       ['Ưu tiên cao',urgent,'Đánh giá cao hoặc nghiêm trọng']
     ].map(([label,value,hint]) => `<div class="overview-stat" title="${escAttr(hint)}"><span>${label}</span><b>${nf.format(value)}</b></div>`).join('');

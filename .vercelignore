@@ -25,3 +25,5 @@ coverage.xml
 pyproject.toml
 requirements-dev.txt
 pytest.ini
+static/dashboard-demo
+static/dashboard-preview

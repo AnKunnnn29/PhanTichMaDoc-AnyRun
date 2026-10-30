@@ -15,11 +15,13 @@ window.onload = async () => {
   if (G.apiKey) document.getElementById('api-key-input').value = G.apiKey;
   document.getElementById('hist-key').value = G.apiKey;
   if (restoreLastAnalysis()) {
-    await persistCurrentAnalysis('browser:restore');
+    // Re-saving the restored case can take a second; show the overview now and refresh once it is stored.
+    loadHistory();
+    persistCurrentAnalysis('browser:restore').then(loadHistory);
   } else {
     await restoreLatestFromServer();
+    await loadHistory();
   }
-  await loadHistory();
   await loadGhidraStatus();
   animateCards(document);
 };
@@ -594,6 +596,8 @@ async function loadHistory() {
     const localRes = await fetch('/api/history/local');
     const localJson = await localRes.json();
     if (!localJson.ok) throw new Error(localJson.error);
+    // Local cases are ready now; the Any.Run history call can be slow or refused, so it must not hold up the overview.
+    window.WorkspaceUI?.setHistory(localJson.items || []);
 
     let anyrunTasks = [];
     let anyrunError = '';
@@ -611,7 +615,6 @@ async function loadHistory() {
         anyrunError = e.message;
       }
     }
-    window.WorkspaceUI?.setHistory(localJson.items || []);
     renderCombinedHistory(localJson.items || [], anyrunTasks, anyrunError);
   } catch (e) {
     window.WorkspaceUI?.setError();

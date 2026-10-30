@@ -46,3 +46,7 @@ tools/.downloads/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local UI prototypes; keep them out of Git and deploys.
+static/dashboard-demo/
+static/dashboard-preview/

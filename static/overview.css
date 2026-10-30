@@ -5,3 +5,9 @@
 .import-extra{margin:12px 0 20px;border-top:1px solid var(--border);padding-top:12px}.import-extra>summary{font-size:12px;cursor:pointer;color:var(--text2);padding:4px 0}.import-extra[open]>summary{margin-bottom:14px}.report-input{max-width:640px}.dashboard-overview .overview-stat{padding:16px!important}.dashboard-overview .overview-stat b{margin-bottom:0}.dashboard-overview .topbar-actions .btn{white-space:nowrap}
 
 @media(max-width:760px){body .dashboard-overview .topbar{display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:10px;text-align:left}body .dashboard-overview .topbar>.topbar-actions{flex:0 0 auto;width:auto;max-width:none;flex-wrap:nowrap;justify-content:flex-end}body .dashboard-overview .topbar-actions>.btn{flex:none;min-width:0;width:auto;padding:9px 10px;font-size:10px}}
+
+/* Result page ATT&CK chips follow the neutral workspace palette instead of the old purple accent. */
+body .mitre-chip{background:var(--bg2);border:1px solid var(--border)}body .mitre-chip:hover{border-color:#a1a1aa}body .mitre-chip .mid{color:var(--text)}body .mitre-chip .mtac{color:var(--text2)}
+/* Origin label lines up with the objective text under the card header. */
+body .response-action>.response-origin{margin:10px 24px 0}
+body .response-detail>.agent-rationale{margin:12px 24px}
