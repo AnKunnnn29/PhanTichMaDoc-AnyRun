@@ -72,6 +72,7 @@ IP_RE = re.compile(rb"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 DOMAIN_RE = re.compile(rb"\b(?:[a-z0-9-]{2,63}\.)+[a-z]{2,12}\b", re.IGNORECASE)
 REGISTRY_RE = re.compile(rb"\bHK(?:LM|CU|CR|U|CC)\\[A-Za-z0-9_\\ .-]{4,}", re.IGNORECASE)
 PRINTABLE_RE = re.compile(rb"[\x20-\x7e]{5,}")
+NON_DOMAIN_SUFFIXES = {"dll", "exe", "sys", "ocx", "mui", "pdb", "tmp", "dat", "bin", "hostname"}
 
 SUSPICIOUS_APIS = [
     "CreateRemoteThread",
@@ -92,6 +93,23 @@ SUSPICIOUS_APIS = [
     "IsDebuggerPresent",
     "CheckRemoteDebuggerPresent",
 ]
+
+
+def _find_java_home() -> str:
+    """Find a local JDK suitable for Ghidra headless without prompting."""
+    candidates = [
+        os.environ.get("JAVA_HOME", ""),
+        r"C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot",
+        r"C:\Program Files\Java\jdk-25.0.2",
+        r"C:\Program Files\Java\jdk-24",
+    ]
+    java_on_path = shutil.which("java")
+    if java_on_path:
+        candidates.append(str(Path(java_on_path).resolve().parents[1]))
+    for candidate in candidates:
+        if candidate and (Path(candidate) / "bin" / "java.exe").exists():
+            return str(Path(candidate))
+    return ""
 
 
 def find_analyze_headless() -> str:
@@ -216,6 +234,17 @@ def _decode_matches(matches: list[bytes], limit: int = 50) -> list[str]:
     return seen
 
 
+def _filter_domains(domains: list[str]) -> list[str]:
+    filtered = []
+    for domain in domains:
+        suffix = domain.rsplit(".", 1)[-1].lower()
+        if suffix in NON_DOMAIN_SUFFIXES:
+            continue
+        if domain not in filtered:
+            filtered.append(domain)
+    return filtered
+
+
 def lightweight_static_triage(path: str) -> dict:
     sample = Path(path)
     data = sample.read_bytes()
@@ -224,7 +253,7 @@ def lightweight_static_triage(path: str) -> dict:
     api_hits = [api for api in SUSPICIOUS_APIS if api.lower().encode("ascii") in lower]
     urls = _decode_matches(URL_RE.findall(data), limit=40)
     ips = _decode_matches(IP_RE.findall(data), limit=40)
-    domains = _decode_matches(DOMAIN_RE.findall(data), limit=40)
+    domains = _filter_domains(_decode_matches(DOMAIN_RE.findall(data), limit=80))[:40]
     registry = _decode_matches(REGISTRY_RE.findall(data), limit=40)
     file_type = "PE executable" if data[:2] == b"MZ" else "Unknown/binary"
     if data[:4] == b"\x7fELF":
@@ -273,10 +302,23 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
 
     scripts_dir = Path(__file__).resolve().parent / "scripts" / "ghidra"
     script_name = "MalwareSummaryExporter.java"
-    with tempfile.TemporaryDirectory(prefix="ir_ghidra_") as tmp:
+    temp_root = Path(os.environ.get("GHIDRA_TMPDIR") or Path(__file__).resolve().parent / "ghidra_tmp")
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="ir_ghidra_", dir=str(temp_root)) as tmp:
         project_dir = Path(tmp) / "project"
         output_json = Path(tmp) / "ghidra_summary.json"
+        user_profile = Path(tmp) / "profile"
+        appdata = user_profile / "AppData" / "Roaming"
+        local_appdata = user_profile / "AppData" / "Local"
         project_dir.mkdir(parents=True, exist_ok=True)
+        appdata.mkdir(parents=True, exist_ok=True)
+        local_appdata.mkdir(parents=True, exist_ok=True)
+        env = environment.copy()
+        env["USERPROFILE"] = str(user_profile)
+        env["APPDATA"] = str(appdata)
+        env["LOCALAPPDATA"] = str(local_appdata)
+        env["TEMP"] = tmp
+        env["TMP"] = tmp
         cmd = [
             *headless_command(headless, java_home),
             runtime_path(project_dir),
@@ -301,12 +343,12 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
                 text=True,
                 encoding='utf-8',
                 errors='replace',
-                env=environment,
                 cwd=PROJECT_ROOT,
                 stdin=subprocess.DEVNULL,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
                 timeout=timeout + 60,
                 check=False,
+                env=env,
             )
         except subprocess.TimeoutExpired as exc:
             return {
@@ -349,6 +391,36 @@ def analyze_sample(path: str, timeout: int = 180) -> dict:
 
 
 def build_ir_enrichment(triage: dict, ghidra: dict) -> dict:
+    summary = ghidra.get("summary") or {}
+    suspicious_apis = sorted(set((triage.get("suspicious_apis") or []) + (summary.get("suspicious_imports") or [])))
+    evidence = []
+    if suspicious_apis:
+        evidence.append("Suspicious APIs: " + ", ".join(suspicious_apis[:8]))
+    if triage.get("entropy", 0) >= 7.2:
+        evidence.append("High entropy may indicate packing, encryption, or obfuscation.")
+    if triage.get("urls") or triage.get("ips") or triage.get("domains"):
+        evidence.append("Network strings are present and should be checked against sandbox/proxy/DNS evidence.")
+    if triage.get("registry"):
+        evidence.append("Registry paths are present and should be checked for persistence.")
+    if not evidence:
+        evidence.append("No strong malicious static indicator was found in this triage pass.")
+
+    suspicious_score = 0
+    suspicious_score += 2 if suspicious_apis else 0
+    suspicious_score += 2 if triage.get("entropy", 0) >= 7.2 else 0
+    suspicious_score += 1 if triage.get("urls") or triage.get("ips") or triage.get("domains") else 0
+    suspicious_score += 1 if triage.get("registry") else 0
+    suspicious_score += 1 if ghidra.get("status") == "ok" and summary.get("function_count", 0) > 0 else 0
+    if suspicious_score >= 5:
+        verdict = "Nghi vấn cao"
+        confidence = "medium"
+    elif suspicious_score >= 2:
+        verdict = "Có dấu hiệu nghi vấn"
+        confidence = "low-medium"
+    else:
+        verdict = "Chưa đủ bằng chứng kết luận mã độc"
+        confidence = "low"
+
     static_iocs = {
         "urls": triage.get("urls", []),
         "ips": triage.get("ips", []),
@@ -364,7 +436,19 @@ def build_ir_enrichment(triage: dict, ghidra: dict) -> dict:
     if ghidra.get("status") == "not_configured":
         actions.insert(0, "Cấu hình GHIDRA_HOME để bật decompile/headless analysis đầy đủ.")
     return {
+        "analysis_type": "static",
+        "dynamic_analysis": False,
+        "malicious_assessment": {
+            "verdict": verdict,
+            "confidence": confidence,
+            "evidence": evidence,
+            "limits": [
+                "Ghidra/static triage does not execute the file, so it cannot prove runtime behavior.",
+                "APIs such as VirtualAlloc, LoadLibrary, or GetProcAddress can also appear in legitimate software.",
+                "Use dynamic sandbox evidence such as Any.Run/Cuckoo/EDR logs to confirm behavior.",
+            ],
+        },
         "static_iocs": static_iocs,
         "recommended_ir_actions": actions,
-        "evidence_note": "Static analysis bổ sung nguyên nhân kỹ thuật; Any.Run vẫn là nguồn chính cho hành vi runtime.",
+        "evidence_note": "Đây là phân tích tĩnh: Ghidra không thực thi file. Any.Run/dynamic sandbox mới xác nhận được hành vi runtime.",
     }

@@ -12,6 +12,7 @@ from incident_response import IncidentResponseGenerator
 from validation import validate_report
 from mitre_mapping import map_evidence, catalogue
 from response_policy import exclusions
+from operational_guidance import apply_guidance
 
 
 def analysis_key(report, iocs) -> str:
@@ -96,6 +97,7 @@ def run_pipeline(report, iocs, source="manual"):
                                 "Bảo toàn bằng chứng; chuyên viên xem xét tác động trước khi áp dụng."]
         action.risks = ["Có thể gián đoạn dịch vụ hoặc làm mất bằng chứng nếu áp dụng sai mục tiêu."]
         action.blocked = not bool(action.evidence_ids)
+        apply_guidance(action, result, bundle)
         action.description = "Khuyến nghị có điều kiện, cần analyst đối chiếu evidence trước khi áp dụng. " + action.description
         action.nist_function = "DE" if "identification" in action.phase.lower() else "RC" if "recovery" in action.phase.lower() else "ID.IM" if "lessons" in action.phase.lower() else "RS"
     result.research = {
@@ -140,4 +142,9 @@ def research_markdown(payload: dict) -> str:
     for row in payload["playbook"]["actions"]:
         review = row.get("review", {})
         lines.append("| " + " | ".join(safe(v) for v in (row.get("id"), row.get("status"), review.get("reviewer", ""), review.get("reason", ""))) + " |")
+    lines += ["", "### Hướng dẫn khắc phục theo từng đề xuất", ""]
+    for row in payload['playbook']['actions']:
+        lines += ['#### ' + safe(row.get('title', '')), safe(row.get('objective', '')), safe(row.get('target_scope', ''))]
+        lines += [f'{index}. {safe(step)}' for index, step in enumerate(row.get('steps', []), 1)]
+        lines += ['Tiêu chí xác minh: ' + safe(' '.join(row.get('verification', []))), 'Nếu phát sinh ảnh hưởng: ' + safe(row.get('rollback', '')), '']
     return "\n".join(lines) + "\n"

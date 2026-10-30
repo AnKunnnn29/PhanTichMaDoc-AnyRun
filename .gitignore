@@ -9,6 +9,12 @@ __pycache__/
 .venv/
 venv/
 env/
+.python_deps/
+.tmp/
+.local/
+.taste-skill/
+.vercel/
+ghidra_tmp/
 
 # Test/cache/tooling output
 .pytest_cache/
@@ -27,6 +33,8 @@ reports/
 tmp_upload_*
 tools/ghidra/
 tools/java/
+tools/ollama/
+tools/ollama-models/
 tools/.downloads/
 .venv/.requirements-sha256
 

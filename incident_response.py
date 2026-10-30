@@ -34,6 +34,13 @@ class IncidentAction:
     risks: List[str] = field(default_factory=list)
     nist_function: str = ""
     blocked: bool = False
+    response_profile: str = ""
+    objective: str = ""
+    target_scope: str = ""
+    steps: List[str] = field(default_factory=list)
+    verification: List[str] = field(default_factory=list)
+    rollback: str = ""
+    related_observations: List[Dict] = field(default_factory=list)
 
 
 @dataclass

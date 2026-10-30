@@ -84,7 +84,7 @@ class TestAnalyzeEndpoint:
         assert response.status_code == 400
         assert "UUID" in response.get_json()["error"]
 
-    def test_anyrun_report_endpoints_do_not_use_v1_prefix(self, monkeypatch):
+    def test_anyrun_report_endpoints_match_official_sdk(self, monkeypatch):
         from anyrun_client import AnyRunClient
 
         seen_urls = []
@@ -107,11 +107,11 @@ class TestAnalyzeEndpoint:
         client.get_task_iocs(task_uuid)
 
         assert seen_urls == [
-            f"https://api.any.run/report/{task_uuid}/summary/json",
+            f"https://api.any.run/v1/analysis/{task_uuid}",
             f"https://api.any.run/report/{task_uuid}/ioc/json",
         ]
 
-    def test_anyrun_report_falls_back_to_v1_analysis_detail(self, monkeypatch):
+    def test_anyrun_json_report_uses_v1_analysis_detail(self, monkeypatch):
         from anyrun_client import AnyRunClient
 
         seen_urls = []
@@ -127,8 +127,6 @@ class TestAnalyzeEndpoint:
 
         def fake_request(self, method, url, **kwargs):
             seen_urls.append(url)
-            if url.endswith("/summary/json"):
-                return FakeResponse(403, {"error": "forbidden"})
             return FakeResponse(200, {"data": {"analysis": {"uuid": task_uuid}, "content": {}}})
 
         monkeypatch.setattr(requests.Session, "request", fake_request)
@@ -139,7 +137,6 @@ class TestAnalyzeEndpoint:
 
         assert payload["data"]["analysis"]["uuid"] == task_uuid
         assert seen_urls == [
-            f"https://api.any.run/report/{task_uuid}/summary/json",
             f"https://api.any.run/v1/analysis/{task_uuid}",
         ]
 

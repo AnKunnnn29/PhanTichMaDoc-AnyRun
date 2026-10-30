@@ -134,10 +134,12 @@ def _iter_ioc_items(ioc_json: dict[str, Any] | list[Any] | None) -> list[dict[st
 
 
 def _read_history() -> list[dict[str, Any]]:
-    if not os.path.exists(_HISTORY_PATH):
+    from runtime_storage import cloud_mode, reports_dir
+    path = str(reports_dir() / 'analysis_history.json') if cloud_mode() else _HISTORY_PATH
+    if not os.path.exists(path):
         return []
     try:
-        with open(_HISTORY_PATH, "r", encoding="utf-8") as fh:
+        with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         return data if isinstance(data, list) else []
     except Exception:
@@ -145,8 +147,10 @@ def _read_history() -> list[dict[str, Any]]:
 
 
 def _write_history(items: list[dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(_HISTORY_PATH), exist_ok=True)
-    with open(_HISTORY_PATH, "w", encoding="utf-8") as fh:
+    from runtime_storage import cloud_mode, reports_dir
+    path = str(reports_dir() / 'analysis_history.json') if cloud_mode() else _HISTORY_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(items, fh, ensure_ascii=False, indent=2)
 
 
