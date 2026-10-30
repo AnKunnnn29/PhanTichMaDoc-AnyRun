@@ -7,7 +7,7 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PIPELINE_VERSION = "evidence-agent-1.5"
+PIPELINE_VERSION = "evidence-agent-1.6"
 
 
 def digest(value) -> str:
@@ -53,7 +53,7 @@ def collect_evidence(report: dict, iocs) -> dict:
     content = report["data"]["content"]
     markdown = report.get("import_metadata", {}).get("original_text", "")
 
-    def add(kind, value, path, source="report", context=None):
+    def add(kind, value, path, source="report", context=None, observable=True):
         if not isinstance(value, (str, int)) or isinstance(value, bool) or not str(value).strip():
             return
         raw = str(value)
@@ -66,6 +66,9 @@ def collect_evidence(report: dict, iocs) -> dict:
             entry["observation"] = "reported"  # text export is not an event log
             entry["source_lines"] = [n for n, line in enumerate(markdown.splitlines(), 1) if raw.lower() in line.lower()][:20]
         records.append(entry)
+        if not observable:
+            # Behaviour signatures, IDS alerts and configs are evidence, not indicators to block.
+            return
         key = (kind, normalized.casefold() if kind in {"file", "registry"} else normalized)
         if key not in index:
             observable = {"id": "ioc-" + digest(key)[:20], "type": kind, "value": normalized,
@@ -79,11 +82,21 @@ def collect_evidence(report: dict, iocs) -> dict:
     for algo in ("md5", "sha1", "sha256"):
         add(algo, (main.get("hashes") or {}).get(algo), "/data/content/mainObject/hashes/" + algo)
     network = content.get("network") or {}
-    for collection, fields in {"connections": {"ip": "ip"}, "httpRequests": {"url": "url", "domain": "domain"},
+    for collection, fields in {"connections": {"ip": "ip"}, "httpRequests": {"url": "url", "domain": "domain", "ip": "ip"},
                                "dnsRequests": {"domain": "domain"}}.items():
         for n, row in enumerate(network.get(collection) or []):
             for field, kind in fields.items():
                 add(kind, row.get(field), f"/data/content/network/{collection}/{n}/{field}", context=row)
+    for n, row in enumerate(network.get("dnsRequests") or []):
+        for i, ip in enumerate(row.get("ips") or []):
+            add("ip", ip, f"/data/content/network/dnsRequests/{n}/ips/{i}",
+                context={"domain": row.get("domain", ""), "relation": "dns_answer", "reputation": row.get("reputation", "")})
+    for n, row in enumerate(network.get("alerts") or []):
+        add("alert", row.get("message"), f"/data/content/network/alerts/{n}/message", context=row, observable=False)
+    for n, row in enumerate(content.get("behaviors") or []):
+        add("behavior", row.get("name"), f"/data/content/behaviors/{n}/name", context=row, observable=False)
+    for n, value in enumerate(content.get("malwareConfig") or []):
+        add("malware_config", value, f"/data/content/malwareConfig/{n}", observable=False)
     for collection, field, kind in [("processes", "name", "process"), ("dropped", "filename", "file"),
                                     ("registry", "key", "registry"), ("synchronization", "name", "mutex"),
                                     ("mitre", "id", "mitre")]:

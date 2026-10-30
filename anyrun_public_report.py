@@ -8,6 +8,7 @@ normalizes it into the report shape consumed by MalwareAnalyzer.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from pathlib import Path
@@ -207,6 +208,10 @@ def _public_vue_data_to_anyrun_report(data: dict, fallback_uuid: str) -> dict:
         "dropped": _normalize_dropped(data.get("filesActivity") or {}),
         "registry": _normalize_registry(data.get("registryActivity") or {}),
         "synchronization": _normalize_sync(data.get("synchronization") or {}),
+        "behaviors": _normalize_behaviors(data.get("behaviorActivities") or []),
+        "threatClasses": _normalize_threat_classes(general),
+        "indicators": [str(i) for i in general.get("indicators", []) or []],
+        "malwareConfig": _normalize_malware_config(data.get("malwareConfiguration") or {}),
     }
     return {
         "publicReport": data,
@@ -255,73 +260,166 @@ def _main_object_size(data: dict) -> int:
     return 0
 
 
+PID_SUFFIX_RE = re.compile(r"^(.*?)\s*\(PID:\s*(\d+)\)\s*$")
+
+
+def _at(row, index, default=""):
+    return row[index] if isinstance(row, list) and len(row) > index else default
+
+
+def _text(value, limit=2000) -> str:
+    """Public report cells use an em dash for "no value"; keep everything else as text."""
+    if value is None or value in ("—", "-"):
+        return ""
+    return str(value)[:limit]
+
+
+def _label(value) -> str:
+    return _text(value.get("value", "")) if isinstance(value, dict) else _text(value)
+
+
+def _pid(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _endpoint(value) -> tuple[str, int | None]:
+    text = _text(value)
+    host, sep, port = text.rpartition(":")
+    if sep and port.isdigit():
+        return host.strip("[]"), int(port)
+    return text, None
+
+
+def _is_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
 def _normalize_network(network: dict) -> dict:
-    connections = []
-    http_requests = []
-    dns_requests = []
+    """Keep who connected where: PID/process, port, ASN, country and ANY.RUN reputation."""
+    connections, http_requests, dns_requests, alerts = [], [], [], []
     for row in network.get("connections", []) or []:
-        remote = str(row[2] if len(row) > 2 else "")
-        ip = remote.rsplit(":", 1)[0] if ":" in remote else remote
-        if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip):
-            connections.append({"ip": ip})
+        ip, port = _endpoint(_at(row, 2))
+        if not _is_ip(ip):
+            continue
+        connections.append({"ip": ip, "port": port, "pid": _pid(_at(row, 0)), "process": _text(_at(row, 1)),
+                            "domain": _text(_at(row, 3)), "asn": _text(_at(row, 4)), "country": _text(_at(row, 5)),
+                            "reputation": _label(_at(row, 6))})
     for row in network.get("requests", []) or []:
-        url = str(row[5] if len(row) > 5 else "")
-        parsed = urlparse(url)
-        http_requests.append(
-            {
-                "method": str(row[2] if len(row) > 2 else ""),
-                "status": row[3] if len(row) > 3 else "",
-                "url": url,
-                "domain": parsed.hostname or "",
-                "userAgent": "",
-            }
-        )
+        url = _text(_at(row, 5))
+        ip, port = _endpoint(_at(row, 4))
+        http_requests.append({"pid": _pid(_at(row, 0)), "process": _text(_at(row, 1)), "method": _text(_at(row, 2)),
+                              "status": _text(_at(row, 3)), "ip": ip if _is_ip(ip) else "", "port": port,
+                              "url": url, "domain": urlparse(url).hostname or "", "country": _text(_at(row, 6)),
+                              "contentType": _label(_at(row, 7)), "size": _text(_at(row, 8)),
+                              "reputation": _label(_at(row, 9)), "userAgent": ""})
     for row in network.get("dns", []) or []:
-        domain = str(row[0] if row else "")
-        dns_requests.append({"domain": domain})
-        for ip in row[1] if len(row) > 1 and isinstance(row[1], list) else []:
-            connections.append({"ip": ip})
-    return {"connections": connections, "httpRequests": http_requests, "dnsRequests": dns_requests}
+        answers = _at(row, 1, [])
+        # Resolved addresses stay attached to their domain; resolving is not the same as connecting.
+        dns_requests.append({"domain": _text(_at(row, 0)),
+                             "ips": [str(ip) for ip in answers if _is_ip(str(ip))] if isinstance(answers, list) else [],
+                             "reputation": _label(_at(row, 2))})
+    for row in network.get("threats", []) or []:
+        alerts.append({"pid": _pid(_at(row, 0)), "process": _text(_at(row, 1)), "class": _label(_at(row, 2)),
+                       "message": _text(_at(row, 3))})
+    return {"connections": connections, "httpRequests": http_requests, "dnsRequests": dns_requests, "alerts": alerts}
 
 
 def _normalize_processes(processes: dict) -> list[dict]:
-    normalized = []
+    rows = []
     for item in processes.get("processesValues", []) or []:
         row = item.get("rowData") or {}
         values = row.get("values") or []
-        normalized.append(
-            {
-                "pid": item.get("pid") or (values[0] if values else 0),
-                "ppid": None,
-                "name": item.get("fileName") or Path(str(values[2] if len(values) > 2 else "")).name,
-                "cmd": str(values[1] if len(values) > 1 else ""),
-                "isInjected": None,
-                "scores": {"verdict": {"threatLevel": row.get("threatLevel", 0)}},
-            }
-        )
-    return normalized
+        info = (row.get("information") or {}).get("values") or []
+        path = _text(_at(values, 2))
+        indicators = _at(values, 3, [])
+        rows.append({
+            "pid": _pid(item.get("pid") or _at(values, 0)) or 0,
+            "ppid": None,
+            "parentName": _text(_at(values, 4)),
+            "name": item.get("fileName") or Path(path.replace("\\", "/")).name,
+            "path": path,
+            "cmd": _text(_at(values, 1), 4000),
+            "indicators": [str(i) for i in indicators] if isinstance(indicators, list) else [],
+            "user": _text(_at(info, 0)), "company": _text(_at(info, 1)), "integrity": _text(_at(info, 2)),
+            "description": _text(_at(info, 3)),
+            "isInjected": None,
+            "scores": {"verdict": {"threatLevel": row.get("threatLevel", 0)}},
+        })
+    # The public page names the parent but not its PID. Link only when that name is unique,
+    # and say so, rather than guessing between several processes with the same name.
+    by_name = {}
+    for row in rows:
+        by_name.setdefault(row["name"].lower(), []).append(row["pid"])
+    for row in rows:
+        candidates = by_name.get(row["parentName"].lower(), [])
+        if len(candidates) == 1 and candidates[0] != row["pid"]:
+            row["ppid"] = candidates[0]
+            row["ppidBasis"] = "unique_parent_name"
+    return rows
 
 
 def _normalize_dropped(files: dict) -> list[dict]:
     result = []
     for item in files.get("droppedFiles", []) or []:
-        result.append(
-            {
-                "filename": item.get("filename", ""),
-                "hashes": {"md5": item.get("md5", ""), "sha256": item.get("sha256", "")},
-                "type": (item.get("type") or {}).get("value", "") if isinstance(item.get("type"), dict) else item.get("type", ""),
-            }
-        )
+        result.append({
+            "filename": _text(item.get("filename", "")),
+            "pid": _pid(item.get("pid")), "process": _text(item.get("process", "")),
+            "hashes": {"md5": _text(item.get("md5", "")), "sha256": _text(item.get("sha256", ""))},
+            "type": _label(item.get("type") or ""),
+        })
     return result
 
 
 def _normalize_registry(registry: dict) -> list[dict]:
-    return [{"key": item.get("key", "")} for item in registry.get("modificationEvents", []) or []]
+    rows = []
+    for item in registry.get("modificationEvents", []) or []:
+        if not isinstance(item, dict):
+            continue
+        row = {k: _text(item.get(k, "")) for k in ("key", "name", "value", "operation", "process")}
+        row["pid"] = _pid(item.get("pid"))
+        rows.append(row)
+    return rows
 
 
 def _normalize_sync(sync: dict) -> list[dict]:
     values = sync.get("values", []) or []
     return [{"name": item.get("name", str(item)) if isinstance(item, dict) else str(item)} for item in values]
+
+
+def _normalize_behaviors(groups: list) -> list[dict]:
+    """ANY.RUN behaviour signatures, e.g. "Deletes shadow copies", with the processes that showed them."""
+    rows = []
+    for group in groups or []:
+        if not isinstance(group, dict):
+            continue
+        severity = _text(group.get("name", "")).lower()
+        for behavior in group.get("values", []) or []:
+            if not isinstance(behavior, dict) or not _text(behavior.get("name", "")):
+                continue
+            processes = []
+            for value in behavior.get("values", []) or []:
+                match = PID_SUFFIX_RE.match(str(value))
+                processes.append({"name": match.group(1), "pid": int(match.group(2))} if match
+                                 else {"name": _text(value), "pid": None})
+            rows.append({"severity": severity, "name": _text(behavior.get("name", "")), "processes": processes[:50]})
+    return rows
+
+
+def _normalize_threat_classes(general: dict) -> list[dict]:
+    return [{"title": _text(item.get("title", "")), "tag": _text(item.get("mainTag", ""))}
+            for item in general.get("threats", []) or [] if isinstance(item, dict)]
+
+
+def _normalize_malware_config(config: dict) -> list[str]:
+    # Extracted configs vary by family; keep them as bounded JSON text for evidence and the agent.
+    return [json.dumps(item, ensure_ascii=False)[:4000] for item in (config or {}).get("familiesMalconfs", []) or []][:10]
 
 
 def _behavior_to_mitre(groups: list[dict]) -> list[dict]:

@@ -41,14 +41,19 @@ def build_behavior(bundle):
                        "ir_action": "Xác minh artifact trên endpoint/log; chưa suy ra quan hệ nhân quả."})
         pid, ppid = context.get("pid"), context.get("ppid")
         if row["type"] == "process" and ppid and str(ppid) in processes:
-            edges.append({"source": processes[str(ppid)], "target": row["id"], "relation": "reported_parent_process",
-                          "evidence_ids": [processes[str(ppid)], row["id"]], "assessment_status": "reported"})
+            # Public reports name the parent without its PID; a unique-name match is an inference.
+            inferred = context.get("ppidBasis") == "unique_parent_name"
+            edges.append({"source": processes[str(ppid)], "target": row["id"],
+                          "relation": "parent_by_unique_name" if inferred else "reported_parent_process",
+                          "evidence_ids": [processes[str(ppid)], row["id"]],
+                          "assessment_status": "inferred" if inferred else "reported"})
         elif row["type"] != "process" and pid and str(pid) in processes:
             edges.append({"source": processes[str(pid)], "target": row["id"], "relation": "reported_process_artifact",
                           "evidence_ids": [processes[str(pid)], row["id"]], "assessment_status": "reported"})
     return {"events": events, "relations": edges,
             "limitations": ["Thứ tự nguồn không chứng minh trình tự thời gian hoặc quan hệ nhân quả.",
-                            "Không dựng quan hệ process/artifact khi nguồn thiếu PID."]}
+                            "Không dựng quan hệ process/artifact khi nguồn thiếu PID.",
+                            "Quan hệ cha-con có nhãn inferred được suy ra từ tên tiến trình cha duy nhất, không phải PPID của nguồn."]}
 
 
 def run_pipeline(report, iocs, source="manual"):

@@ -1167,7 +1167,9 @@ function renderEvidencePanel(data) {
   const chain = add(card, 'details');
   add(chain, 'summary', `Quan hệ hành vi (${data.behavior_chain.relations.length}) và MITRE (${data.mitre_mappings.length})`);
   add(chain, 'p', data.behavior_chain.limitations.join(' '));
-  for (const edge of data.behavior_chain.relations) add(chain, 'p', `${edge.source} → ${edge.target}: ${edge.relation}`);
+  // Real reports can hold hundreds of process→artifact links; show the first ones and say how many exist.
+  for (const edge of data.behavior_chain.relations.slice(0, 200)) add(chain, 'p', `${edge.source} → ${edge.target}: ${edge.relation}${edge.assessment_status === 'inferred' ? ' (suy luận)' : ''}`);
+  if (data.behavior_chain.relations.length > 200) add(chain, 'p', `… và ${data.behavior_chain.relations.length - 200} quan hệ khác (có đủ trong JSON xuất ra).`);
   for (const mapping of data.mitre_mappings) add(chain, 'p', `${mapping.technique_id}: ${mapping.reason} [${mapping.evidence_ids.join(', ')}]`);
   const reviewRoot = document.getElementById('review-content') || root;
   reviewRoot.replaceChildren();
