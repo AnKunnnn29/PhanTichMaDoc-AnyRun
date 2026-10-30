@@ -71,7 +71,10 @@ def test_review_requires_decision_reviewer_and_reason(flask_test_client, emotet_
 @pytest.mark.parametrize("malware", ["emotet", "wannacry", "redline"])
 def test_three_demos_have_full_evidence_agent_and_review_metadata(flask_test_client, malware):
     data = flask_test_client.get(f"/api/demo/{malware}").get_json()["data"]
-    validate_bundle(data["evidence_bundle"])
+    # The browser copy omits the raw report; integrity is checked on the full server snapshot.
+    assert all(src["content_omitted"] and "content" not in src for src in data["evidence_bundle"]["sources"])
+    from case_store import load_case
+    validate_bundle(load_case(data["case_id"])["evidence_bundle"])
     assert data["agent_analysis"]["findings"]
     assert data["nist"]["revision"] == "SP 800-61 Rev.3"
     assert all(a["status"] == "pending" and a["id"] for a in data["playbook"]["actions"])
@@ -88,3 +91,13 @@ def test_forwarded_header_does_not_bypass_rate_limit(flask_test_client):
     for n in range(35):
         response = flask_test_client.post("/api/analyze/json", data={}, headers={"X-Forwarded-For": f"spoof-{n}"})
     assert response.status_code == 429
+
+
+def test_restored_slim_copy_does_not_replace_full_history_payload(flask_test_client):
+    import history_store
+    data = flask_test_client.get("/api/demo/wannacry").get_json()["data"]
+    assert flask_test_client.post("/api/history/local/save", json={"data": data, "source": "browser:restore"}).get_json()["ok"]
+    stored = next(i["payload"] for i in history_store.load_history() if i["payload"].get("case_id") == data["case_id"])
+    assert all("content" in src for src in stored["evidence_bundle"]["sources"])
+    reopened = flask_test_client.get("/api/cases/" + data["case_id"]).get_json()["data"]
+    assert all("content" not in src for src in reopened["evidence_bundle"]["sources"])

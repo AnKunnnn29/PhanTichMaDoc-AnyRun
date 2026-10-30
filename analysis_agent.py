@@ -104,6 +104,56 @@ def validate_findings(findings, bundle: dict, expected_ids: set[str]) -> None:
                 raise ValueError(f"Trường Agent không hợp lệ: {key}")
 
 
+def _repair_json(text: str):
+    """Fix only bracket bookkeeping on a reply the model finished: missing closers at the end or
+    stray closers after a complete object. Anything else (wrong bracket, cut string) stays invalid."""
+    s = text.strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else ""
+        s = s[:s.rfind("```")] if "```" in s else s
+    try:
+        obj, end = json.JSONDecoder().raw_decode(s)
+        if isinstance(obj, dict) and not s[end:].strip(" \n\r\t}]"):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    stack, in_string, escaped = [], False, False
+    for ch in s:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if not stack or stack.pop() != ch:
+                return None
+    if in_string or not stack or len(stack) > 4:
+        return None
+    try:
+        obj = json.loads(s + "".join(reversed(stack)))
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def parse_model_json(text: str) -> dict:
+    """Parse a model reply; a repaired reply is marked so callers can record it and still validate it fully."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        repaired = _repair_json(text)
+        if repaired is None:
+            raise
+        repaired["_json_repaired"] = True
+        return repaired
+
+
 def pipeline_deadline() -> float:
     """Absolute monotonic deadline for every model call of one analysis (hosting allows 60 s per request)."""
     # 45 s leaves room for fetching the report inside Vercel's 60 s request limit; local runs have no such limit.
@@ -130,7 +180,8 @@ def _call_model(messages: list, settings: dict) -> dict:
                    "options": {"temperature": 0.1, "num_predict": settings.get("max_tokens", 4096)}}
         response = requests.post(url, json=payload, timeout=_timeout(settings))
         response.raise_for_status()
-        text = response.json()["message"]["content"]
+        reply = response.json()
+        text, finish = reply["message"]["content"], reply.get("done_reason")
     elif settings["provider"] in {"openai", "deepseek", "gemini"}:
         deepseek = settings["provider"] == "deepseek"
         # Gemini is called through Google's OpenAI-compatible endpoint with an AI Studio key.
@@ -156,12 +207,16 @@ def _call_model(messages: list, settings: dict) -> dict:
                 break  # no time left to wait and retry; report the provider error instead
             time.sleep(wait)
         response.raise_for_status()
-        text = response.json()["choices"][0]["message"]["content"]
+        choice = response.json()["choices"][0]
+        text, finish = choice["message"]["content"] or "", choice.get("finish_reason")
     else:
         raise ValueError("AGENT_PROVIDER chỉ hỗ trợ rules, ollama, openai, deepseek hoặc gemini")
     if len(text) > 100000:
         raise ValueError("Agent output quá lớn")
-    answer = json.loads(text)
+    if finish == "length":
+        # The reply was cut at the token limit: a partial object is never repaired or used.
+        raise json.JSONDecodeError("truncated: finish_reason=length", text, len(text))
+    answer = parse_model_json(text)
     if not isinstance(answer, dict):
         raise ValueError("Agent output phải là JSON object")
     return answer
@@ -216,10 +271,14 @@ def investigate(bundle: dict, profiles: dict | None = None, deadline: float | No
                 for _ in range(BATCH_STEPS):
                     try:
                         answer = _call_model(messages, {**settings, "deadline": deadline})
-                    except json.JSONDecodeError:
-                        local.append({"tool": "model_output", "status": "invalid_json"})
-                        messages.append({"role": "user", "content": "JSON chưa hoàn chỉnh. Trả submit_findings cho toàn bộ batch, mỗi trường văn bản tối đa 160 ký tự, không thêm markdown."})
+                    except json.JSONDecodeError as exc:
+                        cut = "truncated" in str(exc)
+                        local.append({"tool": "model_output", "status": "truncated" if cut else "invalid_json"})
+                        messages.append({"role": "user", "content": ("Câu trả lời bị cắt vì quá dài. " if cut else "JSON chưa hoàn chỉnh. ")
+                                         + "Trả submit_findings cho toàn bộ batch, mỗi trường văn bản tối đa 160 ký tự, không thêm markdown."})
                         continue
+                    if answer.pop("_json_repaired", False):
+                        local.append({"tool": "model_output", "status": "json_repaired"})
                     # Models sometimes submit {"findings": [...]} without naming the tool; it is validated the same way.
                     tool = answer.get("tool") or ("submit_findings" if "findings" in answer else None)
                     if tool == "get_evidence":

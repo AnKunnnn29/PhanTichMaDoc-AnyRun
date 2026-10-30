@@ -155,12 +155,23 @@ def rate_limit(max_requests=60, window_seconds=60):
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
+def _client_payload(payload):
+    """The browser reads evidence rows, never the raw report copy kept for verification. Sending it
+    only made responses heavier (close to Vercel's 4.5 MB limit), so it stays on the server."""
+    bundle = payload.get("evidence_bundle") if isinstance(payload, dict) else None
+    if not isinstance(bundle, dict) or not bundle.get("sources"):
+        return payload
+    sources = [{"id": src.get("id"), "sha256": src.get("sha256"), "content_omitted": True}
+               for src in bundle["sources"] if isinstance(src, dict)]
+    return {**payload, "evidence_bundle": {**bundle, "sources": sources}}
+
+
 def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
     if use_cache:
         cached = find_case(analysis_key(report_json, ioc_json))
         if cached and "fallback" not in (cached.get("agent_analysis", {}).get("mode"), cached.get("case_agent", {}).get("mode")):
             cached["cache"] = {"hit": True, "reason": "Trùng toàn bộ nội dung và phiên bản/cấu hình phân tích"}
-            return cached
+            return _client_payload(cached)
 
     result, playbook = run_pipeline(report_json, ioc_json, source=source)
     f = result.file_info
@@ -226,7 +237,7 @@ def _build_payload(report_json, ioc_json, use_cache=True, source="manual"):
     }
     save_case(payload)
     record_analysis(payload, source=source)
-    return payload
+    return _client_payload(payload)
 
 
 def _get_optional_anyrun_iocs(client, task_id):
@@ -691,7 +702,7 @@ def local_history_latest():
     for item in load_local_history():
         payload = item.get("payload")
         if payload:
-            return jsonify({"ok": True, "data": payload})
+            return jsonify({"ok": True, "data": _client_payload(payload)})
     return jsonify({"ok": False, "error": "Chua co lich su phan tich"}), 404
 
 
@@ -705,6 +716,10 @@ def local_history_save():
     if not data:
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
     try:
+        # The browser holds the slim copy; keep the full server snapshot in history when there is one.
+        sources = (data.get("evidence_bundle") or {}).get("sources") or []
+        if data.get("case_id") and any(isinstance(s, dict) and s.get("content_omitted") for s in sources):
+            data = load_case(data["case_id"]) or data
         entry = record_analysis(data, source=source)
         clean = {k: v for k, v in entry.items() if k != "payload"}
         return jsonify({"ok": True, "item": clean})
@@ -718,7 +733,7 @@ def local_history_item(item_id):
         if item.get("id") == item_id:
             payload = item.get("payload")
             if payload:
-                return jsonify({"ok": True, "data": payload})
+                return jsonify({"ok": True, "data": _client_payload(payload)})
     return jsonify({"ok": False, "error": "Khong tim thay muc lich su"}), 404
 
 
@@ -797,7 +812,7 @@ def local_ai_status():
 @app.route("/api/cases/<case_id>", methods=["GET"])
 def case_detail(case_id):
     payload = load_case(case_id)
-    return jsonify({"ok": True, "data": payload}) if payload else _error_response("Không tìm thấy phân tích", 404)
+    return jsonify({"ok": True, "data": _client_payload(payload)}) if payload else _error_response("Không tìm thấy phân tích", 404)
 
 
 @app.route("/api/cases/<case_id>/review", methods=["POST"])
@@ -808,7 +823,7 @@ def case_review(case_id):
         payload = review_action(case_id, body.get("action_id"), body.get("decision"), body.get("reviewer"),
                                 body.get("reason"), body.get("expected_revision"))
         record_analysis(payload, source="analyst_review")
-        return jsonify({"ok": True, "data": payload})
+        return jsonify({"ok": True, "data": _client_payload(payload)})
     except KeyError as exc:
         return _error_response(str(exc), 404)
     except RuntimeError as exc:

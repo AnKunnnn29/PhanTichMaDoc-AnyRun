@@ -343,3 +343,51 @@ def test_case_prompt_version_is_part_of_the_cache_key(monkeypatch, emotet_report
     before = analysis_pipeline.analysis_key(emotet_report, {})
     monkeypatch.setattr(analysis_pipeline, "CASE_PROMPT_VERSION", "other")
     assert analysis_pipeline.analysis_key(emotet_report, {}) != before
+
+
+@pytest.mark.parametrize("text,expected", [
+    ('{"tool": "submit_assessment", "args": {"assessment": {"q": ["a}", "b"]}}', {"tool": "submit_assessment", "args": {"assessment": {"q": ["a}", "b"]}}}),
+    ('{"tool": "x", "args": {}}}', {"tool": "x", "args": {}}),
+    ('```json\n{"tool": "x"}\n```', {"tool": "x"}),
+])
+def test_bracket_bookkeeping_is_repaired_and_marked(text, expected):
+    from analysis_agent import parse_model_json
+    answer = parse_model_json(text)
+    assert answer.pop("_json_repaired") is True and answer == expected
+
+
+@pytest.mark.parametrize("text", ['{"a": [1, 2}', '{"a": "cut in the middle', '{"a": 1} trailing words'])
+def test_other_broken_json_is_not_guessed(text):
+    import json
+    from analysis_agent import parse_model_json
+    with pytest.raises(json.JSONDecodeError):
+        parse_model_json(text)
+
+
+def test_reply_cut_at_token_limit_is_reported_as_truncated(monkeypatch):
+    import json
+    import responses as mock
+    from analysis_agent import _call_model, agent_settings
+    monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
+    settings = agent_settings()
+    with mock.RequestsMock() as rsps:
+        rsps.post(settings["endpoint"] + "/chat/completions",
+                  json={"choices": [{"finish_reason": "length", "message": {"content": '{"tool": "submit_assessment", "args": {"a'}}]})
+        with pytest.raises(json.JSONDecodeError, match="truncated"):
+            _call_model([{"role": "user", "content": "x"}], settings)
+
+
+def test_agent_records_repairs_and_asks_for_a_shorter_reply_when_cut(monkeypatch, wannacry):
+    import json
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
+
+    def cut(messages):
+        raise json.JSONDecodeError("truncated: finish_reason=length", "", 0)
+    calls = scripted(monkeypatch, [cut,
+                                   {"tool": "get_evidence", "args": {"evidence_ids": ids[:1]}, "_json_repaired": True},
+                                   {"tool": "submit_assessment", "assessment": valid_assessment(bundle, actions, ids)}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert case["mode"] == "llm"
+    assert case["tool_trace"][0]["status"] == "truncated" and "bị cắt vì quá dài" in calls[1][-1]["content"]
+    assert case["tool_trace"][1]["json_repaired"] is True and "_json_repaired" not in json.dumps(case["assessment"])
