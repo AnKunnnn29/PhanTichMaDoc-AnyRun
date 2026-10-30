@@ -100,10 +100,7 @@ class AnyRunClient:
         GET /report/{taskUuid}/summary/json
         """
         task_uuid = validate_task_uuid(task_uuid)
-        try:
-            return self._request("GET", f"/report/{task_uuid}/summary/json", base_url=self.REPORT_BASE_URL)
-        except (AnyRunAuthError, AnyRunNotFoundError):
-            return self._request("GET", f"/analysis/{task_uuid}")
+        return self._request("GET", f"/analysis/{task_uuid}")
 
     def get_task_iocs(self, task_uuid: str) -> dict:
         """

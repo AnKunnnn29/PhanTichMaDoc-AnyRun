@@ -7,7 +7,7 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PIPELINE_VERSION = "evidence-agent-1.2"
+PIPELINE_VERSION = "evidence-agent-1.4"
 
 
 def digest(value) -> str:

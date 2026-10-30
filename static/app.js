@@ -8,6 +8,9 @@ let G = {
 const LAST_ANALYSIS_KEY = 'ir_last_analysis_payload';
 
 window.onload = async () => {
+  // Auto-load API key từ backend nếu có
+  await loadConfigFromBackend();
+
   if (G.apiKey) document.getElementById('api-key-input').value = G.apiKey;
   document.getElementById('hist-key').value = G.apiKey;
   if (restoreLastAnalysis()) {
@@ -20,10 +23,32 @@ window.onload = async () => {
   animateCards(document);
 };
 
+async function loadConfigFromBackend() {
+  try {
+    const r = await fetch('/api/config');
+    const j = await r.json();
+    if (j.ok && j.data.api_key) {
+      // Nếu backend có API key (từ .env), tự động load
+      G.apiKey = j.data.api_key;
+      localStorage.setItem('ir_apikey', G.apiKey);
+      console.log('✅ Auto-loaded API key from backend .env');
+    } else if (localStorage.getItem('ir_apikey')) {
+      // Fallback về localStorage nếu có
+      G.apiKey = localStorage.getItem('ir_apikey');
+      console.log('✅ Loaded API key from localStorage');
+    }
+  } catch (e) {
+    console.warn('Could not load config from backend:', e);
+    // Fallback về localStorage
+    G.apiKey = localStorage.getItem('ir_apikey') || '';
+  }
+}
+
 // ── Navigation ───────────────────────────────────────────────────────────────
 function showPage(id, el) {
+  if (typeof updateGuide === 'function') updateGuide();
   const pageLabel = document.getElementById('workspace-page-label');
-  if (pageLabel) pageLabel.textContent = ({home:'Tổng quan',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Quy trình IR',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
+  if (pageLabel) pageLabel.textContent = ({home:'Bắt đầu',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Kế hoạch khắc phục',evidence:'Bằng chứng nguồn',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
   const target = document.getElementById('page-' + id);
   document.querySelectorAll('[id^="page-"]').forEach(p => {
     p.style.display = p === target ? 'block' : 'none';
@@ -127,26 +152,27 @@ async function runDemo(malware = 'emotet') {
 }
 
 async function analyzeTask() {
-  const key = getKey();
-  const taskInput = document.getElementById('task-uuid');
-  const taskRef = taskInput.value.trim();
+  const taskRef = document.getElementById('task-uuid').value.trim();
   const uuid = extractTaskUuid(taskRef);
-  if (!key)  return toast('Nhập API key trước', 'err');
-  if (!uuid) return toast('Nhập Task UUID', 'err');
-  showLoading('Đang lấy dữ liệu từ Any.Run...');
+  const panel = document.getElementById('task-error');
+  panel.hidden = true;
+  document.getElementById('task-error-message').textContent = '';
+  if (!uuid) return toast('Nhập liên kết Any.Run hoặc Task ID hợp lệ.', 'err');
+  const key = getKey();
+  showLoading(key ? 'Đang lấy báo cáo từ Any.Run API…' : 'Đang kiểm tra trang công khai từ Any.Run…');
   try {
-    const r = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key, task_id: uuid, task_ref: taskRef })
+    const response = await fetch('/api/analyze', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key:key, task_id:uuid, task_ref:taskRef})
     });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
-    renderAll(j.data);
-    showDashboard();
-    toast('Phân tích hoàn tất!');
-  } catch (e) { toast(e.message, 'err'); }
-  finally { hideLoading(); }
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || 'Chưa tải được báo cáo.');
+    renderAll(result.data); showDashboard(); toast('Phân tích hoàn tất!');
+  } catch (error) {
+    document.getElementById('task-error-message').textContent = error.message;
+    panel.hidden = false;
+    panel.scrollIntoView({block:'nearest'});
+  } finally { hideLoading(); }
 }
 
 function extractTaskUuid(value) {
@@ -424,6 +450,7 @@ function renderGhidraResult(data) {
   const ghidra = data.ghidra || {};
   const summary = ghidra.summary || {};
   const enrich = data.ir_enrichment || {};
+  const assessment = enrich.malicious_assessment || {};
   const entropy = Number(triage.entropy || 0);
   const iocTotal = ['urls', 'domains', 'ips', 'registry'].reduce((n, key) => n + ((triage[key] || []).length), 0);
   const suspiciousApis = [...(triage.suspicious_apis || []), ...(summary.suspicious_imports || [])];
@@ -452,7 +479,41 @@ function renderGhidraResult(data) {
   const ghidraState = isGhidraOk
     ? `<span class="badge clean">Ghidra OK</span>`
     : `<span class="badge medium">${esc(ghidra.status || 'not_configured')}</span>`;
+  const assessmentClass = String(assessment.verdict || '').includes('cao') ? 'critical'
+    : String(assessment.verdict || '').includes('nghi') || String(assessment.verdict || '').includes('dấu hiệu') ? 'medium'
+    : 'clean';
+  const evidenceList = (assessment.evidence || []).map(x => `<li>${esc(x)}</li>`).join('');
+  const limitsList = (assessment.limits || []).map(x => `<li>${esc(x)}</li>`).join('');
   document.getElementById('ghidra-result').innerHTML = `
+    <div class="ghidra-panel">
+      <div class="card-title">Kết luận nhanh</div>
+      <div class="inline-note">
+        <b>Loại phân tích:</b> Static analysis với Ghidra. File không được chạy, nên đây chưa phải phân tích động.
+      </div>
+      <div class="ghidra-summary-grid compact">
+        <div class="stat-box">
+          <div class="val">${esc(assessment.verdict || 'Chưa đủ bằng chứng')}</div>
+          <div class="lbl">Đánh giá mã độc</div>
+          <span class="badge ${assessmentClass}">${esc(assessment.confidence || 'low')}</span>
+        </div>
+        <div class="stat-box">
+          <div class="val">${enrich.dynamic_analysis ? 'Có' : 'Không'}</div>
+          <div class="lbl">Dynamic analysis</div>
+          <span class="badge ${enrich.dynamic_analysis ? 'clean' : 'medium'}">${enrich.dynamic_analysis ? 'runtime' : 'static only'}</span>
+        </div>
+      </div>
+      <div class="ghidra-detail-grid">
+        <div>
+          <b>Dấu hiệu đang có</b>
+          <ul class="compact-list">${evidenceList || '<li>Chưa có dấu hiệu mạnh.</li>'}</ul>
+        </div>
+        <div>
+          <b>Giới hạn cần nhớ</b>
+          <ul class="compact-list">${limitsList || '<li>Cần sandbox/EDR để xác nhận hành vi khi chạy.</li>'}</ul>
+        </div>
+      </div>
+    </div>
+
     <div class="ghidra-summary-grid">
       <div class="stat-box">
         <div class="val">${esc(entropy ? entropy.toFixed(2) : 'N/A')}</div>
@@ -806,112 +867,7 @@ function netTab(id, el) {
 }
 
 function renderPlaybook(d) {
-  const p = d.playbook;
-  const phaseMap = {};
-  p.actions.forEach(a => { (phaseMap[a.phase] = phaseMap[a.phase]||[]).push(a); });
-  const pColors = { 1:'p1', 2:'p2', 3:'p3', 4:'p4' };
-  const pIcons  = { 1:'🔴', 2:'🟠', 3:'🟡', 4:'🟢' };
-  const score = p.severity_score || {};
-  const evalData = d.ir_evaluation || {};
-  const timeline = p.timeline || [];
-  const hunts = p.scope_hunting || [];
-
-  let html = `
-    <div class="card" style="margin-bottom:20px">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
-        <span class="badge ${severityClass(p.threat_level)}">${esc(p.severity)}</span>
-        <span style="font-size:18px;font-weight:700">${esc(p.malware_name)}</span>
-      </div>
-      <p style="color:var(--text2);font-size:13.5px;line-height:1.7;margin-bottom:10px">${esc(p.summary)}</p>
-      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--accent);font-size:13px;line-height:1.7">${esc(p.mitigation)}</div>
-    </div>`;
-
-  html += `
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-title">Ma trận đánh giá mức độ</div>
-      <div class="grid-3">
-        <div class="stat-box stat-gauge">${buildThreatGauge(score.score, p.threat_level)}<div class="lbl">Risk Score</div></div>
-        <div class="stat-box"><div class="val">${esc(score.recommended_severity || 'N/A')}</div><div class="lbl">Đề xuất</div></div>
-        <div class="stat-box"><div class="val">${esc(evalData.readiness_score ?? 'N/A')}%</div><div class="lbl">Độ đầy đủ cấu trúc</div></div>
-      </div>
-      <div style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
-        ${(score.reasons || []).map(r => `<div>• ${esc(r)}</div>`).join('') || 'Chưa có lý do scoring.'}
-      </div>
-      <div style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
-        Outputs: ${(evalData.detection_outputs || []).map(x => esc(x)).join(', ') || 'N/A'}
-      </div>
-    </div>`;
-
-  if (timeline.length) {
-    html += `<div class="card" style="margin-bottom:20px">
-      <details><summary class="card-title">Sự kiện nguồn (${timeline.length})</summary>
-      <div class="table-wrap"><table><thead><tr><th>Bước</th><th>Giai đoạn</th><th>Sự kiện</th><th>Bằng chứng</th><th>Hành động IR</th></tr></thead><tbody>
-      ${timeline.map(row => `<tr>
-        <td>${esc(row.step)}</td>
-        <td>${esc(row.stage)}</td>
-        <td>${esc(row.event)}</td>
-        <td><code>${esc(row.evidence || 'N/A')}</code></td>
-        <td>${esc(row.ir_action || '')}</td>
-      </tr>`).join('')}
-      </tbody></table></div></details>
-    </div>`;
-  }
-
-  if (hunts.length) {
-    html += `<div class="card" style="margin-bottom:20px">
-      <details><summary class="card-title">Truy vấn điều tra (${hunts.length})</summary>
-      ${hunts.map(h => `<div class="action-card p2">
-        <div class="action-header">
-          <span>${esc(h.priority || 'P2')}</span>
-          <span class="action-title">${esc(h.question || 'Hunting query')}</span>
-          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${esc(h.data_source || '')}</span>
-        </div>
-        <div class="action-desc">${esc(h.evidence || '')}</div>
-        <div class="code-block"><span class="cmd-line">${esc(h.query || '')}</span></div>
-      </div>`).join('')}</details>
-    </div>`;
-  }
-
-  Object.entries(phaseMap).forEach(([phase, acts]) => {
-    html += `<div class="phase-group">
-      <div class="phase-header" onclick="togglePhase(this)">
-        📌 ${esc(phase)}
-        <span class="count">${acts.length} hành động</span>
-        <svg style="width:16px;height:16px;margin-left:8px;transition:transform 0.2s" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-      </div>
-      <div class="phase-body">`;
-    acts.forEach(a => {
-      html += `<div class="action-card ${pColors[a.priority]||''}">
-        <div class="action-header">
-          <span>${pIcons[a.priority]||''}</span>
-          <span class="action-title">${esc(a.title)}</span>
-          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${esc(a.category)}</span>
-        </div>
-        <div class="action-desc">${esc(productDescription(a.description))}</div>`;
-      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:11px;color:var(--text2)">
-        <span class="tag">Owner: ${esc(a.owner || 'N/A')}</span>
-        <span class="tag">SLA: ${esc(a.sla || 'N/A')}</span>
-        <span class="tag">Status: ${esc(a.status || 'pending')}</span>
-      </div>`;
-      if (a.commands && a.commands.length) {
-        html += `<div class="code-block">${a.commands.map(c =>
-          c.startsWith('#')||!c.trim()
-            ? `<span class="cmd-comment">${esc(c)}</span>`
-            : `<span class="cmd-line">${esc(c)}</span>`
-        ).join('\n')}</div>`;
-      }
-      if (a.notes && a.notes.length) {
-        html += `<div class="action-notes">${a.notes.map(n=>`<div class="action-note">💡 <span>${esc(n)}</span></div>`).join('')}</div>`;
-      }
-      if (a.evidence_required && a.evidence_required.length) {
-        html += `<div class="action-notes">${a.evidence_required.map(n=>`<div class="action-note">Evidence: <span>${esc(n)}</span></div>`).join('')}</div>`;
-      }
-      html += `</div>`;
-    });
-    html += `</div></div>`;
-  });
-  document.getElementById('playbook-content').innerHTML = html;
-  animateCards(document.getElementById('playbook-content'));
+  renderResponsePlan(d);
 }
 
 function togglePhase(el) {
@@ -1124,6 +1080,7 @@ function renderEvidencePanel(data) {
   const root = document.getElementById('evidence-content');
   if (!root) return;
   root.replaceChildren();
+  document.getElementById('review-content')?.replaceChildren();
   const add = (parent, tag, text, cls = '') => {
     const el = document.createElement(tag);
     if (text !== undefined) el.textContent = String(text);
@@ -1182,8 +1139,11 @@ function renderEvidencePanel(data) {
   add(chain, 'p', data.behavior_chain.limitations.join(' '));
   for (const edge of data.behavior_chain.relations) add(chain, 'p', `${edge.source} → ${edge.target}: ${edge.relation}`);
   for (const mapping of data.mitre_mappings) add(chain, 'p', `${mapping.technique_id}: ${mapping.reason} [${mapping.evidence_ids.join(', ')}]`);
-  const review = add(root, 'section', undefined, 'card');
-  add(review, 'h3', 'Xem xét khuyến nghị');
+  const reviewRoot = document.getElementById('review-content') || root;
+  reviewRoot.replaceChildren();
+  const review = add(reviewRoot, 'section', undefined, 'card');
+  add(review, 'h3', 'Quyết định xem xét');
+  add(review, 'p', 'Duyệt, từ chối hoặc yêu cầu bổ sung cho một đề xuất. Trạng thái này chưa chứng minh công việc đã được thực hiện.');
   const select = add(review, 'select'); select.setAttribute('aria-label', 'Chọn khuyến nghị');
   for (const action of data.playbook.actions) {
     const statusLabel = {pending:'Chờ xem xét',approved:'Đã duyệt',rejected:'Từ chối',changes_requested:'Cần bổ sung'}[action.status] || action.status;
@@ -1244,39 +1204,7 @@ function escAttr(s) {
 }
 
 function renderAIProactive(d) {
-  const answerEl = document.getElementById('ai-answer');
-  if (!answerEl) return;
-  const p = d.playbook || {};
-  const t = d.threat || {};
-  const net = d.network || { ips: [], domains: [] };
-  const pr = d.processes || { dropped: [], registry: [], injected: [] };
-  const ma = d.malware_analysis || {};
-  const p0 = (p.actions || []).filter(a => a.priority === 1).slice(0, 3);
-  const nextQuestions = [
-    'Host nào khác từng kết nối tới IOC này?',
-    'File đầu vào đến từ email, web hay share nội bộ?',
-    'Tài khoản nào đăng nhập trước thời điểm malware chạy?'
-  ];
-  answerEl.innerHTML = `
-    <div class="ai-mode">Tổng quan hồ sơ</div>
-    <div class="ai-brief-grid">
-      <div class="ai-brief-item"><span>Mức khẩn cấp</span><b>${esc(p.severity || 'UNKNOWN')}</b></div>
-      <div class="ai-brief-item"><span>Malware</span><b>${esc(p.malware_name || t.threat_name || 'Unknown')}</b></div>
-      <div class="ai-brief-item"><span>Đích mạng</span><b>${(net.ips || []).length + (net.domains || []).length} IOC</b></div>
-      <div class="ai-brief-item"><span>Artifact</span><b>${(pr.dropped || []).length} file / ${(pr.registry || []).length} registry</b></div>
-    </div>
-    <div class="ai-section-title">Nhận định ban đầu</div>
-    <ul class="ai-list">${(ma.behavior || []).slice(0, 2).map(v => `<li>${esc(String(v).replace(/^ioc-[a-f0-9]+:\s*/, '').replace(/\s*Evidence:.*$/, ''))}</li>`).join('') || '<li>Cần bổ sung dữ liệu phân tích.</li>'}</ul>
-    <div class="ai-section-title">Việc nên làm ngay</div>
-    <ol class="ai-list">${p0.map(a => `<li>${esc(a.title || 'Hành động')}</li>`).join('') || '<li>Xác minh hồ sơ trước khi lập kế hoạch xử lý.</li>'}</ol>
-    <div class="ai-suggestion-row">
-      <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Tạo briefing đầy đủ</button>
-      <button class="btn btn-outline" onclick="askAI('Phân tích nguồn lây, cách lan truyền và phạm vi cần hunt')">Hunt phạm vi</button>
-    </div>`;
-}
-
-async function askAILegacy(question = '') {
-  return askAI(question);
+  if (typeof updateChatCase === 'function') updateChatCase(d);
 }
 
 function formatAssistantAnswer(value) {
@@ -1318,6 +1246,8 @@ async function askAI(question = '') {
 
   const input = document.getElementById('ai-question');
   const q = (question || input.value || '').trim();
+  if (!q) { setAIControlsRunning(false); return; }
+  appendChatQuestion(q);
   const answerEl = document.getElementById('ai-answer');
   let streamedAnswer = '';
   let meta = { mode: 'local_fallback', model: '' };
@@ -1326,12 +1256,12 @@ async function askAI(question = '') {
   const modeLabel = {
     deepseek: 'DeepSeek',
     openai: 'OpenAI',
-    ollama: 'Ollama local LLM',
-    local: 'Local assistant',
-    fast_local: 'Fast local assistant',
-    ollama_fallback: 'Local assistant (Ollama timeout)',
+    ollama: 'AI trên máy · Ollama',
+    local: 'Hỗ trợ theo quy tắc',
+    fast_local: 'Hỗ trợ theo quy tắc',
+    ollama_fallback: 'Mô hình chưa trả lời · Hỗ trợ theo quy tắc',
     guardrail: 'Scope guardrail',
-    local_fallback: 'Local assistant'
+    local_fallback: 'Hỗ trợ theo quy tắc'
   };
 
   const renderAnswer = (meta, answer, latencyMs) => {
@@ -1339,13 +1269,16 @@ async function askAI(question = '') {
     const label = modeLabel[meta.mode] || 'Local assistant';
     const warningHtml = meta.warning ? `<div class="ai-warning">${esc(meta.warning)}</div>` : '';
     answerEl.innerHTML = `<div class="ai-mode">${label}${latencyMs === undefined ? ' · Đang trả lời' : ''}</div>${warningHtml}<div class="ai-bubble ai-prose">${formatAssistantAnswer(answer || 'Đang chuẩn bị câu trả lời...')}</div>`;
+    answerEl.dataset.answer = answer;
+    const messages=document.getElementById('chat-messages');
+    messages.scrollTop=messages.scrollHeight;
   };
 
   const fallbackJson = async () => {
     const r = await fetch('/api/ai/remediation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, data: G.data }),
+      body: JSON.stringify({ question: q, data: G.data, history: chatConversation() }),
       signal: controller.signal
     });
     const j = await r.json();
@@ -1357,7 +1290,7 @@ async function askAI(question = '') {
     const r = await fetch('/api/ai/remediation/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, data: G.data }),
+      body: JSON.stringify({ question: q, data: G.data, history: chatConversation() }),
       signal: controller.signal
     });
     if (!r.ok) {

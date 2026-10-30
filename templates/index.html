@@ -6,6 +6,8 @@
 <title>IR Workspace · Phân tích mã độc</title>
 <link rel="stylesheet" href="/static/style.css"/>
 <link rel="stylesheet" href="/static/workspace.css"/>
+<link rel="stylesheet" href="/static/guide.css"/>
+<link rel="stylesheet" href="/static/response.css"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Đến nội dung chính</a>
@@ -14,29 +16,30 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <h1>IR Workspace</h1>
-      <span>Malware analysis</span>
+      <strong>IR Workspace</strong>
+      <span>Đọc báo cáo · Hỗ trợ ứng cứu</span>
     </div>
     <nav aria-label="Điều hướng chính"><p class="nav-caption">Không gian làm việc</p>
       <button type="button" class="nav-item active" data-page="home" aria-label="Trang chủ" aria-current="page" onclick="showPage('home',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
-        <span>Trang chủ</span>
-      </button>
-      <button type="button" class="nav-item" data-page="dashboard" aria-label="Đánh giá sự cố" onclick="showPage('dashboard',this)">
-        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
-        <span>Đánh giá sự cố</span>
+        <span>Bắt đầu</span>
       </button>
       <button type="button" class="nav-item" data-page="analyze" aria-label="Dữ liệu Any.Run" onclick="showPage('analyze',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <span>Dữ liệu Any.Run</span>
+        <span>1. Nhập dữ liệu</span>
+      </button>
+      <button type="button" class="nav-item" data-page="dashboard" aria-label="Đánh giá sự cố" onclick="showPage('dashboard',this)">
+        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
+        <span>2. Kết quả phân tích</span>
       </button>
       <button type="button" class="nav-item" data-page="playbook" aria-label="Quy trình IR" onclick="showPage('playbook',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
-        <span>Quy trình IR</span>
+        <span>3. Kế hoạch khắc phục</span>
       </button>
+      <button type="button" class="nav-item" data-page="evidence" onclick="showPage('evidence',this)" aria-label="Bằng chứng nguồn"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h3"/></svg><span>Bằng chứng nguồn</span></button>
       <button type="button" class="nav-item" data-page="iocs" aria-label="IOC & SIEM" onclick="showPage('iocs',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>IOC & SIEM</span>
+        <span>Chỉ báo &amp; SIEM</span>
       </button>
       <button type="button" class="nav-item" data-page="history" aria-label="Lịch sử" onclick="showPage('history',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -48,12 +51,25 @@
 
   <!-- MAIN -->
   <div class="workspace-shell">
-  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Tổng quan</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
+  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Bắt đầu</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
   <main class="main" id="main-content" tabindex="-1">
 
     <!-- HOME PAGE -->
     <div id="page-home">
-      <section class="overview-heading"><div><h2>Tổng quan</h2><p>Theo dõi hồ sơ và hoạt động phân tích.</p></div><button class="btn btn-primary" type="button" onclick="openImportJson()">+ Phân tích mới</button></section>
+      <section class="overview-heading"><div><h1>Từ báo cáo mã độc đến kế hoạch xử lý</h1><p class="intro-copy">IR Workspace giúp bạn đọc báo cáo Any.Run, tìm dấu hiệu xâm nhập và xây dựng các bước ứng cứu có dẫn chứng. Bắt đầu với báo cáo có sẵn hoặc dùng dữ liệu mẫu để hiểu cách làm.</p></div></section>
+      <p class="help-note" id="cloud-notice" hidden><b>Bản web dùng thử.</b> Hồ sơ và lịch sử trên máy chủ chỉ được lưu tạm, có thể mất khi hệ thống khởi động lại. Hãy tải báo cáo sau khi xem xét. Ghidra cần chạy bản trên máy tính.</p>
+      <section class="start-panel" aria-label="Chọn cách bắt đầu">
+        <div class="start-main"><h3>Bạn đã có báo cáo?</h3><p>Tải tệp Results.md hoặc JSON xuất từ Any.Run. Không cần API key khi nhập báo cáo có sẵn.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết Any.Run</button></div></div>
+        <div class="start-demo"><h3>Lần đầu sử dụng?</h3><p>Mở một ca WannaCry mô phỏng để xem kết quả, dẫn chứng và quy trình xử lý. Không cần tải tệp hay cấu hình.</p><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">Dùng thử với WannaCry →</button></div>
+      </section>
+      <section class="workflow" aria-labelledby="workflow-title"><h3 id="workflow-title">Một hồ sơ đi qua 4 bước</h3><p class="page-guidance" id="flow-status" role="status">Chưa có dữ liệu. Bắt đầu bằng một báo cáo hoặc dữ liệu mẫu.</p><ol>
+        <li><b>Chọn dữ liệu</b><p>Nhập báo cáo, dùng liên kết Any.Run hoặc mở dữ liệu mẫu.</p><button type="button" onclick="startAnalysis()">Bắt đầu nhập</button></li>
+        <li><b>Đọc kết quả &amp; dẫn chứng</b><p>Xem mức nguy hiểm, hành vi và IOC — các dấu hiệu cần kiểm tra.</p><button type="button" data-needs-analysis disabled onclick="goToResult('dashboard')">Xem kết quả</button></li>
+        <li><b>Xem xét khuyến nghị</b><p>Đối chiếu bằng chứng, ghi người duyệt và lý do cho từng bước xử lý.</p><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Mở quy trình xử lý</button></li>
+        <li><b>Xuất &amp; bàn giao</b><p>Tải PDF để đọc, JSON để giữ dữ liệu hoặc quy tắc cho hệ thống giám sát.</p><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Đến phần xuất báo cáo</button></li>
+      </ol></section>
+      <p class="help-note">Chương trình hỗ trợ phân tích và đề xuất. Bạn xem xét trước khi áp dụng; các lệnh khắc phục không tự chạy. Dữ liệu mẫu là mô phỏng.</p>
+      <details class="compact-insights"><summary>Thống kê &amp; hoạt động hồ sơ</summary>
       <section class="overview-stats" aria-label="Thống kê hồ sơ" id="overview-stats">
         <div class="overview-stat"><span>Hồ sơ đã lưu</span><b>—</b><small>Đang tải dữ liệu…</small></div>
       </section>
@@ -61,11 +77,20 @@
         <section class="card"><div class="panel-heading"><div><h3>Hoạt động hồ sơ</h3><p>Số hồ sơ được cập nhật theo ngày</p></div><select id="activity-period" aria-label="Khoảng thời gian biểu đồ"><option value="7">7 ngày qua</option><option value="14" selected>14 ngày qua</option><option value="30">30 ngày qua</option></select></div><div id="activity-chart" class="activity-chart" role="img" aria-label="Đang tải biểu đồ"></div><div class="activity-footer"><span id="activity-total">Đang tải…</span><span>Cập nhật từ lịch sử đã lưu</span></div></section>
         <section class="card"><div class="panel-heading"><div><h3>Mức ưu tiên</h3><p>Phân bố theo đánh giá nguồn</p></div></div><div id="priority-distribution"></div></section>
       </div>
+      </details>
       <section class="card recent-card"><div class="panel-heading"><div><h3>Hồ sơ gần đây</h3><p>Mở hồ sơ để xem bằng chứng và khuyến nghị</p></div><button class="btn btn-outline" type="button" onclick="loadHistory()">Làm mới</button></div>
         <div class="overview-controls"><input type="search" id="case-search" name="case-search" autocomplete="off" spellcheck="false" placeholder="Tìm tên tệp, mã băm, họ mã độc…" aria-label="Tìm hồ sơ"/><select id="case-filter" aria-label="Lọc hồ sơ"><option value="all">Tất cả hồ sơ</option><option value="review">Chờ xem xét</option><option value="critical">Ưu tiên cao</option><option value="demo">Dữ liệu mẫu</option></select></div>
         <div class="table-wrap"><table><thead><tr><th scope="col">Hồ sơ</th><th scope="col">Phân loại</th><th scope="col">Ưu tiên</th><th scope="col">Trạng thái</th><th scope="col">Cập nhật</th></tr></thead><tbody id="recent-cases"><tr><td colspan="5">Đang tải hồ sơ…</td></tr></tbody></table></div>
         <div class="table-footer"><span id="case-page-info">Đang tải…</span><div><button id="cases-prev" type="button" class="btn btn-outline" aria-label="Trang hồ sơ trước">Trước</button> <button id="cases-next" type="button" class="btn btn-outline" aria-label="Trang hồ sơ tiếp">Sau</button></div></div>
       </section>
+      <details class="feature-guide"><summary>Các chức năng dùng để làm gì?</summary><dl>
+        <dt>Nhập dữ liệu</dt><dd>Đọc Results.md / JSON hoặc lấy báo cáo qua Any.Run. Gửi URL và tệp mới tới sandbox cần API key có quyền tương ứng.</dd>
+        <dt>Kết quả phân tích</dt><dd>Tóm tắt tệp, mức nguy hiểm, kết nối mạng, tiến trình và kỹ thuật MITRE ATT&amp;CK được ghi nhận hoặc suy luận.</dd>
+        <dt>Chỉ báo &amp; SIEM</dt><dd>Tra cứu IP, tên miền, URL và mã băm; xuất danh sách IOC hoặc mẫu truy vấn cho Splunk, Elastic, Sentinel, Sigma, Suricata và STIX.</dd>
+        <dt>Xem xét &amp; xuất</dt><dd>Xem nguồn dẫn chứng, trao đổi với trợ lý điều tra, duyệt hoặc yêu cầu bổ sung khuyến nghị; tải báo cáo PDF, HTML, Markdown và JSON.</dd>
+        <dt>Lịch sử</dt><dd>Mở lại hồ sơ đã phân tích để tiếp tục xem xét. Lịch sử Any.Run cần API key; hồ sơ tạm trên bản web có thể mất khi máy chủ khởi động lại.</dd>
+        <dt>Ghidra trên máy</dt><dd>Phân tích tĩnh tệp bằng Ghidra khi chạy ứng dụng trên máy tính. Tệp không được thực thi trong quá trình phân tích tĩnh.</dd>
+      </dl></details>
       <div class="overview-bottom"><span id="home-current-case">Chưa có hồ sơ đang mở.</span><details class="card sample-library"><summary>Dữ liệu mẫu</summary><div class="home-actions compact"><button class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></details></div>
     </div>
 
@@ -73,7 +98,7 @@
     <div id="page-dashboard" style="display:none">
       <div class="topbar">
         <div>
-          <h2>Kết quả phân tích</h2>
+          <h2>2. Kết quả phân tích</h2>
           <span>Chỉ báo, hành vi và mức ưu tiên xử lý.</span>
         </div>
         <div class="topbar-actions">
@@ -83,13 +108,14 @@
       </div>
       <div id="dashboard-empty" class="dashboard-empty">
         <h3>Chưa có kết quả đang mở</h3>
-        <p>Nhập báo cáo để bắt đầu phân tích.</p>
+        <p>Nhập báo cáo ở bước 1 hoặc dùng dữ liệu mẫu. Kết quả sẽ xuất hiện tại đây.</p>
         <div class="home-actions compact">
-          <button type="button" class="btn btn-primary" onclick="openImportJson()">Import report</button>
+          <button type="button" class="btn btn-primary" onclick="openImportJson()">Nhập báo cáo</button>
           <button type="button" class="btn btn-outline" onclick="runDemo()">Chạy demo</button>
         </div>
       </div>
       <div id="dashboard" style="display:none">
+        <p class="page-guidance">Đọc mức nguy hiểm trước, sau đó đối chiếu hành vi và chỉ báo bên dưới. Mở Chỉ báo &amp; SIEM để xem từng IOC, hoặc chuyển đến quy trình để xem xét khuyến nghị.</p>
         <!-- Stat row -->
         <div class="grid-3" style="margin-bottom:20px" id="stat-row"></div>
         <!-- Threat + File info -->
@@ -104,21 +130,22 @@
         <!-- Process -->
         <div class="card" id="card-process"></div>
       </div>
+      <div class="next-step"><span>Tiếp theo: đối chiếu chỉ báo và duyệt các bước xử lý.</span><div class="action-row"><button type="button" class="btn btn-outline" data-needs-analysis disabled onclick="goToResult('iocs')">Xem chỉ báo</button><button type="button" class="btn btn-primary" data-needs-analysis disabled onclick="goToResult('playbook')">Xem xét khuyến nghị →</button></div></div>
     </div>
 
     <!-- ANALYZE PAGE -->
     <div id="page-analyze" style="display:none">
-      <div class="topbar"><h2>Phân tích mới</h2></div>
+      <div class="topbar"><div><h2>1. Nhập dữ liệu</h2><span>Chọn một nguồn dữ liệu để bắt đầu. Nhập báo cáo là cách đơn giản nhất.</span></div></div>
 
       <!-- API Key -->
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-title">Kết nối Any.Run</div>
+      <details class="card connection-settings">
+        <summary>Kết nối Any.Run bằng API key (tùy chọn)</summary>
         <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
           Quản lý quyền truy cập task và gửi mẫu phân tích.
         </p>
         <div class="grid-2">
           <div class="form-group">
-            <label>Any.Run API Key</label>
+            <label for="api-key-input">Any.Run API Key</label>
             <input type="password" id="api-key-input" placeholder="Nhập API key từ app.any.run ..."/>
           </div>
           <div style="display:flex;align-items:flex-end;padding-bottom:16px;gap:10px">
@@ -126,58 +153,67 @@
             <a href="https://app.any.run/profile/" target="_blank" class="btn btn-outline" style="text-decoration:none;font-size:13px">Lấy API Key ↗</a>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Tabs -->
       <div class="card">
         <div class="tabs" role="tablist" aria-label="Chọn kiểu phân tích">
-          <button type="button" class="tab active" id="tab-uuid" role="tab" aria-selected="true" aria-controls="pane-uuid" onclick="switchTab('tab-uuid')">🔗 Task UUID</button>
-          <button type="button" class="tab" id="tab-import" role="tab" aria-selected="false" aria-controls="pane-import" onclick="switchTab('tab-import')">📥 Import Report</button>
-          <button type="button" class="tab" id="tab-url" role="tab" aria-selected="false" aria-controls="pane-url" onclick="switchTab('tab-url')">🌐 Submit URL</button>
-          <button type="button" class="tab" id="tab-file" role="tab" aria-selected="false" aria-controls="pane-file" onclick="switchTab('tab-file')">📁 Submit File</button>
-          <button type="button" class="tab" id="tab-ghidra" role="tab" aria-selected="false" aria-controls="pane-ghidra" onclick="switchTab('tab-ghidra');loadGhidraStatus()">🧩 Ghidra Local</button>
-          <button type="button" class="tab" id="tab-demo" role="tab" aria-selected="false" aria-controls="pane-demo" onclick="switchTab('tab-demo')">🎭 Demo</button>
+          <button type="button" class="tab" id="tab-uuid" role="tab" aria-selected="false" aria-controls="pane-uuid" onclick="switchTab('tab-uuid')">Liên kết / Task ID</button>
+          <button type="button" class="tab active" id="tab-import" role="tab" aria-selected="true" aria-controls="pane-import" onclick="switchTab('tab-import')">Nhập báo cáo</button>
+          <button type="button" class="tab" id="tab-url" role="tab" aria-selected="false" aria-controls="pane-url" onclick="switchTab('tab-url')">Gửi URL tới sandbox</button>
+          <button type="button" class="tab" id="tab-file" role="tab" aria-selected="false" aria-controls="pane-file" onclick="switchTab('tab-file')">Gửi tệp tới sandbox</button>
+          <button type="button" class="tab" id="tab-ghidra" role="tab" aria-selected="false" aria-controls="pane-ghidra" onclick="switchTab('tab-ghidra');loadGhidraStatus()">Ghidra trên máy</button>
+          <button type="button" class="tab" id="tab-demo" role="tab" aria-selected="false" aria-controls="pane-demo" onclick="switchTab('tab-demo')">Dữ liệu mẫu</button>
         </div>
 
         <!-- UUID pane -->
-        <div class="tab-pane active" id="pane-uuid" role="tabpanel" aria-labelledby="tab-uuid">
+        <div class="tab-pane" id="pane-uuid" role="tabpanel" aria-labelledby="tab-uuid" hidden>
           <div class="form-group">
-            <label>Task UUID hoặc public report URL</label>
+            <label for="task-uuid">Task UUID hoặc public report URL</label>
             <input type="text" id="task-uuid" placeholder="https://any.run/report/&lt;sha256&gt;/&lt;uuid&gt;"/>
+            <small style="color:var(--text2);font-size:12px;margin-top:4px;display:block">
+              Dán link <strong>app.any.run/tasks/…</strong>, <strong>any.run/report/…</strong> hoặc Task ID công khai. Không cần API key cho task công khai được Any.Run cho phép đọc.<br>
+              Trang xem được trong trình duyệt vẫn có thể chặn yêu cầu tải từ máy chủ. Khi đó, dùng báo cáo Results.md/JSON đã xuất.
+            </small>
           </div>
           <button class="btn btn-primary" onclick="analyzeTask()">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             Phân tích
           </button>
+          <div id="task-error" class="task-error" role="alert" hidden>
+            <h3>Chưa lấy được dữ liệu báo cáo</h3>
+            <p id="task-error-message"></p>
+            <button type="button" class="btn btn-outline" onclick="openImportJson()">Nhập Results.md / JSON</button>
+          </div>
         </div>
 
         <!-- Import JSON pane -->
-        <div class="tab-pane" id="pane-import" role="tabpanel" aria-labelledby="tab-import" hidden>
+        <div class="tab-pane active" id="pane-import" role="tabpanel" aria-labelledby="tab-import">
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">
-            Chọn báo cáo và bổ sung IOC nếu có.
+            Trên Any.Run, chọn Export → Results (.md) hoặc JSON, rồi tải tệp ở đây. IOC JSON và thông tin bổ sung có thể để trống.
           </p>
           <div class="grid-2">
             <div class="form-group">
-              <label>Any.Run Results .md / JSON Report</label>
+              <label for="report-json-input">Any.Run Results .md / JSON Report</label>
               <input type="file" id="report-json-input" accept=".md,.txt,.json,text/markdown,text/plain,application/json" onchange="handleJsonSelect(this,'report')"/>
             </div>
             <div class="form-group">
-              <label>IOC JSON (tùy chọn)</label>
+              <label for="ioc-json-input">IOC JSON (tùy chọn)</label>
               <input type="file" id="ioc-json-input" accept=".json,application/json" onchange="handleJsonSelect(this,'ioc')"/>
             </div>
           </div>
           <div class="form-group">
-            <label>Thông tin copy thêm từ Any.Run (tùy chọn)</label>
+            <label for="supplemental-text">Thông tin copy thêm từ Any.Run (tùy chọn)</label>
             <textarea id="supplemental-text" rows="8" placeholder="Dán IOC/hash/process copy từ Any.Run, ví dụ:&#10;Main object - WannaCry.zip&#10;sha256 WannaCry.zip 0ea87b...&#10;Dropped file&#10;sha256 C:\note.txt 8e9f..."></textarea>
           </div>
-          <button class="btn btn-primary" onclick="analyzeJsonImport()">Import &amp; tạo IR Playbook</button>
+          <button class="btn btn-primary" onclick="analyzeJsonImport()">Phân tích báo cáo</button>
           <div id="json-import-result" aria-live="polite" style="margin-top:14px;color:var(--text2);font-size:13px"></div>
         </div>
 
         <!-- URL pane -->
         <div class="tab-pane" id="pane-url" role="tabpanel" aria-labelledby="tab-url" hidden>
           <div class="form-group">
-            <label>URL cần phân tích</label>
+            <label for="submit-url">URL cần phân tích</label>
             <input type="text" id="submit-url" placeholder="http://suspicious-site.com/malware"/>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -231,7 +267,7 @@
 
               <div class="ghidra-options">
                 <div class="form-group">
-                  <label>Timeout Ghidra headless (giây)</label>
+                  <label for="ghidra-timeout">Timeout Ghidra headless (giây)</label>
                   <input type="number" id="ghidra-timeout" min="30" max="600" value="180"/>
                 </div>
                 <div class="timeout-presets" aria-label="Preset timeout Ghidra">
@@ -290,7 +326,7 @@
     <!-- PLAYBOOK PAGE -->
     <div id="page-playbook" style="display:none">
       <div class="topbar">
-        <div><h2>Quy trình phản ứng sự cố</h2><span>Theo dõi và xem xét các bước xử lý.</span></div>
+        <div><h2>3. Kế hoạch khắc phục</h2><span>Từ dấu hiệu trong báo cáo đến các bước xử lý có thể kiểm chứng.</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
           <button class="btn btn-outline" onclick="exportReport('html')">⬇ HTML</button>
@@ -299,31 +335,16 @@
           <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">📁 Mở Folder</button>
         </div>
       </div>
-      <div class="card ai-card">
-        <div class="card-title">Trợ lý điều tra</div>
-        <div class="ai-quick">
-          <button class="btn btn-outline" onclick="askAI('Hãy chủ động đánh giá sự cố này như trưởng ca SOC')">Briefing chủ động</button>
-          <button class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button>
-          <button class="btn btn-outline" onclick="askAI('Cần cô lập và chặn IOC như thế nào?')">Cô lập &amp; chặn IOC</button>
-          <button class="btn btn-outline" onclick="askAI('Phân tích nguồn lây, cách lan truyền và phạm vi cần hunt')">Hunt phạm vi</button>
-          <button class="btn btn-outline" onclick="askAI('Làm sao xác minh máy đã sạch sau khi khắc phục?')">Xác minh sạch</button>
-        </div>
-        <div class="ai-input-row">
-          <input id="ai-question" type="text" placeholder="Yêu cầu AI lập kế hoạch, hunt phạm vi, viết lệnh xử lý, nêu giả thuyết nguồn lây..."/>
-          <button class="btn btn-primary" onclick="askAI()">Phân tích</button>
-          <button id="ai-stop-btn" class="btn btn-danger" onclick="stopAI()" disabled>Dừng</button>
-        </div>
-        <div id="ai-answer" class="ai-answer">Chọn hồ sơ để bắt đầu trao đổi.</div>
-      </div>
-      <div id="evidence-content"></div>
       <div id="playbook-content">
         <div class="welcome" style="padding:60px 20px">
           <p style="color:var(--text2)">Chưa có dữ liệu. Hãy chạy phân tích trước.</p>
           <button class="btn btn-primary" style="margin-top:16px" onclick="showPage('analyze',document.querySelector('[data-page=analyze]'))">→ Phân tích ngay</button>
         </div>
       </div>
+      <section id="review-content" aria-label="Duyệt đề xuất khắc phục"></section>
     </div>
 
+      <div id="page-evidence" style="display:none"><div class="topbar"><div><h2>Bằng chứng nguồn</h2><span>Tra cứu IOC, vị trí xuất hiện và quan hệ được ghi nhận trong báo cáo.</span></div><button type="button" class="btn btn-outline" onclick="goToResult('playbook')">Đến kế hoạch khắc phục →</button></div><div id="evidence-content"><p class="page-guidance">Mở một hồ sơ để tra cứu nguồn bằng chứng.</p></div></div>
     <!-- IOC PAGE -->
     <div id="page-iocs" style="display:none">
       <div class="topbar">
@@ -332,13 +353,14 @@
           <button class="btn btn-outline" onclick="copyAllIOCs()">📋 Copy tất cả</button>
           <button class="btn btn-outline" onclick="exportReport('json')">⬇ Export JSON</button>
           <button class="btn btn-outline" onclick="exportReport('csv')">⬇ IOC CSV</button>
-          <button class="btn btn-outline" onclick="exportReport('splunk')">⬇ Splunk SPL</button>
+<details class="export-menu"><summary class="btn btn-outline">Xuất cho SIEM ▾</summary><div class="export-options">          <button class="btn btn-outline" onclick="exportReport('splunk')">⬇ Splunk SPL</button>
           <button class="btn btn-outline" onclick="exportReport('elastic')">⬇ Elastic KQL</button>
           <button class="btn btn-outline" onclick="exportReport('sentinel')">⬇ Sentinel KQL</button>
           <button class="btn btn-green" onclick="exportReport('sigma')">⬇ Sigma</button>
           <button class="btn btn-outline" onclick="exportReport('suricata')">⬇ Suricata</button>
           <button class="btn btn-outline" onclick="exportReport('stix')">⬇ STIX</button>
           <button class="btn btn-outline" onclick="exportReport('manifest')">⬇ IOC Manifest</button>
+</div></details>
         </div>
       </div>
       <div id="ioc-content">
@@ -356,7 +378,7 @@
       </div>
       <div class="card">
         <div class="form-group" style="max-width:400px;margin-bottom:16px">
-          <label>API Key (để xem lịch sử)</label>
+          <label for="hist-key">API Key (để xem lịch sử)</label>
           <input type="password" id="hist-key" placeholder="API key..."/>
         </div>
         <button class="btn btn-primary" onclick="loadHistory()">Xem lịch sử</button>
@@ -369,7 +391,19 @@
 </div>
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-<script src="/static/app.js?v=20260609-public-report"></script>
+<button type="button" class="chat-launch" onclick="toggleChat(true)" aria-haspopup="dialog" aria-controls="chat-panel">Chat hỗ trợ</button>
+<dialog id="chat-panel" class="chat-panel" aria-labelledby="chat-title">
+  <header class="chat-heading"><div><h2 id="chat-title">Trợ lý phân tích &amp; ứng cứu</h2><p id="chat-provider">Đang kiểm tra kết nối AI…</p></div><button type="button" onclick="toggleChat(false)" aria-label="Đóng chat">Đóng</button></header>
+  <div class="chat-context">Đang trao đổi về <span id="chat-case-name">Chưa mở hồ sơ</span></div>
+  <div class="chat-messages" id="chat-messages" role="log" aria-label="Lịch sử trò chuyện" aria-live="polite"><div id="ai-answer" class="chat-welcome">Mở một hồ sơ hoặc chạy dữ liệu mẫu để trao đổi về bằng chứng và cách xử lý.</div></div>
+  <div class="ai-quick"><button type="button" class="btn btn-outline" onclick="askAI('Tôi nên xử lý theo thứ tự ưu tiên nào?')">Ưu tiên xử lý</button><button type="button" class="btn btn-outline" onclick="askAI('Cần thêm bằng chứng nào trước khi khắc phục?')">Cần thêm bằng chứng gì?</button><button type="button" class="btn btn-outline" onclick="clearChat()">Xóa hội thoại</button></div>
+  <form id="chat-form" class="chat-form"><input id="ai-question" type="text" aria-label="Câu hỏi về hồ sơ" maxlength="2000" placeholder="Hỏi về biện pháp xử lý hoặc dẫn chứng…" autocomplete="off"/><button type="submit" class="btn btn-primary">Gửi</button><button type="button" id="ai-stop-btn" class="btn btn-outline" onclick="stopAI()" disabled>Dừng</button></form>
+  <p class="chat-foot">AI hỗ trợ diễn giải. Đối chiếu log và người phụ trách trước khi áp dụng; chat không tự thực thi lệnh.</p>
+</dialog>
+<script src="/static/app.js?v=20261030-response"></script>
 <script src="/static/workspace.js"></script>
+<script src="/static/guide.js"></script>
+<script src="/static/response.js"></script>
+<script src="/static/chatbox.js"></script>
 </body>
 </html>

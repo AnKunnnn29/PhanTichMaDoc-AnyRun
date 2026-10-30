@@ -14,7 +14,8 @@ from contextlib import contextmanager
 
 @contextmanager
 def _connect():
-    path = Path(os.getenv("IR_CASE_DB", str(Path(__file__).parent / "reports" / "cases.sqlite3")))
+    from runtime_storage import reports_dir, cloud_mode
+    path = reports_dir() / 'cases.sqlite3' if cloud_mode() else Path(os.getenv("IR_CASE_DB", str(reports_dir() / "cases.sqlite3")))
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=20)
     try:

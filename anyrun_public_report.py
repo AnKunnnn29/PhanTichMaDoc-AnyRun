@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import requests
+from anyrun_public_client import fetch_public_page, resolve_public_task, PublicTaskLookupError
 
 
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -24,7 +25,10 @@ PUBLIC_REPORT_RE = re.compile(
 
 
 class AnyRunPublicReportError(Exception):
-    pass
+    def __init__(self, message, code="anyrun_public_report_unavailable", status=403):
+        super().__init__(message)
+        self.code = code
+        self.status = status
 
 
 def extract_task_uuid(value: str) -> str:
@@ -40,25 +44,28 @@ def load_public_report(task_uuid: str, source_ref: str = "", reports_dir: str | 
     source_ref = source_ref or ""
     public_url = _extract_public_url(source_ref)
     if public_url:
-        return _public_vue_data_to_anyrun_report(_download_public_vue_data(public_url), task_uuid)
+        data = _download_public_vue_data(public_url)
+        if _data_uuid(data) and _data_uuid(data) != task_uuid:
+            raise AnyRunPublicReportError('Báo cáo trả về không khớp Task ID đã nhập.', 'anyrun_report_mismatch', 422)
+        return _public_vue_data_to_anyrun_report(data, task_uuid)
 
     cached = _load_cached_public_vue_data(task_uuid, Path(reports_dir))
     if cached:
         return _public_vue_data_to_anyrun_report(cached, task_uuid)
 
-    if re.search(r"https?://app\.any\.run/tasks/", source_ref, re.IGNORECASE):
-        raise AnyRunPublicReportError(
-            "Link app.any.run/tasks/<uuid> là trang task cần đăng nhập, không phải public report URL. "
-            "Hãy mở task trên Any.Run, chọn Public report/Share rồi dán link dạng "
-            "https://any.run/report/<sha256>/<uuid>."
-        )
-
-    if source_ref.strip().lower() == task_uuid:
-        raise AnyRunPublicReportError(
-            "Backend chỉ nhận được Task UUID, không nhận được public report URL đầy đủ. "
-            "Hãy restart Flask, nhấn Ctrl+F5 trên trình duyệt rồi dán lại link dạng "
-            "https://any.run/report/<sha256>/<uuid>."
-        )
+    task_url = _extract_task_url(source_ref, task_uuid)
+    if task_url or source_ref.strip().lower() == task_uuid:
+        try:
+            report_url = resolve_public_task(task_uuid)
+        except PublicTaskLookupError as exc:
+            raise AnyRunPublicReportError(str(exc), 'anyrun_public_task_unavailable', 403) from exc
+        except Exception as exc:
+            raise AnyRunPublicReportError('Chưa kết nối được kênh đọc task công khai của Any.Run. Thử lại sau hoặc nhập báo cáo đã xuất.', 'anyrun_task_lookup_failed', 502) from exc
+        data = _download_public_vue_data(report_url)
+        received_uuid = _data_uuid(data)
+        if received_uuid and received_uuid != task_uuid:
+            raise AnyRunPublicReportError("Báo cáo trả về không khớp Task ID đã nhập.", "anyrun_report_mismatch", 422)
+        return _public_vue_data_to_anyrun_report(data, task_uuid)
 
     raise AnyRunPublicReportError(
         "Không tìm thấy public report HTML/JSON cho UUID này. Hãy paste link dạng "
@@ -73,16 +80,60 @@ def _extract_public_url(value: str) -> str:
     return match.group(0).replace("https://report.any.run/", "https://any.run/")
 
 
+def _extract_task_url(value: str, expected_uuid: str) -> str:
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in ("http", "https") or parsed.hostname != "app.any.run":
+        return ""
+    if not re.fullmatch(r"/tasks/" + re.escape(expected_uuid) + r"/?", parsed.path, re.IGNORECASE):
+        return ""
+    return "https://app.any.run/tasks/" + expected_uuid
+
+
 def _download_public_vue_data(url: str) -> dict:
+    """Read a public page normally; report access protection without assuming privacy."""
     try:
-        response = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-    except requests.RequestException as exc:
+        response = fetch_public_page(url)
+    except Exception as exc:
         raise AnyRunPublicReportError(
-            f"Không kết nối được tới public report Any.Run. Kiểm tra mạng, proxy hoặc firewall: {exc}"
+            "Không kết nối được tới Any.Run. Kiểm tra mạng, proxy hoặc firewall; "
+            "bạn cũng có thể nhập báo cáo Results.md/JSON đã xuất.",
+            "anyrun_network_error", 503
         ) from exc
+    html = response.text
+    if response.status_code == 200:
+        try:
+            return _extract_vue_data(html)
+        except AnyRunPublicReportError:
+            pass
+    challenge = any(marker in html.lower() for marker in ("/cdn-cgi/challenge-platform/", "cf-chl-"))
+    if response.status_code == 403 or challenge:
+        detail = "Cloudflare yêu cầu xác minh trình duyệt" if challenge else "Any.Run từ chối yêu cầu từ máy chủ (HTTP 403)"
+        raise AnyRunPublicReportError(
+            detail + ". Link vẫn có thể xem công khai trong trình duyệt của bạn; "
+            "điều đó không đảm bảo máy chủ ứng dụng tải được dữ liệu. "
+            "Hãy xuất Results.md hoặc JSON từ Any.Run rồi chọn Nhập báo cáo, "
+            "hoặc sử dụng API key có quyền đọc báo cáo.",
+            "anyrun_server_access_blocked", 403
+        )
+    if response.status_code == 404:
+        raise AnyRunPublicReportError("Any.Run trả HTTP 404 cho trang báo cáo. Kiểm tra lại liên kết hoặc nhập báo cáo đã xuất.", "anyrun_report_not_found", 404)
     if response.status_code != 200:
-        raise AnyRunPublicReportError(f"Không tải được public report HTML ({response.status_code}).")
-    return _extract_vue_data(response.text)
+        raise AnyRunPublicReportError(f"Máy chủ không tải được trang Any.Run (HTTP {response.status_code}). Thử lại hoặc nhập báo cáo đã xuất.", "anyrun_upstream_error", 502)
+    try:
+        return _extract_vue_data(html)
+    except AnyRunPublicReportError:
+        # A task page can link to a server-rendered report. Follow only the
+        # matching public report URL on the known ANY.RUN host, at most once.
+        if urlparse(url).hostname == "app.any.run":
+            report_url = _extract_public_url(html.replace("\\/", "/"))
+            if report_url and extract_task_uuid(report_url) == extract_task_uuid(url):
+                return _download_public_vue_data(report_url)
+        raise AnyRunPublicReportError(
+            "Đã tải trang Any.Run nhưng chưa tìm thấy dữ liệu báo cáo có thể đọc tự động. "
+            "Trang có thể cần JavaScript hoặc xác minh trong trình duyệt. "
+            "Hãy chọn Export trên Any.Run, tải Results.md/JSON và dùng Nhập báo cáo.",
+            "anyrun_page_data_unavailable", 422
+        )
 
 
 def _load_cached_public_vue_data(task_uuid: str, reports_dir: Path) -> dict:
@@ -106,7 +157,7 @@ def _load_cached_public_vue_data(task_uuid: str, reports_dir: Path) -> dict:
 
 
 def _extract_vue_data(html: str) -> dict:
-    match = re.search(r'window\.vueData="([^"]+)"', html or "")
+    match = re.search(r'window\.vueData\s*=\s*"([^"]+)"', html or "")
     if not match:
         raise AnyRunPublicReportError("HTML public report không có window.vueData.")
     try:
@@ -156,9 +207,9 @@ def _public_vue_data_to_anyrun_report(data: dict, fallback_uuid: str) -> dict:
         "dropped": _normalize_dropped(data.get("filesActivity") or {}),
         "registry": _normalize_registry(data.get("registryActivity") or {}),
         "synchronization": _normalize_sync(data.get("synchronization") or {}),
-        "publicReport": data,
     }
     return {
+        "publicReport": data,
         "data": {
             "analysis": {
                 "uuid": uuid,

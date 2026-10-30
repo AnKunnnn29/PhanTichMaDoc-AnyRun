@@ -12,8 +12,9 @@ from pathlib import Path
 from dataclasses import asdict
 from analysis_pipeline import run_pipeline, analysis_key, research_markdown
 from case_store import find_case, save_case, load_case, review_action
+from runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
 
-if sys.platform == "win32":
+if sys.platform == "win32" and __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
@@ -67,6 +68,23 @@ analyzer = MalwareAnalyzer()
 ir_gen = IncidentResponseGenerator()
 ml_predictor = MLThreatPredictor()
 _rate_buckets = defaultdict(deque)
+
+
+@app.before_request
+def cloud_capability_guard():
+    if cloud_mode() and request.path in ('/api/submit_analyze/url', '/api/submit_analyze/file', '/api/open_reports'):
+        return _error_response('Bản web hỗ trợ gửi mẫu lấy Task ID. Khi sandbox hoàn tất, dán Task ID vào mục Liên kết / Task ID để lấy kết quả. Chức năng chờ tự động và mở thư mục dùng trên máy tính.', 400, 'local_only')
+
+
+@app.after_request
+def keep_workspace_cookie(response):
+    if cloud_mode():
+        from flask import g
+        if hasattr(g, 'workspace_id'):
+            response.set_cookie('ir_workspace', g.workspace_id, secure=True, httponly=True, samesite='Lax')
+        if request.path.startswith('/api/'):
+            response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 def _error_response(message, status=400, code="bad_request"):
@@ -204,7 +222,7 @@ def _get_optional_anyrun_iocs(client, task_id):
 
 
 def _build_public_report_payload(task_id, source_ref="", use_cache=True):
-    report_json = load_public_report(task_id, source_ref=source_ref, reports_dir="reports")
+    report_json = load_public_report(task_id, source_ref=source_ref, reports_dir=runtime_reports_dir())
     return _build_payload(report_json, {}, use_cache=use_cache, source="anyrun:public-report")
 
 
@@ -256,7 +274,7 @@ def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
     suffix = Path(filename).suffix.lower()
     with tempfile.NamedTemporaryFile(
         delete=False,
-        dir=os.getcwd(),
+        dir=tempfile.gettempdir() if cloud_mode() else os.getcwd(),
         prefix="tmp_upload_",
         suffix=suffix,
     ) as tmp:
@@ -270,6 +288,25 @@ def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
 @app.route("/")
 def index():
     return send_from_directory("templates", "index.html")
+
+
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    """Trả về config public (không sensitive) để frontend tự động load."""
+    api_key = os.getenv("ANYRUN_API_KEY", "")
+    # Chỉ trả về nếu có key và không phải placeholder
+    has_key = bool(api_key and api_key != "your_api_key_here")
+    return jsonify({
+        "ok": True,
+        "data": {
+            "cloud_mode": cloud_mode(),
+            "ui_version": "response-v2",
+            "has_api_key": has_key,
+            "api_key_hint": f"{api_key[:8]}..." if has_key and len(api_key) > 10 else "",
+            # Trả về full key để frontend tự động điền (chỉ trong localhost)
+            "api_key": api_key if not cloud_mode() and has_key and request.host in ("localhost", "127.0.0.1", "localhost:5000", "127.0.0.1:5000") else "",
+        }
+    })
 
 
 @app.route("/api/demo/<string:malware>", methods=["GET"])
@@ -294,19 +331,27 @@ def demo(malware):
 def analyze():
     try:
         body = _json_body()
-        api_key = validate_api_key(body.get("api_key"))
+        api_key_raw = body.get("api_key", "")
         task_id = validate_task_uuid(body.get("task_id"))
         task_ref = body.get("task_ref") or task_id
         force_analyze = bool(body.get("force_analyze", False))
         from anyrun_client import AnyRunClient
 
-        try:
-            client = AnyRunClient(api_key)
-            report_json = client.get_task_report(task_id)
-            ioc_json = _get_optional_anyrun_iocs(client, task_id)
-            payload = _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")
-        except AnyRunAuthError:
+        # Nếu có API key → dùng authenticated API
+        if api_key_raw and api_key_raw.strip():
+            api_key = validate_api_key(api_key_raw)
+            try:
+                client = AnyRunClient(api_key)
+                report_json = client.get_task_report(task_id)
+                ioc_json = _get_optional_anyrun_iocs(client, task_id)
+                payload = _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="anyrun:task")
+            except AnyRunAuthError:
+                # Fallback về public report nếu API key invalid
+                payload = _build_public_report_payload(task_id, source_ref=task_ref, use_cache=not force_analyze)
+        else:
+            # Không có API key → dùng public report
             payload = _build_public_report_payload(task_id, source_ref=task_ref, use_cache=not force_analyze)
+
         return jsonify(
             {
                 "ok": True,
@@ -316,7 +361,7 @@ def analyze():
     except ValidationError as e:
         return _error_response(str(e))
     except AnyRunPublicReportError as e:
-        return _error_response(str(e), 403, "anyrun_public_report_unavailable")
+        return _error_response(str(e), e.status, e.code)
     except AnyRunAuthError as e:
         return _error_response(
             (
@@ -350,6 +395,8 @@ def analyze_json_upload():
 
 @app.route("/api/ghidra/status", methods=["GET"])
 def ghidra_status_route():
+    if cloud_mode():
+        return jsonify({"ok": True, "data": {"available": False, "status": "local_only", "setup_hint": "Ghidra cần chạy bản trên máy tính."}})
     return jsonify({"ok": True, "data": ghidra_status()})
 
 
@@ -357,6 +404,8 @@ def ghidra_status_route():
 @rate_limit(max_requests=8)
 def ghidra_analyze_upload():
     """Local static malware analysis with optional Ghidra headless enrichment."""
+    if cloud_mode():
+        return _error_response("Ghidra cần chạy bản trên máy tính.", 400, "local_only")
     tmp_path = ""
     try:
         if "sample_file" not in request.files:
@@ -669,7 +718,7 @@ def local_history_item(item_id):
 def ai_remediation():
     body = _json_body()
     question = body.get("question", "")
-    data = body.get("data") or {}
+    data = chat_payload(body)
     if not data:
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
     try:
@@ -683,7 +732,7 @@ def ai_remediation():
 def ai_remediation_stream():
     body = _json_body()
     question = body.get("question", "")
-    data = body.get("data") or {}
+    data = chat_payload(body)
     if not data:
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
 
@@ -700,6 +749,38 @@ def ai_remediation_stream():
 @app.route("/api/ai/status", methods=["GET"])
 def ai_status():
     return jsonify({"ok": True, "data": get_ai_status()})
+
+
+def chat_payload(body):
+    data = body.get('data') or {}
+    if not isinstance(data, dict):
+        raise ValidationError('Dữ liệu hồ sơ phải là object')
+    history = body.get('history') or []
+    if not isinstance(history, list):
+        raise ValidationError('Lịch sử chat phải là danh sách')
+    if not isinstance(body.get('question', ''), str) or len(body.get('question', '')) > 2000:
+        raise ValidationError('Câu hỏi phải là văn bản tối đa 2000 ký tự')
+    if not data:
+        return {}
+    safe_history = [{'role': row['role'], 'content': row['content'][:2000]}
+                    for row in history[-6:] if isinstance(row, dict) and row.get('role') in ('user', 'assistant') and isinstance(row.get('content'), str)]
+    return {**data, '_chat_history': safe_history}
+
+
+@app.route('/api/ai/local-status', methods=['GET'])
+def local_ai_status():
+    if cloud_mode():
+        return jsonify({'ok': True, 'data': {'ready': False, 'local_only': True}})
+    from ai_assistant import _llm_config
+    import requests
+    config = _llm_config()
+    try:
+        response = requests.get(config.ollama_base_url + '/api/tags', timeout=2)
+        response.raise_for_status()
+        models = [m.get('name') for m in response.json().get('models', [])]
+        return jsonify({'ok': True, 'data': {'ready': config.ollama_model in models, 'model': config.ollama_model}})
+    except (requests.RequestException, ValueError, TypeError):
+        return jsonify({'ok': True, 'data': {'ready': False, 'model': config.ollama_model}})
 
 
 @app.route("/api/cases/<case_id>", methods=["GET"])
@@ -744,24 +825,25 @@ def export_report():
     import datetime
 
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    os.makedirs("reports", exist_ok=True)
+    export_dir = runtime_reports_dir()
+    export_dir.mkdir(parents=True, exist_ok=True)
     if fmt == "markdown":
-        path = f"reports/IR_Report_{now}.md"
+        path = str(export_dir / f"IR_Report_{now}.md")
         _write_markdown(data, path)
         with open(path, "a", encoding="utf-8") as evidence_report:
             evidence_report.write(research_markdown(data))
     elif fmt == "html":
-        path = f"reports/IR_Report_{now}.html"
+        path = str(export_dir / f"IR_Report_{now}.html")
         _write_html(data, path)
     elif fmt == "pdf":
-        path = f"reports/IR_Report_{now}.pdf"
+        path = str(export_dir / f"IR_Report_{now}.pdf")
         export_payload_pdf(data, path)
     elif fmt in SIEM_FORMATS:
         extension = SIEM_EXTENSIONS[fmt]
-        path = f"reports/SIEM_{fmt}_{now}.{extension}"
+        path = str(export_dir / f"SIEM_{fmt}_{now}.{extension}")
         _write_siem(data, fmt, path)
     else:
-        path = f"reports/IR_Report_{now}.json"
+        path = str(export_dir / f"IR_Report_{now}.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2)
     return jsonify({"ok": True, "path": path, "download_url": "/api/exports/" + Path(path).name})
@@ -771,7 +853,7 @@ def export_report():
 def download_export(filename):
     if not re.fullmatch(r"(?:IR_Report|SIEM_[a-z0-9_]+)_[0-9]{8}_[0-9]{6}_[0-9]{6}\.[a-z0-9]+", filename):
         return _error_response("Không tìm thấy báo cáo", 404)
-    return send_from_directory(str(Path.cwd() / "reports"), filename, as_attachment=True)
+    return send_from_directory(str(runtime_reports_dir()), filename, as_attachment=True)
 
 
 def _ensure_malware_analysis(data: dict) -> dict:
