@@ -16,9 +16,30 @@ function updateGuide() {
     button.disabled = !G.data;
     button.title = G.data ? '' : 'Nhập báo cáo hoặc dùng thử dữ liệu mẫu trước';
   });
-  document.getElementById('flow-status').textContent = G.data
-    ? 'Đã có kết quả. Tiếp theo: kiểm tra chỉ báo và xem xét khuyến nghị.'
-    : 'Chưa có dữ liệu. Bắt đầu bằng một báo cáo hoặc dữ liệu mẫu.';
+  const status = document.getElementById('flow-status');
+  status.replaceChildren();
+  if (!G.data) {
+    status.textContent = 'Chưa có dữ liệu. Bắt đầu bằng một báo cáo hoặc dữ liệu mẫu.';
+    return;
+  }
+  // A case reopened from the last visit is named, so the chat context is never a surprise.
+  const name = G.data.file?.name || G.data.playbook?.malware_name || 'hồ sơ';
+  status.append(`Đang mở hồ sơ ${name}${G.restored ? ' (khôi phục từ lần làm việc trước)' : ''}. Tiếp theo: kiểm tra chỉ báo và xem xét khuyến nghị. `);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'btn btn-outline';
+  close.textContent = 'Đóng hồ sơ';
+  close.addEventListener('click', closeCase);
+  status.append(close);
+}
+function closeCase() {
+  try { localStorage.removeItem(LAST_ANALYSIS_KEY); localStorage.setItem(CASE_CLOSED_KEY, '1'); } catch (_) { /* storage may be blocked */ }
+  G.data = null;
+  G.restored = false;
+  if (typeof clearChat === 'function') clearChat();
+  document.getElementById('chat-case-name').textContent = 'Chưa mở hồ sơ';
+  updateGuide();
+  toast('Đã đóng hồ sơ. Lịch sử vẫn giữ để mở lại khi cần.');
 }
 window.addEventListener('load', async () => {
   updateGuide();

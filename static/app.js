@@ -6,6 +6,7 @@ let G = {
   aiRequestId: 0
 };
 const LAST_ANALYSIS_KEY = 'ir_last_analysis_payload';
+const CASE_CLOSED_KEY = 'ir_case_closed';
 
 window.onload = async () => {
   // Auto-load API key từ backend nếu có
@@ -622,6 +623,7 @@ async function loadHistory() {
 // ── Render functions ──────────────────────────────────────────────────────────
 function renderAll(data, options = {}) {
   G.data = data;
+  G.restored = Boolean(options.restored);
   saveLastAnalysis(data);
   renderDashboard(data);
   renderPlaybook(data);
@@ -633,6 +635,7 @@ function renderAll(data, options = {}) {
 
 function saveLastAnalysis(data) {
   try {
+    localStorage.removeItem(CASE_CLOSED_KEY);
     localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(data));
   } catch (e) {
     console.warn('Không thể lưu phiên phân tích gần nhất:', e);
@@ -662,6 +665,7 @@ function restoreLastAnalysis() {
     const data = JSON.parse(raw);
     if (!data || !data.playbook || !data.threat) return false;
     G.data = data;
+    G.restored = true;
     renderDashboard(data);
     renderPlaybook(data);
     renderIOCs(data);
@@ -675,11 +679,13 @@ function restoreLastAnalysis() {
 }
 
 async function restoreLatestFromServer() {
+  // The analyst closed the case on purpose; do not reopen the newest one on reload.
+  try { if (localStorage.getItem(CASE_CLOSED_KEY)) return; } catch (_) { /* storage may be blocked */ }
   try {
     const r = await fetch('/api/history/local/latest');
     const j = await r.json();
     if (!j.ok || !j.data) return;
-    renderAll(j.data, { silent: true });
+    renderAll(j.data, { silent: true, restored: true });
   } catch (e) {
     // Không có lịch sử thì giữ màn hình chờ bình thường.
   }
@@ -1282,6 +1288,7 @@ function escAttr(s) {
 
 function renderAIProactive(d) {
   if (typeof updateChatCase === 'function') updateChatCase(d);
+  if (typeof updateGuide === 'function') updateGuide();
 }
 
 function formatAssistantAnswer(value) {

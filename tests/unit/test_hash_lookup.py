@@ -83,3 +83,33 @@ def test_invalid_hash_and_missing_key_do_not_call_service(monkeypatch):
 def test_lookup_only_for_explicit_requests(question,expected):
     from hash_lookup import lookup_requested
     assert lookup_requested(question) is expected
+
+
+def _case_payload():
+    def ev(path, value, ctx):
+        return {'type': 'sha256', 'source_path': path, 'value': value, 'context': ctx}
+    return {'file': {'name': 'bundle.zip', 'sha256': 'a' * 64},
+            'evidence_bundle': {'evidence': [
+                ev('/data/content/mainObject/hashes/sha256', 'a' * 64, {}),
+                ev('/data/content/dropped/0/hashes/sha256', 'b' * 64, {'filename': r'C:\Temp\__PSScriptPolicyTest_x.ps1', 'type': 'executable'}),
+                ev('/data/content/dropped/1/hashes/sha256', 'c' * 64, {'filename': r'C:\Temp\notes.txt', 'type': 'text'}),
+                ev('/data/content/dropped/2/hashes/sha256', 'd' * 64, {'filename': r'C:\Temp\payload.exe', 'type': 'executable'})]}}
+
+
+def test_case_candidates_are_main_sample_then_dropped_executables():
+    from hash_lookup import case_hash_candidates
+    assert [h for _, h in case_hash_candidates(_case_payload())] == ['a' * 64, 'd' * 64]
+
+
+@responses.activate
+def test_case_lookup_falls_through_container_to_dropped_payload():
+    def reply(request):
+        if 'a' * 64 in request.body:
+            return (200, {}, json.dumps({'query_status': 'hash_not_found'}))
+        return (200, {}, json.dumps({'query_status': 'ok', 'data': [{'sha256_hash': 'd' * 64, 'file_name': 'Install.exe',
+                                                                      'signature': 'WannaCry', 'tags': ['ransomware']}]}))
+    responses.add_callback(responses.POST, ENDPOINT, callback=reply)
+    result = answer_lookup('Tra cứu mã băm của tệp trong hồ sơ này', _case_payload())
+    assert [t['status'] for t in result['tried']] == ['not_found', 'found']
+    assert 'Mẫu chính bundle.zip' in result['answer'] and 'payload.exe khớp bản ghi' in result['answer']
+    assert 'WannaCry' in result['answer'] and result['lookup']['hash'] == 'd' * 64

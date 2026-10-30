@@ -105,7 +105,45 @@ def format_lookup(result):
         'Đây là dữ liệu tham chiếu bên ngoài, không xác nhận endpoint của bạn đã nhiễm. Đối chiếu với bằng chứng trong hồ sơ trước khi xử lý.'])
 
 
+MAX_CASE_LOOKUPS=4
+EXECUTABLE_EXT=('.exe','.dll','.scr','.sys','.bat','.ps1','.vbs','.js','.msi')
+
+
+def case_hash_candidates(payload):
+    """The opened case's main sample first, then executables it dropped (a .zip container is rarely indexed itself)."""
+    candidates=[]
+    main=select_hash('',payload)
+    if main:candidates.append(('Mẫu chính '+str((payload.get('file') or {}).get('name') or ''),main))
+    for row in (payload.get('evidence_bundle') or {}).get('evidence',[]):
+        ctx=row.get('context') or {}
+        name=str(ctx.get('filename',''))
+        if row.get('type')!='sha256' or '/dropped/' not in str(row.get('source_path','')):continue
+        if ctx.get('type')!='executable' and not name.lower().endswith(EXECUTABLE_EXT):continue
+        if '__PSScriptPolicyTest_' in name:continue
+        value=str(row.get('value','')).lower()
+        if re.fullmatch('[a-f0-9]{64}',value) and value not in {h for _,h in candidates}:
+            candidates.append(('Tệp thực thi do mẫu tạo ra '+name,value))
+    return candidates
+
+
 def answer_lookup(question,payload):
-    result=lookup_hash(select_hash(question,payload))
-    return {'mode':'hash_lookup','model':'hash-intelligence','answer':format_lookup(result),
-            'lookup':result,'sources':[result['source_url']] if result.get('source_url') else []}
+    if HASH_RE.search(question) or not payload:
+        result=lookup_hash(select_hash(question,payload))
+        return {'mode':'hash_lookup','model':'hash-intelligence','answer':format_lookup(result),
+                'lookup':result,'sources':[result['source_url']] if result.get('source_url') else []}
+    tried=[]
+    for label,value in case_hash_candidates(payload)[:MAX_CASE_LOOKUPS]:
+        result=lookup_hash(value)
+        tried.append((label,result))
+        if result['status'] in ('found','not_configured','auth_error','rate_limited'):break
+    if not tried:
+        result={'status':'invalid_hash','hash':''}
+        return {'mode':'hash_lookup','model':'hash-intelligence','answer':format_lookup(result),'lookup':result,'sources':[]}
+    label,result=next(((l,r) for l,r in tried if r['status']=='found'),tried[-1])
+    lines=[f'{l.strip()} ({r["hash"][:12]}…): chưa có trong nguồn tra cứu.' for l,r in tried if r['status']=='not_found' and r is not result]
+    if result['status']=='found':
+        lines.append(f'{label.strip()} khớp bản ghi trong nguồn tra cứu:')
+    answer='\n'.join(lines+[format_lookup(result)])
+    return {'mode':'hash_lookup','model':'hash-intelligence','answer':answer,'lookup':result,
+            'tried':[{'label':l,'hash':r['hash'],'status':r['status']} for l,r in tried],
+            'sources':[result['source_url']] if result.get('source_url') else []}
