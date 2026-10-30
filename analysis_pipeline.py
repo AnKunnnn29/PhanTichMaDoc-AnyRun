@@ -15,6 +15,7 @@ from mitre_mapping import map_evidence, catalogue
 from response_policy import exclusions
 from operational_guidance import apply_guidance
 from network_intel import build_network_profiles, enrich_network_profiles
+from impact_analysis import analyze_impact
 
 
 def analysis_key(report, iocs) -> str:
@@ -76,6 +77,7 @@ def run_pipeline(report, iocs, source="manual"):
     # Simulated demo indicators are not worth (or safe to imply as) real intel lookups.
     threat_intel = enrich_network_profiles(network_profiles, enabled=not str(source).startswith("demo"))
     agent = investigate(bundle, network_profiles)
+    impact = analyze_impact(report, bundle, network_profiles)
     behavior = build_behavior(bundle)
     mappings, catalog_meta = map_evidence(bundle)
     result.threat_info.mitre_techniques = [{"id": m["technique_id"], "name": m["name"],
@@ -124,13 +126,13 @@ def run_pipeline(report, iocs, source="manual"):
     case_agent = investigate_case(bundle, behavior, mappings, [
         {"id": a.id, "title": a.title, "phase": a.phase, "category": a.category, "priority": a.priority,
          "response_profile": a.response_profile, "objective": a.objective, "evidence_ids": a.evidence_ids}
-        for a in playbook.actions], threat, network_profiles)
+        for a in playbook.actions], threat, network_profiles, impact)
     apply_case_plan(playbook.actions, case_agent)
     result.research = {
         "case_id": "case-" + uuid.uuid4().hex, "analysis_fingerprint": analysis_key(report, iocs),
         "pipeline_version": PIPELINE_VERSION, "source": source,
         "evidence_bundle": bundle, "agent_analysis": agent, "case_agent": case_agent, "behavior_chain": behavior,
-        "network_profiles": network_profiles, "threat_intel_status": threat_intel, "mitre_mappings": mappings,
+        "network_profiles": network_profiles, "threat_intel_status": threat_intel, "impact_analysis": impact, "mitre_mappings": mappings,
         "mitre_catalog": catalog_meta,
         "response_exclusions": excluded,
         "analysis_status": "insufficient_data" if result.threat_info.verdict == "Unknown" else "completed_with_review_required",
@@ -158,6 +160,14 @@ def research_markdown(payload: dict) -> str:
              "| IOC ID | Vai trò dự kiến | Nguy cơ giả định | Diễn giải | Ảnh hưởng | Cần xác minh | Evidence |", "|---|---|---|---|---|---|---|"]
     for row in agent["findings"]:
         lines.append("| " + " | ".join(safe(row[k]) for k in ("ioc_id", "role", "severity", "explanation", "potential_impact", "verification_needed", "evidence_ids")) + " |")
+    impact = payload.get("impact_analysis")
+    if impact and impact["categories"]:
+        lines += ["", "### Tác động và thiệt hại", "", safe(impact["summary"]), ""]
+        for c in impact["categories"]:
+            lines += [f"#### {safe(c['title'])} ({safe(c['severity'])})"] + ["- " + safe(f) for f in c["facts"]]
+            lines += ["", "Ảnh hưởng: " + safe(c["impact"]), "Hướng xử lý: " + safe(c["response_hint"]),
+                      "Evidence: " + safe(", ".join(c["evidence_ids"][:10])), ""]
+        lines += ["- " + safe(x) for x in impact["limitations"]]
     profiles = [p for p in (payload.get("network_profiles") or {}).values()
                 if p["role"] not in {"benign_infrastructure", "local_network"}]
     if payload.get("network_profiles"):

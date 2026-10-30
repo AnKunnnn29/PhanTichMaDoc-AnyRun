@@ -1088,6 +1088,24 @@ function renderEvidencePanel(data) {
     parent.appendChild(el);
     return el;
   };
+  const impact = data.impact_analysis;
+  if (impact) {
+    const section = add(root, 'section', undefined, 'card case-agent');
+    add(section, 'h3', 'Tác động và thiệt hại');
+    add(section, 'p', impact.categories.length ? `${impact.categories.length} nhóm tác động rút ra từ dữ liệu sandbox, kèm bằng chứng.` : impact.summary);
+    const sevText = {critical:'Nghiêm trọng',high:'Cao',medium:'Trung bình',low:'Thấp',info:'Thông tin'};
+    for (const c of impact.categories) {
+      const box = add(section, 'details', undefined, 'action-card');
+      if (['critical', 'high'].includes(c.severity)) box.open = true;
+      add(box, 'summary', `${c.title} · ${sevText[c.severity] || c.severity}`);
+      const facts = add(box, 'ul');
+      for (const f of c.facts) add(facts, 'li', f);
+      add(box, 'p', `Ảnh hưởng: ${c.impact}`);
+      add(box, 'p', `Hướng xử lý: ${c.response_hint}`);
+      add(box, 'p', `Bằng chứng: ${c.evidence_ids.length} mục (xem chi tiết ở danh sách chỉ báo bên dưới).`);
+    }
+    for (const note of impact.limitations || []) add(section, 'p', note);
+  }
   const caseAgent = data.case_agent;
   if (caseAgent) {
     const section = add(root, 'section', undefined, 'card case-agent');

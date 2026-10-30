@@ -44,6 +44,7 @@ TOOLS_HELP = {
     "get_family_intel": "args {name: tên họ mã độc} - ghi chú tham khảo nội bộ, không phải evidence",
     "lookup_hash": "args {hash: md5/sha1/sha256 có trong hồ sơ} - tra cứu bên ngoài chỉ đọc, không phải evidence",
     "list_actions": "args {} - các khuyến nghị playbook cần đánh giá",
+    "get_impact_analysis": "args {} - tác động rút từ dữ liệu: tệp bị mã hóa, dữ liệu bị đánh cắp, tự khởi động, vô hiệu hóa phòng thủ",
     "get_network_profiles": "args {role?: vai trò, limit?: <=20} - hồ sơ từng IP/domain/URL: tiến trình, port, uy tín, threat intel, vai trò",
     "submit_assessment": "args {assessment: {...}} - nộp kết quả cuối cùng",
 }
@@ -71,9 +72,10 @@ def _clip(value, limit=600):
 class CaseTools:
     """Read-only views of one case. Records which evidence the model has actually read."""
 
-    def __init__(self, bundle, behavior, mappings, actions, threat, profiles=None):
+    def __init__(self, bundle, behavior, mappings, actions, threat, profiles=None, impact=None):
         self.bundle, self.behavior, self.mappings, self.actions, self.threat = bundle, behavior, mappings, actions, threat
         self.profiles = profiles or {}
+        self.impact = impact or {"categories": []}
         self.evidence = {e["id"]: e for e in bundle["evidence"]}
         self.observables = [o for o in bundle["observables"] if o["type"] != "mitre"]
         self.hashes = {o["value"] for o in self.observables if o["type"] in {"md5", "sha1", "sha256"} and o["valid"]}
@@ -150,6 +152,11 @@ class CaseTools:
             self.external.append({"tool": "lookup_hash", "hash": value, "status": result["status"],
                                   "source_url": result.get("source_url", "")})
             return {"reference_only": True, **{k: v for k, v in result.items() if k != "retrieved_at"}}
+        if name == "get_impact_analysis":
+            return {"severity": self.impact.get("severity"), "limitations": self.impact.get("limitations", []),
+                    "categories": [{**{k: c[k] for k in ("id", "title", "severity", "facts", "impact", "tactic")},
+                                    "evidence": [self._row(self.evidence[i]) for i in c["evidence_ids"][:3] if i in self.evidence]}
+                                   for c in self.impact["categories"]]}
         if name == "get_network_profiles":
             role, limit = args.get("role"), min(int(args.get("limit", 20)), 20)
             rows = [p for p in self.profiles.values() if not role or p["role"] == role]
@@ -265,7 +272,8 @@ def baseline_assessment(tools: CaseTools) -> dict:
             continue
         row = chain.setdefault(stage, {"stage": stage, "summary": "", "evidence_ids": [], "mitre": [],
                                        "assessment_status": "hypothesis"})
-        row["mitre"].append(m["technique_id"])
+        if m["technique_id"] not in row["mitre"]:
+            row["mitre"].append(m["technique_id"])
         row["evidence_ids"] += [i for i in m["evidence_ids"] if i not in row["evidence_ids"]]
         if m["origin"] == "source_report":
             row["assessment_status"] = "reported"
@@ -286,13 +294,29 @@ def baseline_assessment(tools: CaseTools) -> dict:
         row["summary"] = (f"{len(row['evidence_ids'])} evidence liên quan giai đoạn {row['stage']}"
                           + (f" ({', '.join(row['mitre'][:4])})" if row["mitre"] else "") + "; cần analyst xác nhận quan hệ.")
         row["evidence_ids"] = row["evidence_ids"][:10]
+    # Concrete impact categories become stages when the ATT&CK candidates did not already cover them.
+    for c in tools.impact["categories"]:
+        if c.get("tactic") in STAGE_ORDER and c["evidence_ids"]:
+            row = chain.setdefault(c["tactic"], {"stage": c["tactic"], "summary": "", "evidence_ids": [], "mitre": [],
+                                                 "assessment_status": "hypothesis"})
+            row["evidence_ids"] += [i for i in c["evidence_ids"] if i not in row["evidence_ids"]]
+            row.setdefault("facts", []).append(c["title"] + ": " + c["facts"][0])
+    for row in chain.values():
+        if row.get("facts"):
+            row["summary"] = "; ".join(row.pop("facts"))[:380]
+            row["evidence_ids"] = row["evidence_ids"][:12]
     level = tools.threat.get("threat_level") or 0
     severity = {4: "critical", 3: "high", 2: "medium", 1: "low"}.get(int(level) if str(level).isdigit() else 0, "unknown")
     sample = [e["id"] for e in tools.bundle["evidence"] if e["type"] == "sha256"][:1]
+    impact_rows = tools.impact["categories"]
+    if impact_rows:
+        severity = impact_rows[0]["severity"] if impact_rows[0]["severity"] in SEVERITIES else severity
+        sample = list(dict.fromkeys(i for c in impact_rows for i in c["evidence_ids"][:2]))[:8]
     return {"summary": f"Sandbox đánh giá {tools.threat.get('verdict', 'Unknown')} ({tools.threat.get('threat_name') or 'chưa rõ họ'}); "
                        "chuỗi hành vi dựng từ technique được báo cáo/quy tắc, chưa có suy luận riêng của Agent.",
             "impact": {"severity": severity if sample else "unknown",
-                       "summary": "Mức độ lấy theo threat level của sandbox; chưa xác nhận ảnh hưởng trên endpoint thật.",
+                       "summary": (tools.impact.get("summary", "")[:560] if impact_rows else
+                                   "Mức độ lấy theo threat level của sandbox; chưa xác nhận ảnh hưởng trên endpoint thật."),
                        "evidence_ids": sample if severity != "unknown" else []},
             "behavior_chain": sorted(chain.values(), key=lambda s: STAGE_ORDER.index(s["stage"])),
             "action_plan": [{"action_id": a["id"], "decision": "recommend" if a.get("evidence_ids") else "defer",
@@ -334,11 +358,11 @@ def _trace_args(args):
             for k, v in (args or {}).items() if k != "assessment"} if isinstance(args, dict) else {}
 
 
-def investigate_case(bundle, behavior, mappings, actions, threat, network_profiles=None) -> dict:
+def investigate_case(bundle, behavior, mappings, actions, threat, network_profiles=None, impact=None) -> dict:
     """actions: list of dicts with id/title/phase/category/priority/response_profile/objective/evidence_ids."""
     started = time.perf_counter()
     settings = agent_settings()
-    tools = CaseTools(bundle, behavior, mappings, actions, threat, network_profiles)
+    tools = CaseTools(bundle, behavior, mappings, actions, threat, network_profiles, impact)
     trace, warnings, mode = [], [], "rule_based"
     assessment = None
     if settings["provider"] != "rules":
