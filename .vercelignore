@@ -21,3 +21,7 @@ ghidra_tmp
 htmlcov
 .coverage*
 coverage.xml
+# Lint-only config. Vercel installs from pyproject.toml when present, which would skip requirements.txt.
+pyproject.toml
+requirements-dev.txt
+pytest.ini
