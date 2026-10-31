@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from analyzer import MalwareAnalyzer
+from ir_workspace.analysis.analyzer import MalwareAnalyzer
 
 pytestmark = pytest.mark.unit
 

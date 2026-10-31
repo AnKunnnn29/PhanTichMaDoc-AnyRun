@@ -4,11 +4,11 @@ import copy
 
 import pytest
 
-from analysis_pipeline import research_markdown, run_pipeline
-from anyrun_public_report import _public_vue_data_to_anyrun_report
-from evidence import collect_evidence
-from impact_analysis import analyze_impact, decode_powershell
-from network_intel import build_network_profiles
+from ir_workspace.analysis.analysis_pipeline import research_markdown, run_pipeline
+from ir_workspace.integrations.anyrun_public_report import _public_vue_data_to_anyrun_report
+from ir_workspace.analysis.evidence import collect_evidence
+from ir_workspace.analysis.impact_analysis import analyze_impact, decode_powershell
+from ir_workspace.integrations.network_intel import build_network_profiles
 
 pytestmark = pytest.mark.unit
 UUID = "4a4f9f51-083f-47e7-9d1d-424bfcdbbeea"

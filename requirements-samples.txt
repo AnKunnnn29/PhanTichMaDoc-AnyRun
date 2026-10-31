@@ -1,0 +1,3 @@
+# Optional local-only sample verification; excluded from Vercel's core dependencies.
+pyzipper>=0.4.0
+pypdf>=6.0

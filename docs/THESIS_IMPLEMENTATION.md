@@ -7,14 +7,14 @@ Cập nhật ngày 29/10/2026. Đối chiếu với đề cương `DC-10-Nguyen_
 
 | Yêu cầu trong đề cương | Triển khai | Cách nghiệm thu |
 |---|---|---|
-| Nhập Task UUID, public report, JSON/Markdown | `app.py`, `main.py`, các adapter hiện có; kiểm tra schema trong `validation.py` | JSON hỏng/rỗng trả lỗi; bản có content nhưng thiếu verdict giữ Unknown |
-| Chuẩn hóa IOC, chống trùng | `evidence.py` | Chuẩn hóa IP/domain/hash, giữ nguyên đường dẫn và ngữ cảnh gốc; giá trị sai định dạng không vào blocklist |
-| Evidence truy ngược nguồn | `evidence.py` | ID ổn định, SHA256 của JSON chuẩn hóa, JSON Pointer, nội dung nguồn; văn bản nhập có thêm dòng nguồn |
-| Agent diễn giải từng IOC | `analysis_agent.py` | Vai trò, diễn giải, ảnh hưởng, cần xác minh, evidence; rules mặc định hoặc LLM cấu hình rõ ràng |
-| Giới hạn Agent | `analysis_agent.py` | Chỉ hai công cụ đọc evidence/gửi findings; tối đa 4 bước/batch, 8 IOC/batch, 120 IOC/lượt LLM; lỗi trả fallback có nhãn |
-| Hành vi và MITRE | `analysis_pipeline.py`, `mitre_mapping.py` | Chỉ nối process/artifact khi có PID; phân biệt reported/hypothesis; danh mục ATT&CK 19.2 cố định |
-| Playbook và chuyên viên duyệt | `incident_response.py`, `case_store.py`, giao diện Quy trình IR | Pending ban đầu; reviewer/lý do; SQLite lưu sự kiện, revision ngăn ghi đè quyết định cũ; không thực thi lệnh |
-| Báo cáo có evidence | `reporter.py`, `app.py` | JSON/Markdown đầy đủ, HTML/PDF có phụ lục evidence/Agent/review; export theo case_id lấy snapshot server |
+| Nhập Task UUID, public report, JSON/Markdown | `app.py`, `main.py`, các adapter hiện có; kiểm tra schema trong `ir_workspace/core/validation.py` | JSON hỏng/rỗng trả lỗi; bản có content nhưng thiếu verdict giữ Unknown |
+| Chuẩn hóa IOC, chống trùng | `ir_workspace/analysis/evidence.py` | Chuẩn hóa IP/domain/hash, giữ nguyên đường dẫn và ngữ cảnh gốc; giá trị sai định dạng không vào blocklist |
+| Evidence truy ngược nguồn | `ir_workspace/analysis/evidence.py` | ID ổn định, SHA256 của JSON chuẩn hóa, JSON Pointer, nội dung nguồn; văn bản nhập có thêm dòng nguồn |
+| Agent diễn giải từng IOC | `ir_workspace/ai/analysis_agent.py` | Vai trò, diễn giải, ảnh hưởng, cần xác minh, evidence; rules mặc định hoặc LLM cấu hình rõ ràng |
+| Giới hạn Agent | `ir_workspace/ai/analysis_agent.py` | Chỉ hai công cụ đọc evidence/gửi findings; tối đa 4 bước/batch, 8 IOC/batch, 120 IOC/lượt LLM; lỗi trả fallback có nhãn |
+| Hành vi và MITRE | `ir_workspace/analysis/analysis_pipeline.py`, `ir_workspace/analysis/mitre_mapping.py` | Chỉ nối process/artifact khi có PID; phân biệt reported/hypothesis; danh mục ATT&CK 19.2 cố định |
+| Playbook và chuyên viên duyệt | `ir_workspace/analysis/incident_response.py`, `ir_workspace/storage/case_store.py`, giao diện Quy trình IR | Pending ban đầu; reviewer/lý do; SQLite lưu sự kiện, revision ngăn ghi đè quyết định cũ; không thực thi lệnh |
+| Báo cáo có evidence | `ir_workspace/reporting/reporter.py`, `app.py` | JSON/Markdown đầy đủ, HTML/PDF có phụ lục evidence/Agent/review; export theo case_id lấy snapshot server |
 | Đánh giá chương thực nghiệm | `evaluation.py` | Manifest nhãn độc lập, P/R/F1 trích xuất, thời gian chưa cache, rubric người chấm |
 
 Cache cũ theo malware family đã bỏ: cùng family hoặc cùng hash file phụ không được dùng lại kết quả mẫu khác.
@@ -65,7 +65,7 @@ API key không đưa vào JavaScript, API status hoặc Git. Endpoint/model/JSON
 [tài liệu DeepSeek](https://api-docs.deepseek.com/quick_start) và [JSON Output](https://api-docs.deepseek.com/guides/json_mode/).
 Prompt v5 chia batch nhỏ để tránh JSON bị cắt; có lượt sửa output trong ngân sách 4 bước.
 
-Ngoại lệ ứng cứu trong `response_policy.py` giữ domain/URL kill-switch WannaCry khỏi lệnh chặn.
+Ngoại lệ ứng cứu trong `ir_workspace/ai/response_policy.py` giữ domain/URL kill-switch WannaCry khỏi lệnh chặn.
 Khi chưa có quan hệ xác minh giữa IP và domain kill-switch, IP được giữ làm evidence/hunting,
 chưa đưa vào blocklist. Đây là biện pháp thận trọng khi thiếu quan hệ nguồn, không kết luận IP lành tính.
 Tham chiếu [Microsoft: WannaCrypt ransomware worm](https://www.microsoft.com/en-us/security/blog/2017/05/12/wannacrypt-ransomware-worm-targets-out-of-date-systems/).

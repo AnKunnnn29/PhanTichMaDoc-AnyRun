@@ -27,3 +27,7 @@ requirements-dev.txt
 pytest.ini
 static/dashboard-demo
 static/dashboard-preview
+
+Samples Malware
+samples
+requirements-samples.txt

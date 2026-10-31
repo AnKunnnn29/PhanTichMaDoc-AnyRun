@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from analyzer import (  # noqa: E402
+from ir_workspace.analysis.analyzer import (  # noqa: E402
     FileInfo,
     IOCData,
     MalwareAnalysisResult,
@@ -18,16 +18,16 @@ from analyzer import (  # noqa: E402
     ProcessActivity,
     ThreatInfo,
 )
-from demo_data import DEMO_IOC, DEMO_REPORT  # noqa: E402
-from demo_data_redline import DEMO_REDLINE_IOC, DEMO_REDLINE_REPORT  # noqa: E402
-from demo_data_wannacry import DEMO_WANNACRY_IOC, DEMO_WANNACRY_REPORT  # noqa: E402
-from incident_response import IncidentAction, IncidentResponsePlaybook  # noqa: E402
-import ml_engine as _ml_engine  # noqa: E402,F401
+from ir_workspace.demo.demo_data import DEMO_IOC, DEMO_REPORT  # noqa: E402
+from ir_workspace.demo.demo_data_redline import DEMO_REDLINE_IOC, DEMO_REDLINE_REPORT  # noqa: E402
+from ir_workspace.demo.demo_data_wannacry import DEMO_WANNACRY_IOC, DEMO_WANNACRY_REPORT  # noqa: E402
+from ir_workspace.analysis.incident_response import IncidentAction, IncidentResponsePlaybook  # noqa: E402
+import ir_workspace.ai.ml_engine as _ml_engine  # noqa: E402,F401
 
 
 @pytest.fixture(autouse=True)
 def isolate_runtime_state(monkeypatch, tmp_path):
-    import history_store
+    import ir_workspace.storage.history_store as history_store
     monkeypatch.setattr(history_store, "_HISTORY_PATH", str(tmp_path / "history.json"))
     monkeypatch.setenv("IR_CASE_DB", str(tmp_path / "cases.sqlite3"))
     monkeypatch.setenv("AGENT_PROVIDER", "rules")
@@ -81,7 +81,7 @@ def temp_output_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def mock_anyrun_client():
-    from anyrun_client import AnyRunClient
+    from ir_workspace.integrations.anyrun_client import AnyRunClient
 
     return AnyRunClient("test-api-key", timeout=1)
 

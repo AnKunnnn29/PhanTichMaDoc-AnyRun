@@ -1,6 +1,6 @@
-from analysis_pipeline import run_pipeline
-from ai_assistant import _build_context, _system_prompt
-from response_policy import is_protected_destination
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
+from ir_workspace.ai.ai_assistant import _build_context, _system_prompt
+from ir_workspace.ai.response_policy import is_protected_destination
 
 
 def test_wannacry_kill_switch_kept_as_evidence_not_block_rule(wannacry_report, wannacry_ioc):

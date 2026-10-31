@@ -50,3 +50,8 @@ Thumbs.db
 # Local UI prototypes; keep them out of Git and deploys.
 static/dashboard-demo/
 static/dashboard-preview/
+
+# Local malware fixtures stay outside source control.
+Samples Malware/
+samples/
+*.exe.bin

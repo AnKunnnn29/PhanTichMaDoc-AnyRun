@@ -40,12 +40,12 @@ from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
 from rich import print as rprint
 
-from anyrun_client import AnyRunClient, AnyRunAPIError, AnyRunAuthError
-from analyzer import MalwareAnalyzer
-from incident_response import IncidentResponseGenerator
-from reporter import TerminalReporter, ReportExporter
-from markdown_importer import markdown_to_anyrun_report
-from analysis_pipeline import run_pipeline
+from ir_workspace.integrations.anyrun_client import AnyRunClient, AnyRunAPIError, AnyRunAuthError
+from ir_workspace.analysis.analyzer import MalwareAnalyzer
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+from ir_workspace.reporting.reporter import TerminalReporter, ReportExporter
+from ir_workspace.integrations.markdown_importer import markdown_to_anyrun_report
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
 
 console = Console(highlight=False)
 
@@ -100,7 +100,7 @@ def run_analysis_pipeline(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_demo(output_dir: str, export: bool) -> None:
-    from demo_data import DEMO_REPORT, DEMO_IOC
+    from ir_workspace.demo.demo_data import DEMO_REPORT, DEMO_IOC
     console.print(Panel(
         "[bold yellow]🎭 DEMO MODE[/bold yellow]\n"
         "Đang sử dụng dữ liệu mẫu mô phỏng mã độc [bold]Emotet[/bold] "

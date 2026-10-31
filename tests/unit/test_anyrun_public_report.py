@@ -4,9 +4,9 @@ import responses
 import json
 from urllib.parse import quote
 from types import SimpleNamespace
-import anyrun_public_report as public
+import ir_workspace.integrations.anyrun_public_report as public
 
-from anyrun_public_report import (
+from ir_workspace.integrations.anyrun_public_report import (
     AnyRunPublicReportError,
     _download_public_vue_data,
     _extract_public_url,
@@ -67,7 +67,7 @@ def test_public_task_can_follow_matching_static_report(tmp_path,monkeypatch):
     report=load_public_report(TASK_UUID,source_ref=task_url,reports_dir=tmp_path)
     assert report['data']['analysis']['uuid']==TASK_UUID
     assert report['publicReport']['general']['verdict']['type']==3
-    from validation import validate_report
+    from ir_workspace.core.validation import validate_report
     validate_report(report,{})
 
 

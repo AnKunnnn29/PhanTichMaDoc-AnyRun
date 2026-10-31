@@ -8,8 +8,8 @@ from zipfile import ZipFile
 
 import pytest
 
-import ghidra_analyzer as ga
-import runtime_setup as setup
+import ir_workspace.integrations.ghidra_analyzer as ga
+import ir_workspace.core.runtime_setup as setup
 
 pytestmark = pytest.mark.unit
 

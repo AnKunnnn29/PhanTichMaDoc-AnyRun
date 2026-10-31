@@ -6,8 +6,8 @@ from io import StringIO
 import pytest
 from rich.console import Console
 
-import reporter
-from reporter import (
+import ir_workspace.reporting.reporter as reporter
+from ir_workspace.reporting.reporter import (
     ReportExporter,
     TerminalReporter,
     build_html_report,
@@ -138,7 +138,7 @@ class TestReportContent:
         assert "C2" in behavior
 
     def test_build_ir_evaluation_scores_report_readiness(self, sample_analysis_result):
-        from incident_response import IncidentResponseGenerator
+        from ir_workspace.analysis.incident_response import IncidentResponseGenerator
 
         playbook = IncidentResponseGenerator().generate(sample_analysis_result)
         evaluation = build_ir_evaluation(sample_analysis_result, playbook)

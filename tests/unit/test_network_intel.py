@@ -4,12 +4,12 @@ import copy
 import pytest
 import responses
 
-import network_intel
-from analysis_agent import _llm_priority
-from analysis_pipeline import run_pipeline
-from anyrun_public_report import _public_vue_data_to_anyrun_report
-from evidence import collect_evidence
-from network_intel import THREATFOX_URL, URLHAUS_HOST_URL, build_network_profiles, enrich_network_profiles
+import ir_workspace.integrations.network_intel as network_intel
+from ir_workspace.ai.analysis_agent import _llm_priority
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
+from ir_workspace.integrations.anyrun_public_report import _public_vue_data_to_anyrun_report
+from ir_workspace.analysis.evidence import collect_evidence
+from ir_workspace.integrations.network_intel import THREATFOX_URL, URLHAUS_HOST_URL, build_network_profiles, enrich_network_profiles
 
 pytestmark = pytest.mark.unit
 UUID = "4d6f6b46-fc90-40d9-ae47-55fe05b845b0"

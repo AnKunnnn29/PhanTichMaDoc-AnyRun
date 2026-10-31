@@ -4,8 +4,8 @@ import requests
 
 import pytest
 
-import ai_assistant
-from ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
+import ir_workspace.ai.ai_assistant as ai_assistant
+from ir_workspace.ai.ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
 
 pytestmark = pytest.mark.unit
 

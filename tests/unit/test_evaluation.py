@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from evaluation import evaluate, load_manifest, score_extraction
+from ir_workspace.cli.evaluation import evaluate, load_manifest, score_extraction
 
 
 def test_precision_recall_counts_and_normalization():

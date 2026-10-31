@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from validation import (
+from ir_workspace.core.validation import (
     REPORT_EXTENSIONS,
     ValidationError,
     validate_api_key,

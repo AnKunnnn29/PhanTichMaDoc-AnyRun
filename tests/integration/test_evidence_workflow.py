@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from case_store import load_case
-from evidence import validate_bundle
+from ir_workspace.storage.case_store import load_case
+from ir_workspace.analysis.evidence import validate_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -73,7 +73,7 @@ def test_three_demos_have_full_evidence_agent_and_review_metadata(flask_test_cli
     data = flask_test_client.get(f"/api/demo/{malware}").get_json()["data"]
     # The browser copy omits the raw report; integrity is checked on the full server snapshot.
     assert all(src["content_omitted"] and "content" not in src for src in data["evidence_bundle"]["sources"])
-    from case_store import load_case
+    from ir_workspace.storage.case_store import load_case
     validate_bundle(load_case(data["case_id"])["evidence_bundle"])
     assert data["agent_analysis"]["findings"]
     assert data["nist"]["revision"] == "SP 800-61 Rev.3"
@@ -94,7 +94,7 @@ def test_forwarded_header_does_not_bypass_rate_limit(flask_test_client):
 
 
 def test_restored_slim_copy_does_not_replace_full_history_payload(flask_test_client):
-    import history_store
+    import ir_workspace.storage.history_store as history_store
     data = flask_test_client.get("/api/demo/wannacry").get_json()["data"]
     assert flask_test_client.post("/api/history/local/save", json={"data": data, "source": "browser:restore"}).get_json()["ok"]
     stored = next(i["payload"] for i in history_store.load_history() if i["payload"].get("case_id") == data["case_id"])

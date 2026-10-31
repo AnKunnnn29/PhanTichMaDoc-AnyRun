@@ -10,9 +10,9 @@ from collections import defaultdict, deque
 from functools import wraps
 from pathlib import Path
 from dataclasses import asdict
-from analysis_pipeline import run_pipeline, analysis_key, research_markdown
-from case_store import find_case, save_case, load_case, review_action
-from runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
+from ir_workspace.analysis.analysis_pipeline import run_pipeline, analysis_key, research_markdown
+from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action
+from ir_workspace.storage.runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
 
 if sys.platform == "win32" and __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -27,23 +27,23 @@ except ImportError:
 
 from flask import Flask, Response, request, jsonify, send_from_directory, stream_with_context
 from werkzeug.exceptions import RequestEntityTooLarge
-from analyzer import MalwareAnalyzer
-from incident_response import IncidentResponseGenerator
-from demo_data import DEMO_REPORT, DEMO_IOC
-from demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
-from demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
-from ml_engine import MLThreatPredictor
-from markdown_importer import markdown_to_anyrun_report
-from ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
-from reporter import build_html_report, build_ir_evaluation, build_malware_analysis, export_payload_pdf
-from siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
-from history_store import (
+from ir_workspace.analysis.analyzer import MalwareAnalyzer
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+from ir_workspace.demo.demo_data import DEMO_REPORT, DEMO_IOC
+from ir_workspace.demo.demo_data_wannacry import DEMO_WANNACRY_REPORT, DEMO_WANNACRY_IOC
+from ir_workspace.demo.demo_data_redline import DEMO_REDLINE_REPORT, DEMO_REDLINE_IOC
+from ir_workspace.ai.ml_engine import MLThreatPredictor
+from ir_workspace.integrations.markdown_importer import markdown_to_anyrun_report
+from ir_workspace.ai.ai_assistant import answer_remediation, answer_remediation_stream, get_ai_status
+from ir_workspace.reporting.reporter import build_html_report, build_ir_evaluation, build_malware_analysis, export_payload_pdf
+from ir_workspace.reporting.siem_exporter import SIEM_EXTENSIONS, SIEM_FORMATS, build_siem_export
+from ir_workspace.storage.history_store import (
     extract_hashes_from_report,
     load_history as load_local_history,
     record_analysis,
     task_uuid_from_report,
 )
-from validation import (
+from ir_workspace.core.validation import (
     MAX_REPORT_UPLOAD_BYTES,
     MAX_SANDBOX_UPLOAD_BYTES,
     REPORT_EXTENSIONS,
@@ -55,10 +55,10 @@ from validation import (
     validate_uploaded_filename,
     validate_url,
 )
-from ghidra_analyzer import analyze_sample as analyze_sample_with_ghidra
-from ghidra_analyzer import ghidra_status
-from anyrun_client import AnyRunAuthError, AnyRunNotFoundError
-from anyrun_public_report import AnyRunPublicReportError, load_public_report
+from ir_workspace.integrations.ghidra_analyzer import analyze_sample as analyze_sample_with_ghidra
+from ir_workspace.integrations.ghidra_analyzer import ghidra_status
+from ir_workspace.integrations.anyrun_client import AnyRunAuthError, AnyRunNotFoundError
+from ir_workspace.integrations.anyrun_public_report import AnyRunPublicReportError, load_public_report
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
@@ -311,9 +311,9 @@ def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
 # ── routes ─────────────────────────────────────────────────────────────────
 
 
-@app.route("/")
-def index():
-    return send_from_directory("templates", "index.html")
+from ir_workspace.web.pages import pages
+
+app.register_blueprint(pages)
 
 
 @app.route("/api/config", methods=["GET"])
@@ -355,7 +355,7 @@ def analyze():
         task_id = validate_task_uuid(body.get("task_id"))
         task_ref = body.get("task_ref") or task_id
         force_analyze = bool(body.get("force_analyze", False))
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         # Nếu có API key → dùng authenticated API
         if api_key_raw and api_key_raw.strip():
@@ -454,7 +454,7 @@ def submit_url():
         body = _json_body()
         api_key = _resolve_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)
         res = client.submit_url(url)
@@ -475,7 +475,7 @@ def submit_file():
         if "file" not in request.files:
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)
         res = client.submit_file(tmp_path)
@@ -519,7 +519,7 @@ _cleanup_thread.start()
 
 def _poll_and_analyze(api_key, task_id, max_wait=300):
     """Chạy trong thread riêng: polling → analyze → lưu kết quả."""
-    from anyrun_client import AnyRunClient, AnyRunNotFoundError
+    from ir_workspace.integrations.anyrun_client import AnyRunClient, AnyRunNotFoundError
 
     client = AnyRunClient(api_key)
     elapsed = 0
@@ -595,7 +595,7 @@ def submit_analyze_url():
         body = _json_body()
         api_key = _resolve_api_key(body.get("api_key"))
         url = validate_url(body.get("url"))
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)
         res = client.submit_url(url)
@@ -621,7 +621,7 @@ def submit_analyze_file():
         if "file" not in request.files:
             raise ValidationError("Không có file")
         tmp_path = _save_temp_upload(request.files["file"])
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)
         res = client.submit_file(tmp_path)
@@ -666,7 +666,7 @@ def history():
     try:
         body = _json_body()
         api_key = _resolve_api_key(body.get("api_key"))
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         client = AnyRunClient(api_key)
         res = client.get_history(limit=15)
@@ -743,7 +743,7 @@ def ai_remediation():
     body = _json_body()
     question = body.get("question", "")
     data = chat_payload(body)
-    from hash_lookup import lookup_requested
+    from ir_workspace.integrations.hash_lookup import lookup_requested
     if not data and not lookup_requested(question):
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
     try:
@@ -758,7 +758,7 @@ def ai_remediation_stream():
     body = _json_body()
     question = body.get("question", "")
     data = chat_payload(body)
-    from hash_lookup import lookup_requested
+    from ir_workspace.integrations.hash_lookup import lookup_requested
     if not data and not lookup_requested(question):
         return jsonify({"ok": False, "error": "Chua co du lieu phan tich"}), 400
 
@@ -797,7 +797,7 @@ def chat_payload(body):
 def local_ai_status():
     if cloud_mode():
         return jsonify({'ok': True, 'data': {'ready': False, 'local_only': True}})
-    from ai_assistant import _llm_config
+    from ir_workspace.ai.ai_assistant import _llm_config
     import requests
     config = _llm_config()
     try:

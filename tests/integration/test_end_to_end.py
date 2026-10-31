@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from analyzer import MalwareAnalyzer
-from incident_response import IncidentResponseGenerator
-from reporter import ReportExporter
+from ir_workspace.analysis.analyzer import MalwareAnalyzer
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+from ir_workspace.reporting.reporter import ReportExporter
 
 pytestmark = pytest.mark.integration
 

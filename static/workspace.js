@@ -4,7 +4,7 @@
   const nf = new Intl.NumberFormat('vi-VN');
   const date = new Intl.DateTimeFormat('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   const names = {critical:'Nghiêm trọng',high:'Cao',medium:'Cần kiểm tra',clean:'Không phát hiện',unknown:'Chưa xác định'};
-  const colors = {critical:'#d44444',high:'#dc913c',medium:'#d6b94c',clean:'#279d7d',unknown:'#a7afbf'};
+  const colors = {critical:'#c47a7e',high:'#c4a06c',medium:'#aeb47d',clean:'#83b8a9',unknown:'#71839a'};
   const byId = id => document.getElementById(id);
   function priority(item) {
     if (!item.verdict || item.verdict === 'Unknown') return 'unknown';
@@ -28,10 +28,10 @@
     const urgent = items.filter(i => ['critical','high'].includes(priority(i))).length;
     byId('overview-stats').innerHTML = [
       ['Hồ sơ đã lưu',items.length,'Trong lịch sử hiện có'],
-      ['Khuyến nghị chờ duyệt',pending,'Tổng số khuyến nghị chưa duyệt hoặc cần bổ sung trong mọi hồ sơ'],
-      ['Chỉ báo duy nhất',refs.size,'Đối chiếu từ các hồ sơ có evidence'],
+      ['Khuyến nghị chờ duyệt',pending,'Cần duyệt hoặc bổ sung'],
+      ['Chỉ báo duy nhất',refs.size,'Đối chiếu từ bằng chứng'],
       ['Ưu tiên cao',urgent,'Đánh giá cao hoặc nghiêm trọng']
-    ].map(([label,value,hint]) => `<div class="overview-stat" title="${escAttr(hint)}"><span>${label}</span><b>${nf.format(value)}</b></div>`).join('');
+    ].map(([label,value,hint]) => `<div class="overview-stat" title="${escAttr(hint)}"><span>${label}</span><b>${nf.format(value)}</b><small>${esc(hint)}</small></div>`).join('');
     const counts = Object.fromEntries(Object.keys(names).map(k => [k,items.filter(i => priority(i) === k).length]));
     byId('priority-distribution').innerHTML = `<div class="priority-meter" aria-hidden="true">${Object.keys(names).map(k => `<i style="width:${items.length ? counts[k]/items.length*100 : 0}%;background:${colors[k]}"></i>`).join('')}</div>` + Object.keys(names).map(k => `<div class="priority-row"><i style="background:${colors[k]}"></i><span>${names[k]}</span><b>${nf.format(counts[k])}</b></div>`).join('');
     renderChart(); renderRows(); renderCurrent();

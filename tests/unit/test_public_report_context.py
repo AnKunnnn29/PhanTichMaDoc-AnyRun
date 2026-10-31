@@ -3,10 +3,10 @@ import copy
 
 import pytest
 
-from analysis_pipeline import build_behavior, run_pipeline
-from anyrun_public_report import _public_vue_data_to_anyrun_report
-from evidence import collect_evidence, validate_bundle
-from validation import validate_report
+from ir_workspace.analysis.analysis_pipeline import build_behavior, run_pipeline
+from ir_workspace.integrations.anyrun_public_report import _public_vue_data_to_anyrun_report
+from ir_workspace.analysis.evidence import collect_evidence, validate_bundle
+from ir_workspace.core.validation import validate_report
 
 pytestmark = pytest.mark.unit
 UUID = "4a4f9f51-083f-47e7-9d1d-424bfcdbbeea"

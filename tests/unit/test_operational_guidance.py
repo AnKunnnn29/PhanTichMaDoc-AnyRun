@@ -1,4 +1,4 @@
-from analysis_pipeline import run_pipeline
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
 from dataclasses import asdict
 
 
@@ -16,9 +16,9 @@ def test_guidance_has_steps_verification_and_explicit_target_limit(wannacry_repo
 
 
 def test_clean_case_guidance_does_not_instruct_quarantine(sample_analysis_result):
-    from analyzer import MalwareAnalysisResult,ThreatInfo
-    from incident_response import IncidentResponseGenerator
-    from operational_guidance import apply_guidance
+    from ir_workspace.analysis.analyzer import MalwareAnalysisResult,ThreatInfo
+    from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+    from ir_workspace.analysis.operational_guidance import apply_guidance
     result=sample_analysis_result
     result.threat_info.verdict='Unknown'
     action=IncidentResponseGenerator().generate(result).actions[0]

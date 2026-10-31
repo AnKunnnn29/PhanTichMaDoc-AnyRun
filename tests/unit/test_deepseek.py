@@ -1,8 +1,8 @@
 import json
 import responses
 
-from analysis_agent import _call_model, agent_settings
-from ai_assistant import _llm_config, _answer_with_openai, _iter_openai_stream, get_ai_status
+from ir_workspace.ai.analysis_agent import _call_model, agent_settings
+from ir_workspace.ai.ai_assistant import _llm_config, _answer_with_openai, _iter_openai_stream, get_ai_status
 
 
 @responses.activate

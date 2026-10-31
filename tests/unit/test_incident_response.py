@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from incident_response import IncidentResponseGenerator
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
 
 pytestmark = pytest.mark.unit
 

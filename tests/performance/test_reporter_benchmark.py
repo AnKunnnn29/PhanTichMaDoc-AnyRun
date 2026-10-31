@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from incident_response import IncidentResponseGenerator
-from reporter import ReportExporter
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+from ir_workspace.reporting.reporter import ReportExporter
 
 pytestmark = [pytest.mark.performance, pytest.mark.slow]
 

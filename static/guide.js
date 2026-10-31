@@ -1,6 +1,5 @@
 /* The four steps follow the actual report -> evidence -> review -> export flow. */
 function startAnalysis(tab = 'import') {
-  showPage('analyze', document.querySelector('[data-page="analyze"]'));
   switchTab('tab-' + tab);
 }
 function goToResult(page) {

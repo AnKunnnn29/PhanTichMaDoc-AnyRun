@@ -103,7 +103,7 @@ Không đưa `.env` lên Git. Trên Vercel, đặt các biến này trong **Sett
 
 ## AI Agent
 
-| | Agent diễn giải IOC (`analysis_agent.py`) | Agent điều tra hồ sơ (`case_agent.py`) |
+| | Agent diễn giải IOC (`ir_workspace/ai/analysis_agent.py`) | Agent điều tra hồ sơ (`ir_workspace/ai/case_agent.py`) |
 |---|---|---|
 | Đầu vào | Nhóm 8 IOC kèm hồ sơ mạng | Tóm tắt hồ sơ; agent tự gọi công cụ để đọc thêm |
 | Công cụ | `get_evidence`, `submit_findings` | `list_observables`, `get_evidence`, `search_evidence`, `get_process_tree`, `get_network_profiles`, `get_impact_analysis`, `get_process_story`, `get_static_profile`, `get_family_expectations`, `get_mitre_candidates`, `lookup_mitre`, `get_family_intel`, `lookup_hash`, `list_actions`, `submit_assessment` |
@@ -127,20 +127,20 @@ Trường `mode` trong kết quả cho biết `llm`, `partial`, `fallback` hay `
 |---|---|
 | `app.py` | Flask web và REST API |
 | `main.py`, `start.py` | CLI; khởi động kèm runtime Ghidra/JDK |
-| `anyrun_client.py`, `anyrun_public_client.py`, `anyrun_public_report.py` | Lấy báo cáo Any.Run (API, task công khai) và chuẩn hóa |
-| `markdown_importer.py`, `validation.py`, `analyzer.py` | Nhập Results.md/JSON, kiểm tra cấu trúc, mô hình dữ liệu |
-| `evidence.py` | Evidence bundle truy ngược nguồn; `PIPELINE_VERSION` |
-| `network_intel.py` | Hồ sơ và vai trò từng đích mạng; tra ThreatFox/URLhaus |
-| `impact_analysis.py` | Tác động cụ thể kèm evidence |
-| `remediation.py` | Biện pháp khắc phục riêng cho ca |
-| `incident_response.py`, `operational_guidance.py`, `response_policy.py` | Playbook mẫu NIST, hướng dẫn chung, ngoại lệ ứng cứu |
-| `analysis_agent.py`, `case_agent.py` | Hai AI Agent |
-| `analysis_pipeline.py` | Ghép toàn bộ pipeline, cache theo nội dung và cấu hình |
-| `mitre_mapping.py` | Danh mục ATT&CK 19.2, ánh xạ có evidence |
-| `ai_assistant.py`, `hash_lookup.py` | Chat hỗ trợ; tra MalwareBazaar |
-| `case_store.py`, `history_store.py`, `runtime_storage.py` | Quyết định duyệt (SQLite), lịch sử, lưu trữ theo trình duyệt trên Vercel |
-| `reporter.py`, `siem_exporter.py` | Xuất báo cáo và quy tắc SIEM |
-| `ghidra_analyzer.py` | Phân tích tĩnh bằng Ghidra headless + static triage |
+| `ir_workspace/integrations/anyrun_client.py`, `ir_workspace/integrations/anyrun_public_client.py`, `ir_workspace/integrations/anyrun_public_report.py` | Lấy báo cáo Any.Run (API, task công khai) và chuẩn hóa |
+| `ir_workspace/integrations/markdown_importer.py`, `ir_workspace/core/validation.py`, `ir_workspace/analysis/analyzer.py` | Nhập Results.md/JSON, kiểm tra cấu trúc, mô hình dữ liệu |
+| `ir_workspace/analysis/evidence.py` | Evidence bundle truy ngược nguồn; `PIPELINE_VERSION` |
+| `ir_workspace/integrations/network_intel.py` | Hồ sơ và vai trò từng đích mạng; tra ThreatFox/URLhaus |
+| `ir_workspace/analysis/impact_analysis.py` | Tác động cụ thể kèm evidence |
+| `ir_workspace/analysis/remediation.py` | Biện pháp khắc phục riêng cho ca |
+| `ir_workspace/analysis/incident_response.py`, `ir_workspace/analysis/operational_guidance.py`, `ir_workspace/ai/response_policy.py` | Playbook mẫu NIST, hướng dẫn chung, ngoại lệ ứng cứu |
+| `ir_workspace/ai/analysis_agent.py`, `ir_workspace/ai/case_agent.py` | Hai AI Agent |
+| `ir_workspace/analysis/analysis_pipeline.py` | Ghép toàn bộ pipeline, cache theo nội dung và cấu hình |
+| `ir_workspace/analysis/mitre_mapping.py` | Danh mục ATT&CK 19.2, ánh xạ có evidence |
+| `ir_workspace/ai/ai_assistant.py`, `ir_workspace/integrations/hash_lookup.py` | Chat hỗ trợ; tra MalwareBazaar |
+| `ir_workspace/storage/case_store.py`, `ir_workspace/storage/history_store.py`, `ir_workspace/storage/runtime_storage.py` | Quyết định duyệt (SQLite), lịch sử, lưu trữ theo trình duyệt trên Vercel |
+| `ir_workspace/reporting/reporter.py`, `ir_workspace/reporting/siem_exporter.py` | Xuất báo cáo và quy tắc SIEM |
+| `ir_workspace/integrations/ghidra_analyzer.py` | Phân tích tĩnh bằng Ghidra headless + static triage |
 | `evaluation.py` | Đo trích xuất IOC (P/R/F1) theo manifest nhãn |
 
 ## REST API chính
@@ -190,3 +190,27 @@ Chi tiết: [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 - [tools/README.md](tools/README.md): runtime Ghidra/JDK trong dự án
 
 Phân tích sâu A–F, nguồn dữ liệu, mức bằng chứng và giới hạn: [docs/DEEP_ANALYSIS.md](docs/DEEP_ANALYSIS.md).
+
+## Tổ chức và điều hướng
+
+Giữ `app.py` là Flask entry point trực tiếp cho local và Vercel. Các module nghiệp vụ nằm trong `ir_workspace/`: `analysis`, `ai`, `integrations`, `storage`, `reporting`, `core`, `demo`, `cli`. `ir_workspace/paths.py` xác định thư mục tài nguyên chung; `ir_workspace/web/pages.py` đăng ký URL màn hình. Các lệnh `python start.py`, `python app.py`, `python main.py`, `python evaluation.py` và `python train_ml.py` giữ nguyên.
+
+Điều hướng được tách sang `static/navigation.js`. Các màn hình có URL `/overview`, `/home`, `/analyze`, `/dashboard`, `/playbook`, `/evidence`, `/iocs`, `/history`. Các tab phân tích dùng `/analyze/import`, `/analyze/uuid`, `/analyze/url`, `/analyze/file`, `/analyze/ghidra`, `/analyze/demo`. Có thể mở trực tiếp, reload và dùng Back/Forward; hồ sơ hiện tại vẫn được khôi phục như trước. URL không chứa hồ sơ để chia sẻ sang trình duyệt khác.
+
+Kiểm tra frontend: `node tests/frontend/test_navigation.cjs` và `node tests/frontend/test_rendering.cjs`. Test deployment chạy bản sao sạch chỉ gồm mã nguồn và tài nguyên, không dựa vào `.env`, `.venv`, `models` hay cache của máy phát triển.
+
+## Kiểm tra mẫu local
+
+Cài phần phụ bằng `python -m pip install -r requirements-samples.txt`, rồi chạy:
+
+```powershell
+python -m ir_workspace.cli.check_samples --samples-dir "../Samples Malware"
+```
+
+Công cụ đọc mật khẩu từ `password.txt` trong thư mục mẫu, giải mã ZIP AES trong bộ nhớ, tính hash và trích chuỗi tĩnh. Không giải nén payload ra đĩa, không chạy mẫu, không gọi Ghidra headless và không upload. Kết quả ở `reports/sample-check.json`; chỉ hash trên trang đầu PDF được đối chiếu. PDF không được chuyển thành evidence sandbox có cấu trúc. Muốn thử luồng phân tích hành vi trên web, dùng Task ID hoặc báo cáo JSON/Results.md. Số chuỗi trích xuất không phải độ chính xác phát hiện mã độc.
+
+## Giao diện điều tra
+
+Theme mặc định dùng nền tối than xanh, điểm nhấn teal trầm và màu cảnh báo theo mức ưu tiên. Binary/hex là chi tiết trang trí tĩnh, không phải telemetry hoặc kết quả phân tích. Nút mặt trời ở thanh công cụ đổi sáng/tối và lưu lựa chọn trong trình duyệt; lựa chọn theme chỉ áp dụng trong phiên hiện tại nếu không ghi được localStorage. Hỗ trợ màn hình nhỏ, bàn phím và giảm chuyển động.
+
+Token màu và phần trình bày nằm trong `static/console.css`; hành vi đổi theme ở `static/theme.js`. Tham khảo cách tổ chức dashboard của [Elastic Security](https://www.elastic.co/docs/solutions/security/dashboards/overview-dashboard), [Wazuh](https://documentation.wazuh.com/current/user-manual/wazuh-dashboard/navigating-the-wazuh-dashboard.html) và [Grafana](https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/). Số liệu vẫn lấy từ hồ sơ đang lưu.

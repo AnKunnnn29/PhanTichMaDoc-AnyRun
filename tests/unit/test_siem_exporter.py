@@ -6,7 +6,7 @@ from io import StringIO
 
 import pytest
 
-from siem_exporter import (
+from ir_workspace.reporting.siem_exporter import (
     build_elastic_kql,
     build_ioc_csv,
     build_ioc_manifest,

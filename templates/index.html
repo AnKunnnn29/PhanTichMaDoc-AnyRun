@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>IR Workspace · Phân tích mã độc</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('ir_theme')==='light'?'light':'dark'}catch(_){}</script>
+<meta name="theme-color" content="#151b23"/>
 <link rel="stylesheet" href="/static/style.css"/>
 <link rel="stylesheet" href="/static/workspace.css"/>
 <link rel="stylesheet" href="/static/guide.css"/>
 <link rel="stylesheet" href="/static/response.css"/>
 <link rel="stylesheet" href="/static/overview.css?v=3"/>
+<link rel="stylesheet" href="/static/console.css?v=1"/>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Đến nội dung chính</a>
@@ -17,8 +20,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <strong>IR Workspace</strong>
-      <span>Đọc báo cáo · Hỗ trợ ứng cứu</span>
+      <div class="brand"><svg class="brand-symbol" aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M9 2v5m7-5v5m7-5v5M9 25v5m7-5v5m7-5v5M2 9h5m-5 7h5m-5 7h5m18-14h5m-5 7h5m-5 7h5"/><rect x="7" y="7" width="18" height="18" rx="3"/><path d="m12 13 4 3-4 3m6 0h3"/></svg><div><strong>IR Workspace</strong><span>Malware investigation</span></div></div>
     </div>
     <nav aria-label="Điều hướng chính"><p class="nav-caption">Không gian làm việc</p>
       <button type="button" class="nav-item active" data-page="overview" aria-label="Bảng tổng quan" aria-current="page" onclick="showPage('overview',this)"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span>Tổng quan</span></button>
@@ -26,17 +28,18 @@
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10"/></svg>
         <span>Bắt đầu</span>
       </button>
+      <p class="nav-caption nav-section">Điều tra &amp; ứng cứu</p>
       <button type="button" class="nav-item" data-page="analyze" aria-label="Dữ liệu Any.Run" onclick="showPage('analyze',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <span>1. Nhập dữ liệu</span>
+        <span>Nhập dữ liệu</span>
       </button>
       <button type="button" class="nav-item" data-page="dashboard" aria-label="Đánh giá sự cố" onclick="showPage('dashboard',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/></svg>
-        <span>2. Kết quả phân tích</span>
+        <span>Kết quả phân tích</span>
       </button>
       <button type="button" class="nav-item" data-page="playbook" aria-label="Quy trình IR" onclick="showPage('playbook',this)">
         <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
-        <span>3. Kế hoạch khắc phục</span>
+        <span>Kế hoạch khắc phục</span>
       </button>
       <button type="button" class="nav-item" data-page="evidence" onclick="showPage('evidence',this)" aria-label="Bằng chứng nguồn"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h3"/></svg><span>Bằng chứng nguồn</span></button>
       <button type="button" class="nav-item" data-page="iocs" aria-label="IOC & SIEM" onclick="showPage('iocs',this)">
@@ -48,17 +51,21 @@
         <span>Lịch sử</span>
       </button>
     </nav>
-<div class="sidebar-footer"><b>IR Workspace</b>Phân tích &amp; phản ứng sự cố</div>
+<div class="sidebar-footer"><span class="footer-glyph" aria-hidden="true">{ }</span><b>Mỗi kết luận, một dẫn chứng.</b><p>Đối chiếu nguồn trước khi xử lý.</p><button type="button" onclick="showPage('home')">Hướng dẫn sử dụng <span aria-hidden="true">↗</span></button></div>
   </aside>
 
   <!-- MAIN -->
   <div class="workspace-shell">
-  <header class="shell-header"><span>Không gian phân tích &nbsp; / &nbsp; <strong id="workspace-page-label">Tổng quan</strong></span><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ">Tìm hồ sơ… &nbsp; ⌕</button></header>
+  <header class="shell-header"><div class="breadcrumb"><span>Không gian phân tích</span><span aria-hidden="true">/</span><strong id="workspace-page-label">Tổng quan</strong></div><div class="header-tools"><button class="shell-search" type="button" onclick="WorkspaceUI.focusSearch()" aria-label="Tìm hồ sơ"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><span>Tìm hồ sơ</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Chuyển sang giao diện sáng" title="Chuyển sáng / tối"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button></div></header>
   <main class="main" id="main-content" tabindex="-1">
 
     <!-- OVERVIEW PAGE -->
     <div id="page-overview" class="dashboard-overview">
-      <div class="topbar"><h2>Tổng quan</h2><div class="topbar-actions"><button type="button" class="btn btn-outline" onclick="loadHistory()">Làm mới</button><button type="button" class="btn btn-primary" onclick="startAnalysis('uuid')">Phân tích mới</button></div></div>
+      <div class="topbar"><div><h2>Tổng quan điều tra</h2><p class="page-description">Hồ sơ, dấu vết và những đề xuất cần bạn xem xét.</p></div><div class="topbar-actions"><button type="button" class="btn btn-outline" onclick="loadHistory()"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>Làm mới</button><button type="button" class="btn btn-primary" onclick="startAnalysis('import')"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Phân tích mới</button></div></div>
+      <section class="analysis-banner" aria-label="Bắt đầu điều tra"><div class="banner-copy"><span class="banner-label"><span aria-hidden="true">&gt;_</span> Phòng phân tích mã độc</span><h3>Đọc dấu vết. Hiểu hành vi.</h3><p>Từ báo cáo sandbox đến bằng chứng và hướng ứng cứu.</p><button type="button" class="banner-link" onclick="startAnalysis('import')">Mở báo cáo mới <span aria-hidden="true">↗</span></button></div><div class="binary-art" aria-hidden="true"><pre>4D 5A  90 00  03 00  00 00
+01001101 01011010 00000000
+00110110 11000001 01101100
+01101001 01110010 00100000</pre><div class="binary-chip"><svg viewBox="0 0 60 60" fill="none"><rect x="13" y="13" width="34" height="34" rx="5"/><path d="M20 4v9m10-9v9m10-9v9M20 47v9m10-9v9m10-9v9M4 20h9m-9 10h9m-9 10h9m34-20h9m-9 10h9m-9 10h9M23 23l8 7-8 7m10 0h5"/></svg><span>.bin</span></div></div></section>
       <div id="overview-current" class="overview-current" hidden></div>
       <section aria-label="Thống kê hồ sơ" class="overview-stats" id="overview-stats">
 <div class="overview-stat"><span>Hồ sơ đã lưu</span><b>—</b><small>Đang tải dữ liệu…</small></div>
@@ -76,11 +83,11 @@
     </div>
     <!-- HOME PAGE -->
     <div id="page-home" style="display:none">
-      <section class="overview-heading"><h1>Bắt đầu phân tích</h1></section>
+      <section class="overview-heading"><div><h1>Bắt đầu một cuộc điều tra.</h1><p class="page-description">Chọn báo cáo của bạn hoặc khám phá bằng một hồ sơ mô phỏng.</p></div></section>
       <p class="page-guidance" id="flow-status" role="status">Chưa mở hồ sơ.</p>
       <section class="start-panel" aria-label="Chọn cách bắt đầu">
-        <div class="start-main"><h3>Báo cáo Any.Run</h3><p>Nhập Results.md / JSON hoặc dùng liên kết công khai.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết</button></div></div>
-        <div class="start-demo"><h3>Dữ liệu mẫu</h3><p>Hồ sơ mô phỏng, không cần API key.</p><div class="action-row"><button type="button" class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button type="button" class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></div>
+        <div class="start-main"><span class="source-format">.json / .md</span><h3>Báo cáo Any.Run</h3><p>Nhập Results.md / JSON hoặc dùng liên kết công khai.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết</button></div></div>
+        <div class="start-demo"><span class="source-format">demo / sandbox</span><h3>Dữ liệu mẫu</h3><p>Hồ sơ mô phỏng, không cần API key.</p><div class="action-row"><button type="button" class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button type="button" class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></div>
       </section>
       <details class="feature-guide workflow"><summary>Cách sử dụng</summary><ol><li><b>Nhập dữ liệu</b><button type="button" onclick="startAnalysis()">Chọn báo cáo</button></li><li><b>Đọc kết quả</b><button type="button" data-needs-analysis disabled onclick="goToResult('dashboard')">Xem kết quả</button></li><li><b>Xem xét khuyến nghị</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Mở kế hoạch</button></li><li><b>Xuất báo cáo</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Xuất & bàn giao</button></li></ol></details>
       <details class="feature-guide"><summary>Chức năng &amp; giới hạn</summary><dl>
@@ -98,7 +105,7 @@
     <div id="page-dashboard" style="display:none">
       <div class="topbar">
         <div>
-          <h2>2. Kết quả phân tích</h2>
+          <h2>Kết quả phân tích</h2>
 
         </div>
         <div class="topbar-actions">
@@ -135,7 +142,7 @@
 
     <!-- ANALYZE PAGE -->
     <div id="page-analyze" style="display:none">
-      <div class="topbar"><div><h2>1. Nhập dữ liệu</h2><span>Liên kết, báo cáo hoặc dữ liệu mẫu.</span></div></div>
+      <div class="topbar"><div><h2>Nhập dữ liệu</h2><span>Liên kết, báo cáo hoặc dữ liệu mẫu.</span></div></div>
 
       <!-- API Key -->
       <details class="card connection-settings">
@@ -251,8 +258,8 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
           <div class="ghidra-console">
             <div class="ghidra-intro">
               <div>
-                <div class="card-title">🧩 Phân tích tĩnh local bằng Ghidra</div>
-                <h3>Static triage + reverse engineering leads</h3>
+                <div class="card-title">Phân tích tĩnh bằng Ghidra</div>
+                <h3>Khám phá cấu trúc và dấu vết trong tệp</h3>
                 <p>Phân tích tĩnh trên máy: hash, chuỗi, IOC và cấu trúc tệp. Không chạy mẫu.</p>
               </div>
               <div id="ghidra-status" class="ghidra-status" aria-live="polite">Đang kiểm tra Ghidra...</div>
@@ -298,9 +305,9 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
         <div class="tab-pane" id="pane-demo" role="tabpanel" aria-labelledby="tab-demo" hidden>
           <p style="color:var(--text2);margin-bottom:16px;font-size:14px">Chạy demo với dữ liệu mẫu mô phỏng mã độc. Không cần API key.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-primary" onclick="runDemo('emotet')">▶ Demo Emotet (Trojan)</button>
-            <button class="btn btn-primary" style="background:var(--red);border-color:var(--red)" onclick="runDemo('wannacry')">▶ Demo WannaCry (Ransomware)</button>
-            <button class="btn btn-primary" style="background:var(--orange);border-color:var(--orange)" onclick="runDemo('redline')">▶ Demo RedLine (Stealer)</button>
+            <button class="btn btn-primary" onclick="runDemo('emotet')">Emotet · Trojan</button>
+            <button class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry · Ransomware</button>
+            <button class="btn btn-outline" onclick="runDemo('redline')">RedLine · Stealer</button>
           </div>
         </div>
       </div>
@@ -327,13 +334,13 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
     <!-- PLAYBOOK PAGE -->
     <div id="page-playbook" style="display:none">
       <div class="topbar">
-        <div><h2>3. Kế hoạch khắc phục</h2><span>Từ dấu hiệu trong báo cáo đến các bước xử lý có thể kiểm chứng.</span></div>
+        <div><h2>Kế hoạch khắc phục</h2><span>Từ dấu hiệu trong báo cáo đến các bước xử lý có thể kiểm chứng.</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-outline" onclick="exportReport('markdown')">⬇ Markdown</button>
-          <button class="btn btn-outline" onclick="exportReport('html')">⬇ HTML</button>
-          <button class="btn btn-green" onclick="exportReport('pdf')">⬇ PDF</button>
-          <button class="btn btn-green" onclick="exportReport('json')">⬇ JSON</button>
-          <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">📁 Mở Folder</button>
+          <button class="btn btn-outline" onclick="exportReport('markdown')">Markdown</button>
+          <button class="btn btn-outline" onclick="exportReport('html')">HTML</button>
+          <button class="btn btn-green" onclick="exportReport('pdf')">PDF</button>
+          <button class="btn btn-green" onclick="exportReport('json')">JSON</button>
+          <button class="btn btn-outline" onclick="openReports()" title="Mở thư mục reports">Mở thư mục</button>
         </div>
       </div>
       <div id="playbook-content">
@@ -351,16 +358,16 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
       <div class="topbar">
         <div><h2>IOC & SIEM</h2><span>Indicators of Compromise, blocklist và truy vấn hunt cho phản ứng sự cố</span></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-outline" onclick="copyAllIOCs()">📋 Copy tất cả</button>
-          <button class="btn btn-outline" onclick="exportReport('json')">⬇ Export JSON</button>
-          <button class="btn btn-outline" onclick="exportReport('csv')">⬇ IOC CSV</button>
-<details class="export-menu"><summary class="btn btn-outline">Xuất cho SIEM ▾</summary><div class="export-options">          <button class="btn btn-outline" onclick="exportReport('splunk')">⬇ Splunk SPL</button>
-          <button class="btn btn-outline" onclick="exportReport('elastic')">⬇ Elastic KQL</button>
-          <button class="btn btn-outline" onclick="exportReport('sentinel')">⬇ Sentinel KQL</button>
-          <button class="btn btn-green" onclick="exportReport('sigma')">⬇ Sigma</button>
-          <button class="btn btn-outline" onclick="exportReport('suricata')">⬇ Suricata</button>
-          <button class="btn btn-outline" onclick="exportReport('stix')">⬇ STIX</button>
-          <button class="btn btn-outline" onclick="exportReport('manifest')">⬇ IOC Manifest</button>
+          <button class="btn btn-outline" onclick="copyAllIOCs()">Sao chép tất cả</button>
+          <button class="btn btn-outline" onclick="exportReport('json')">Export JSON</button>
+          <button class="btn btn-outline" onclick="exportReport('csv')">IOC CSV</button>
+<details class="export-menu"><summary class="btn btn-outline">Xuất cho SIEM ▾</summary><div class="export-options">          <button class="btn btn-outline" onclick="exportReport('splunk')">Splunk SPL</button>
+          <button class="btn btn-outline" onclick="exportReport('elastic')">Elastic KQL</button>
+          <button class="btn btn-outline" onclick="exportReport('sentinel')">Sentinel KQL</button>
+          <button class="btn btn-green" onclick="exportReport('sigma')">Sigma</button>
+          <button class="btn btn-outline" onclick="exportReport('suricata')">Suricata</button>
+          <button class="btn btn-outline" onclick="exportReport('stix')">STIX</button>
+          <button class="btn btn-outline" onclick="exportReport('manifest')">IOC Manifest</button>
 </div></details>
         </div>
       </div>
@@ -375,7 +382,7 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
     <div id="page-history" style="display:none">
       <div class="topbar">
         <div><h2>Lịch sử phân tích</h2><span>Mở lại hồ sơ và tiếp tục điều tra.</span></div>
-        <button class="btn btn-primary" onclick="loadHistory()">🔄 Tải lại</button>
+        <button class="btn btn-primary" onclick="loadHistory()">Tải lại</button>
       </div>
       <div class="card">
         <div class="form-group" style="max-width:400px;margin-bottom:16px">
@@ -392,7 +399,7 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
 </div>
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-<button type="button" class="chat-launch" onclick="toggleChat(true)" aria-haspopup="dialog" aria-controls="chat-panel">Chat hỗ trợ</button>
+<button type="button" class="chat-launch" onclick="toggleChat(true)" aria-haspopup="dialog" aria-controls="chat-panel"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2 1.5-5A8 8 0 1 1 20 11Z"/><path d="M7 10h8m-8 4h5"/></svg>Trợ lý điều tra</button>
 <dialog id="chat-panel" class="chat-panel" aria-labelledby="chat-title">
   <header class="chat-heading"><div><h2 id="chat-title">Trợ lý phân tích &amp; ứng cứu</h2><p id="chat-provider">Đang kiểm tra kết nối AI…</p></div><button type="button" onclick="toggleChat(false)" aria-label="Đóng chat">Đóng</button></header>
   <div class="chat-context">Đang trao đổi về <span id="chat-case-name">Chưa mở hồ sơ</span></div>
@@ -401,9 +408,11 @@ sha256 C:\note.txt 8e9f..." rows="3"></textarea>
   <form id="chat-form" class="chat-form"><input id="ai-question" type="text" aria-label="Câu hỏi về hồ sơ" maxlength="2000" placeholder="Hỏi về biện pháp xử lý hoặc dẫn chứng…" autocomplete="off"/><button type="submit" class="btn btn-primary">Gửi</button><button type="button" id="ai-stop-btn" class="btn btn-outline" onclick="stopAI()" disabled>Dừng</button></form>
   <p class="chat-foot">Đối chiếu bằng chứng trước khi xử lý. Chat không thực thi lệnh.</p>
 </dialog>
+<script src="/static/theme.js?v=1"></script>
+<script src="/static/navigation.js?v=1"></script>
 <script src="/static/app.js?v=20261030-deep3"></script>
 <script src="/static/deep-analysis.js?v=1"></script>
-<script src="/static/workspace.js?v=2"></script>
+<script src="/static/workspace.js?v=3"></script>
 <script src="/static/guide.js?v=2"></script>
 <script src="/static/response.js?v=2"></script>
 <script src="/static/chatbox.js"></script>

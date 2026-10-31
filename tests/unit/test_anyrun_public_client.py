@@ -1,6 +1,6 @@
 import json
 import pytest
-import anyrun_public_client as client
+import ir_workspace.integrations.anyrun_public_client as client
 
 TASK='4a4f9f51-083f-47e7-9d1d-424bfcdbbeea'
 SHA='a'*64

@@ -4,12 +4,12 @@ import copy
 
 import pytest
 
-from analysis_agent import _baseline, investigate, validate_findings
-from analysis_pipeline import analysis_key, build_behavior, run_pipeline
-from analyzer import MalwareAnalyzer
-from evidence import collect_evidence, normalize, validate_bundle
-from markdown_importer import markdown_to_anyrun_report
-from mitre_mapping import map_evidence
+from ir_workspace.ai.analysis_agent import _baseline, investigate, validate_findings
+from ir_workspace.analysis.analysis_pipeline import analysis_key, build_behavior, run_pipeline
+from ir_workspace.analysis.analyzer import MalwareAnalyzer
+from ir_workspace.analysis.evidence import collect_evidence, normalize, validate_bundle
+from ir_workspace.integrations.markdown_importer import markdown_to_anyrun_report
+from ir_workspace.analysis.mitre_mapping import map_evidence
 
 pytestmark = pytest.mark.unit
 
@@ -121,7 +121,7 @@ def test_behavior_uses_explicit_process_relations_only(emotet_report):
 
 
 def test_rules_mode_is_labelled_and_does_not_call_network(monkeypatch, emotet_report):
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: pytest.fail("Unexpected network"))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: pytest.fail("Unexpected network"))
     agent = investigate(collect_evidence(emotet_report, {}))
     assert agent["mode"] == "rule_based"
     assert agent["validation"]["semantic_accuracy"] == "requires_analyst_review"
@@ -135,7 +135,7 @@ def test_llm_reads_evidence_and_returns_validated_findings(monkeypatch, emotet_r
     rows = [_baseline(x) for x in bundle["observables"]]
     responses = iter([{"tool": "get_evidence", "evidence_ids": [e for r in rows for e in r["evidence_ids"]]},
                       {"tool": "submit_findings", "findings": rows}])
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(responses))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: next(responses))
     result = investigate(bundle)
     assert result["mode"] == "llm"
     assert [x["tool"] for x in result["tool_trace"]] == ["interpret_observables", "get_evidence", "submit_findings"]
@@ -145,7 +145,7 @@ def test_llm_reads_evidence_and_returns_validated_findings(monkeypatch, emotet_r
                                    {"tool": "submit_findings", "findings": []}])
 def test_llm_invalid_tools_and_output_fall_back_explicitly(monkeypatch, emotet_report, answer):
     monkeypatch.setenv("AGENT_PROVIDER", "ollama")
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: answer)
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: answer)
     result = investigate(collect_evidence(emotet_report, {}))
     assert result["mode"] == "fallback" and result["warnings"]
     assert all(x["origin"] == "rule_based" for x in result["findings"])
@@ -178,7 +178,7 @@ def test_agent_repairs_enum_arrays_within_step_budget(monkeypatch, emotet_report
     replies = iter([{"tool": "get_evidence", "evidence_ids": row["evidence_ids"]},
                     {"tool": "submit_findings", "findings": [invalid]},
                     {"tool": "submit_findings", "findings": [row]}])
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(replies))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: next(replies))
     output = investigate(bundle)
     assert output["mode"] == "llm"
     assert any(e["status"] == "rejected" for e in output["tool_trace"])
@@ -193,14 +193,14 @@ def test_llm_citing_unread_evidence_gets_a_retry(monkeypatch, emotet_report):
     responses = iter([{"tool": "submit_findings", "findings": rows},
                       {"tool": "get_evidence", "evidence_ids": ids},
                       {"tool": "submit_findings", "findings": rows}])
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(responses))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: next(responses))
     result = investigate(bundle)
     assert result["mode"] == "llm"
     assert [x["status"] for x in result["tool_trace"][1:]] == ["rejected", "ok", "validated"]
 
 
 def test_one_failing_batch_keeps_the_other_llm_findings(monkeypatch, emotet_report):
-    import analysis_agent
+    import ir_workspace.ai.analysis_agent as analysis_agent
     monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
     monkeypatch.setenv("AGENT_PARALLEL", "1")
     monkeypatch.setattr(analysis_agent, "BATCH_SIZE", 1)
@@ -210,7 +210,7 @@ def test_one_failing_batch_keeps_the_other_llm_findings(monkeypatch, emotet_repo
     responses = iter([{"tool": "get_evidence", "evidence_ids": first["evidence_ids"]},
                       {"tool": "submit_findings", "findings": [first]},
                       *[{"tool": "run_shell"}] * analysis_agent.BATCH_STEPS])
-    monkeypatch.setattr("analysis_agent._call_model", lambda *_: next(responses))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent._call_model', lambda *_: next(responses))
     result = investigate(bundle)
     assert result["mode"] == "partial" and any("1/2" in w for w in result["warnings"])
     assert [f["origin"] for f in result["findings"]] == ["llm_hypothesis", "rule_based"]

@@ -3,8 +3,8 @@ import warnings
 import pytest
 from sklearn.exceptions import InconsistentVersionWarning
 
-from incident_response import IncidentResponseGenerator
-from validation import ValidationError, validate_report
+from ir_workspace.analysis.incident_response import IncidentResponseGenerator
+from ir_workspace.core.validation import ValidationError, validate_report
 
 
 def test_hunting_hashes_use_matching_columns_and_names(sample_analysis_result):
@@ -18,11 +18,11 @@ def test_hunting_hashes_use_matching_columns_and_names(sample_analysis_result):
 
 
 def test_incompatible_ml_model_is_not_used(monkeypatch, sample_analysis_result):
-    from ml_engine import MLThreatPredictor
-    monkeypatch.setattr("ml_engine.os.path.exists", lambda _: True)
+    from ir_workspace.ai.ml_engine import MLThreatPredictor
+    monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda _: True)
     def incompatible(_):
         warnings.warn(InconsistentVersionWarning(estimator_name="test", current_sklearn_version="2", original_sklearn_version="1"))
-    monkeypatch.setattr("ml_engine.joblib.load", incompatible)
+    monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', incompatible)
     predictor = MLThreatPredictor("test.pkl")
     assert not predictor.is_loaded and predictor.model is None
     assert predictor.predict(sample_analysis_result)["status"] == "disabled"

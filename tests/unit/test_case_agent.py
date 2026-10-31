@@ -5,10 +5,10 @@ from dataclasses import asdict
 
 import pytest
 
-from analysis_pipeline import run_pipeline
-from case_agent import MAX_STEPS, CaseTools, apply_case_plan, investigate_case
-from response_policy import is_protected_destination
-from demo_data_wannacry import DEMO_WANNACRY_IOC, DEMO_WANNACRY_REPORT
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
+from ir_workspace.ai.case_agent import MAX_STEPS, CaseTools, apply_case_plan, investigate_case
+from ir_workspace.ai.response_policy import is_protected_destination
+from ir_workspace.demo.demo_data_wannacry import DEMO_WANNACRY_IOC, DEMO_WANNACRY_REPORT
 
 pytestmark = pytest.mark.unit
 
@@ -34,7 +34,7 @@ def scripted(monkeypatch, answers):
         answer = next(script)
         return answer(messages) if callable(answer) else answer
     monkeypatch.setenv("AGENT_PROVIDER", "ollama")
-    monkeypatch.setattr("case_agent._call_model", fake)
+    monkeypatch.setattr('ir_workspace.ai.case_agent._call_model', fake)
     return calls
 
 
@@ -56,7 +56,7 @@ def wannacry():
 
 
 def test_rules_mode_builds_baseline_without_model(monkeypatch, wannacry):
-    monkeypatch.setattr("case_agent._call_model", lambda *_: pytest.fail("Unexpected model call"))
+    monkeypatch.setattr('ir_workspace.ai.case_agent._call_model', lambda *_: pytest.fail("Unexpected model call"))
     bundle, behavior, mappings, actions, threat, _ = wannacry
     case = investigate_case(bundle, behavior, mappings, actions, threat)
     a = case["assessment"]
@@ -180,10 +180,10 @@ def test_tools_read_only_views_track_evidence(wannacry):
 
 def test_gemini_provider_retries_rate_limit(monkeypatch):
     import responses as mock
-    from analysis_agent import _call_model, agent_settings
+    from ir_workspace.ai.analysis_agent import _call_model, agent_settings
     monkeypatch.setenv("AGENT_PROVIDER", "gemini")
     monkeypatch.setenv("AISTUDIO_API_KEY", "test-placeholder")
-    monkeypatch.setattr("analysis_agent.time.sleep", lambda seconds: None)
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent.time.sleep', lambda seconds: None)
     settings = agent_settings()
     assert settings["model"] and "generativelanguage" in settings["endpoint"]
     url = settings["endpoint"] + "/chat/completions"
@@ -210,7 +210,7 @@ def test_attack_ids_are_corrected_against_the_catalogue_and_recorded(monkeypatch
 
 
 def test_narrative_is_optional_but_bounded(monkeypatch, wannacry):
-    from case_agent import NARRATIVE_MAX
+    from ir_workspace.ai.case_agent import NARRATIVE_MAX
     bundle, behavior, mappings, actions, threat, _ = wannacry
     ids = [e["id"] for e in bundle["evidence"] if e["type"] == "process"]
     deep = {"process_story": {"processes": [{"id": ids[0]}], "narrative": []}}
@@ -226,9 +226,9 @@ def test_narrative_is_optional_but_bounded(monkeypatch, wannacry):
 
 def test_transient_provider_error_is_retried(monkeypatch):
     import responses as mock
-    from analysis_agent import _call_model, agent_settings
+    from ir_workspace.ai.analysis_agent import _call_model, agent_settings
     monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
-    monkeypatch.setattr("analysis_agent.time.sleep", lambda seconds: None)
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent.time.sleep', lambda seconds: None)
     settings = agent_settings()
     url = settings["endpoint"] + "/chat/completions"
     with mock.RequestsMock() as rsps:
@@ -262,14 +262,14 @@ def test_time_budget_stops_the_agent_before_hosting_limit(monkeypatch, wannacry)
 def test_model_call_timeout_never_exceeds_the_deadline(monkeypatch):
     import time
     import requests
-    from analysis_agent import _call_model, agent_settings
+    from ir_workspace.ai.analysis_agent import _call_model, agent_settings
     monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
     seen = {}
 
     def fake_post(url, headers=None, json=None, timeout=None):
         seen["timeout"] = timeout
         raise requests.Timeout("slow provider")
-    monkeypatch.setattr("analysis_agent.requests.post", fake_post)
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent.requests.post', fake_post)
     settings = {**agent_settings(), "deadline": time.monotonic() + 8}
     with pytest.raises(requests.Timeout):
         _call_model([{"role": "user", "content": "x"}], settings)
@@ -282,9 +282,9 @@ def test_no_retry_wait_past_the_deadline(monkeypatch):
     import time
     import requests
     import responses as mock
-    from analysis_agent import _call_model, agent_settings
+    from ir_workspace.ai.analysis_agent import _call_model, agent_settings
     monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
-    monkeypatch.setattr("analysis_agent.time.sleep", lambda s: pytest.fail("must not wait past the deadline"))
+    monkeypatch.setattr('ir_workspace.ai.analysis_agent.time.sleep', lambda s: pytest.fail("must not wait past the deadline"))
     settings = {**agent_settings(), "deadline": time.monotonic() + 10}
     with mock.RequestsMock() as rsps:
         rsps.post(settings["endpoint"] + "/chat/completions", status=429, headers={"Retry-After": "30"})
@@ -294,7 +294,7 @@ def test_no_retry_wait_past_the_deadline(monkeypatch):
 
 
 def test_pipeline_gives_both_agents_one_deadline(monkeypatch, wannacry_report, wannacry_ioc):
-    import analysis_pipeline
+    import ir_workspace.analysis.analysis_pipeline as analysis_pipeline
     seen = []
     real_ioc, real_case = analysis_pipeline.investigate, analysis_pipeline.investigate_case
     monkeypatch.setattr(analysis_pipeline, "investigate", lambda b, p, d: seen.append(d) or real_ioc(b, p, d))
@@ -318,7 +318,7 @@ def test_extra_unread_citations_are_trimmed_but_one_read_source_is_required(monk
 
 def test_local_and_vercel_deadlines_differ(monkeypatch):
     import time
-    from analysis_agent import pipeline_deadline
+    from ir_workspace.ai.analysis_agent import pipeline_deadline
     monkeypatch.delenv("PIPELINE_DEADLINE_SECONDS", raising=False)
     monkeypatch.setenv("VERCEL", "1")
     assert 44 <= pipeline_deadline() - time.monotonic() <= 45
@@ -339,7 +339,7 @@ def test_unread_refs_on_deferred_decisions_are_counted(monkeypatch, wannacry):
 
 
 def test_case_prompt_version_is_part_of_the_cache_key(monkeypatch, emotet_report):
-    import analysis_pipeline
+    import ir_workspace.analysis.analysis_pipeline as analysis_pipeline
     before = analysis_pipeline.analysis_key(emotet_report, {})
     monkeypatch.setattr(analysis_pipeline, "CASE_PROMPT_VERSION", "other")
     assert analysis_pipeline.analysis_key(emotet_report, {}) != before
@@ -351,7 +351,7 @@ def test_case_prompt_version_is_part_of_the_cache_key(monkeypatch, emotet_report
     ('```json\n{"tool": "x"}\n```', {"tool": "x"}),
 ])
 def test_bracket_bookkeeping_is_repaired_and_marked(text, expected):
-    from analysis_agent import parse_model_json
+    from ir_workspace.ai.analysis_agent import parse_model_json
     answer = parse_model_json(text)
     assert answer.pop("_json_repaired") is True and answer == expected
 
@@ -359,7 +359,7 @@ def test_bracket_bookkeeping_is_repaired_and_marked(text, expected):
 @pytest.mark.parametrize("text", ['{"a": [1, 2}', '{"a": "cut in the middle', '{"a": 1} trailing words'])
 def test_other_broken_json_is_not_guessed(text):
     import json
-    from analysis_agent import parse_model_json
+    from ir_workspace.ai.analysis_agent import parse_model_json
     with pytest.raises(json.JSONDecodeError):
         parse_model_json(text)
 
@@ -367,7 +367,7 @@ def test_other_broken_json_is_not_guessed(text):
 def test_reply_cut_at_token_limit_is_reported_as_truncated(monkeypatch):
     import json
     import responses as mock
-    from analysis_agent import _call_model, agent_settings
+    from ir_workspace.ai.analysis_agent import _call_model, agent_settings
     monkeypatch.setenv("AGENT_PROVIDER", "deepseek")
     settings = agent_settings()
     with mock.RequestsMock() as rsps:

@@ -85,7 +85,7 @@ class TestAnalyzeEndpoint:
         assert "UUID" in response.get_json()["error"]
 
     def test_anyrun_report_endpoints_match_official_sdk(self, monkeypatch):
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         seen_urls = []
 
@@ -112,7 +112,7 @@ class TestAnalyzeEndpoint:
         ]
 
     def test_anyrun_json_report_uses_v1_analysis_detail(self, monkeypatch):
-        from anyrun_client import AnyRunClient
+        from ir_workspace.integrations.anyrun_client import AnyRunClient
 
         seen_urls = []
 
@@ -141,9 +141,9 @@ class TestAnalyzeEndpoint:
         ]
 
     def test_analyze_endpoint_allows_ioc_endpoint_forbidden(self, flask_test_client, monkeypatch):
-        import anyrun_client
+        import ir_workspace.integrations.anyrun_client as anyrun_client
         import app as app_module
-        from anyrun_client import AnyRunAuthError
+        from ir_workspace.integrations.anyrun_client import AnyRunAuthError
 
         class FakeAnyRunClient:
             def __init__(self, api_key):
@@ -173,9 +173,9 @@ class TestAnalyzeEndpoint:
         assert payload["data"] == {"task_uuid": task_uuid, "ioc_json": {}}
 
     def test_analyze_endpoint_falls_back_to_public_report_on_api_forbidden(self, flask_test_client, monkeypatch):
-        import anyrun_client
+        import ir_workspace.integrations.anyrun_client as anyrun_client
         import app as app_module
-        from anyrun_client import AnyRunAuthError
+        from ir_workspace.integrations.anyrun_client import AnyRunAuthError
 
         class FakeAnyRunClient:
             def __init__(self, api_key):
@@ -436,7 +436,7 @@ class TestServerSideApiKey:
         assert "private-local-key" not in response.get_data(as_text=True)
 
     def test_analyze_uses_server_key_when_body_key_is_empty(self, flask_test_client, monkeypatch):
-        import anyrun_client
+        import ir_workspace.integrations.anyrun_client as anyrun_client
         import app as app_module
 
         used = {}

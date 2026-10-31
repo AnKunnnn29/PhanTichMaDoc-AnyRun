@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ml_engine import MLThreatPredictor
+from ir_workspace.ai.ml_engine import MLThreatPredictor
 
 pytestmark = pytest.mark.unit
 
@@ -27,8 +27,8 @@ class TestMLInitialization:
         class MockModel:
             pass
 
-        monkeypatch.setattr("ml_engine.os.path.exists", lambda path: True)
-        monkeypatch.setattr("ml_engine.joblib.load", lambda path: MockModel())
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda path: True)
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', lambda path: MockModel())
 
         predictor = MLThreatPredictor("model.pkl")
 
@@ -36,8 +36,8 @@ class TestMLInitialization:
         assert isinstance(predictor.model, MockModel)
 
     def test_failed_model_load_keeps_predictor_disabled(self, monkeypatch):
-        monkeypatch.setattr("ml_engine.os.path.exists", lambda path: True)
-        monkeypatch.setattr("ml_engine.joblib.load", lambda path: (_ for _ in ()).throw(RuntimeError("bad model")))
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda path: True)
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', lambda path: (_ for _ in ()).throw(RuntimeError("bad model")))
 
         predictor = MLThreatPredictor("model.pkl")
 
@@ -85,8 +85,8 @@ class TestPrediction:
             def predict_proba(self, X):
                 return np.array([[0.1, 0.2, 0.7]])
 
-        monkeypatch.setattr("ml_engine.os.path.exists", lambda path: True)
-        monkeypatch.setattr("ml_engine.joblib.load", lambda path: MockModel())
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda path: True)
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', lambda path: MockModel())
         predictor = MLThreatPredictor("model.pkl")
 
         result = predictor.predict(sample_analysis_result)
@@ -104,8 +104,8 @@ class TestPrediction:
             def predict_proba(self, X):
                 return np.array([[1.0]])
 
-        monkeypatch.setattr("ml_engine.os.path.exists", lambda path: True)
-        monkeypatch.setattr("ml_engine.joblib.load", lambda path: MockModel())
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda path: True)
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', lambda path: MockModel())
 
         result = MLThreatPredictor("model.pkl").predict(sample_analysis_result)
 
@@ -121,8 +121,8 @@ class TestPrediction:
             def predict_proba(self, X):
                 return np.array([[1.0, 0.0, 0.0]])
 
-        monkeypatch.setattr("ml_engine.os.path.exists", lambda path: True)
-        monkeypatch.setattr("ml_engine.joblib.load", lambda path: MockModel())
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.os.path.exists', lambda path: True)
+        monkeypatch.setattr('ir_workspace.ai.ml_engine.joblib.load', lambda path: MockModel())
 
         result = MLThreatPredictor("model.pkl").predict(object())
 

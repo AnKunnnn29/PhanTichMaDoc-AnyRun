@@ -3,10 +3,10 @@ import copy
 
 import pytest
 
-from analysis_pipeline import run_pipeline
-from anyrun_public_report import _public_vue_data_to_anyrun_report
-from incident_response import IncidentAction
-from remediation import merge_actions
+from ir_workspace.analysis.analysis_pipeline import run_pipeline
+from ir_workspace.integrations.anyrun_public_report import _public_vue_data_to_anyrun_report
+from ir_workspace.analysis.incident_response import IncidentAction
+from ir_workspace.analysis.remediation import merge_actions
 from test_impact_analysis import RANSOM, STEALER, UUID
 
 pytestmark = pytest.mark.unit

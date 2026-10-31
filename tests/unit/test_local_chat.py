@@ -1,6 +1,6 @@
 import json
 import responses
-import ai_assistant
+import ir_workspace.ai.ai_assistant as ai_assistant
 
 
 @responses.activate

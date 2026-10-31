@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from anyrun_client import (
+from ir_workspace.integrations.anyrun_client import (
     AnyRunAPIError,
     AnyRunAuthError,
     AnyRunClient,
@@ -226,7 +226,7 @@ class TestAnyRunClientPostMethods:
             "get_task_report",
             lambda task_uuid: {"data": {"analysis": {"status": "running"}}},
         )
-        monkeypatch.setattr("anyrun_client.time.sleep", lambda seconds: None)
+        monkeypatch.setattr('ir_workspace.integrations.anyrun_client.time.sleep', lambda seconds: None)
 
         with pytest.raises(TimeoutError):
             mock_anyrun_client.wait_for_task("550e8400-e29b-41d4-a716-446655440000", poll_interval=1, max_wait=1)

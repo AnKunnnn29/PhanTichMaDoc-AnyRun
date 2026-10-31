@@ -2,8 +2,8 @@ import json
 import requests
 import responses
 import pytest
-from hash_lookup import ENDPOINT,NOT_FOUND,lookup_hash,answer_lookup,_cache
-from ai_assistant import answer_remediation,answer_remediation_stream
+from ir_workspace.integrations.hash_lookup import ENDPOINT,NOT_FOUND,lookup_hash,answer_lookup,_cache
+from ir_workspace.ai.ai_assistant import answer_remediation,answer_remediation_stream
 
 SHA='a'*64
 
@@ -81,7 +81,7 @@ def test_invalid_hash_and_missing_key_do_not_call_service(monkeypatch):
     ('Tôi nên xử lý theo thứ tự ưu tiên nào?',False),
 ])
 def test_lookup_only_for_explicit_requests(question,expected):
-    from hash_lookup import lookup_requested
+    from ir_workspace.integrations.hash_lookup import lookup_requested
     assert lookup_requested(question) is expected
 
 
@@ -97,7 +97,7 @@ def _case_payload():
 
 
 def test_case_candidates_are_main_sample_then_dropped_executables():
-    from hash_lookup import case_hash_candidates
+    from ir_workspace.integrations.hash_lookup import case_hash_candidates
     assert [h for _, h in case_hash_candidates(_case_payload())] == ['a' * 64, 'd' * 64]
 
 

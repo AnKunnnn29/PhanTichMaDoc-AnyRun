@@ -5,14 +5,14 @@ import json
 
 import pytest
 
-from anyrun_public_report import _public_vue_data_to_anyrun_report
-from analysis_pipeline import build_behavior, run_pipeline, research_markdown
-from case_agent import CaseTools, validate_assessment, baseline_assessment
-from deep_analysis import (analyze_command, build_deep_analysis, classify_file, compare_family,
+from ir_workspace.integrations.anyrun_public_report import _public_vue_data_to_anyrun_report
+from ir_workspace.analysis.analysis_pipeline import build_behavior, run_pipeline, research_markdown
+from ir_workspace.ai.case_agent import CaseTools, validate_assessment, baseline_assessment
+from ir_workspace.analysis.deep_analysis import (analyze_command, build_deep_analysis, classify_file, compare_family,
                            enrich_mappings, family_catalog, path_key, deep_report_lines)
-from evidence import collect_evidence, validate_bundle, resolve_pointer
-from mitre_mapping import map_evidence
-from report_context import graph_context
+from ir_workspace.analysis.evidence import collect_evidence, validate_bundle, resolve_pointer
+from ir_workspace.analysis.mitre_mapping import map_evidence
+from ir_workspace.reporting.report_context import graph_context
 from test_public_report_context import VUE, UUID, process
 
 pytestmark = pytest.mark.unit
@@ -216,7 +216,7 @@ def test_loader_and_persistence_roles_are_hypotheses():
 
 
 def test_llm_orchestration_uses_new_tools_and_cites_read_source(monkeypatch):
-    from case_agent import investigate_case
+    from ir_workspace.ai.case_agent import investigate_case
     report,bundle,mappings,deep=parsed()
     target=next(e['id'] for e in bundle['evidence'] if e['type']=='process')
     script=iter([{'tool':'get_process_story','args':{'limit':1}}, {'tool':'get_static_profile','args':{}},
@@ -226,16 +226,16 @@ def test_llm_orchestration_uses_new_tools_and_cites_read_source(monkeypatch):
                      'impact':{'severity':'unknown','summary':'Chưa đủ dữ liệu tác động.','evidence_ids':[]},
                      'behavior_chain':[],'action_plan':[],'open_questions':[],
                      'attack_narrative':[{'text':'Nguồn ghi nhận tiến trình mẫu.','evidence_ids':[target],'assessment_status':'observed'}]}}}])
-    monkeypatch.setenv('AGENT_PROVIDER','deepseek');monkeypatch.setattr('case_agent._call_model',lambda *_:next(script))
+    monkeypatch.setenv('AGENT_PROVIDER','deepseek');monkeypatch.setattr('ir_workspace.ai.case_agent._call_model',lambda *_:next(script))
     result=investigate_case(bundle,build_behavior(bundle),mappings,[],{},deep=deep)
     assert result['mode']=='llm' and result['assessment']['attack_narrative'][0]['evidence_ids']==[target]
     assert [r['tool'] for r in result['tool_trace']][:3]==['get_process_story','get_static_profile','get_family_expectations']
 
 
 def test_chat_context_uses_deep_clues_without_dumping_module_lists():
-    from ai_assistant import _build_context
+    from ir_workspace.ai.ai_assistant import _build_context
     report,_,_,_=parsed();result,plan=run_pipeline(report,{},source='demo:test')
-    from reporter import _report_payload
+    from ir_workspace.reporting.reporter import _report_payload
     payload=_report_payload(result,plan)
     payload['processes']['list'][0]['modules']=['DO_NOT_DUMP_RAW_MODULE_LIST']*1000
     context=_build_context(payload)
@@ -244,7 +244,7 @@ def test_chat_context_uses_deep_clues_without_dumping_module_lists():
 
 
 def test_source_row_cut_by_tool_budget_is_not_counted_as_read():
-    from case_agent import _visible_source_ids
+    from ir_workspace.ai.case_agent import _visible_source_ids
     row={'id':'ev-example','type':'process','source_path':'/data/content/processes/0/name','value':'a.exe','context':'x'*1000}
     result={'evidence':[row]}
     wire=json.dumps(result,ensure_ascii=False)
@@ -265,7 +265,7 @@ def test_yara_capability_and_certificate_alert_stay_signatures_not_events():
 
 
 def test_only_notable_modules_are_kept_with_a_count():
-    from anyrun_public_report import _modules
+    from ir_workspace.integrations.anyrun_public_report import _modules
     row = {'information': {'modules': [[r'C:\Windows\System32\advapi32.dll'], [r'C:\Windows\System32\MSCOREE.DLL'],
                                        [r'C:\Windows\System32\bcrypt.dll'], [r'C:\Windows\System32\vaultcli.dll']]}}
     assert _modules(row) == {'modules': [r'C:\Windows\System32\MSCOREE.DLL', r'C:\Windows\System32\vaultcli.dll'], 'moduleCount': 4}

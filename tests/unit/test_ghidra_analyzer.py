@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ghidra_analyzer import build_ir_enrichment, lightweight_static_triage
+from ir_workspace.integrations.ghidra_analyzer import build_ir_enrichment, lightweight_static_triage
 
 
 def test_static_triage_does_not_treat_dll_names_as_domains(tmp_path: Path):

@@ -9,7 +9,7 @@ import subprocess
 import sys
 import venv
 
-from runtime_setup import ensure_runtimes
+from ir_workspace.core.runtime_setup import ensure_runtimes
 
 ROOT = Path(__file__).resolve().parent
 

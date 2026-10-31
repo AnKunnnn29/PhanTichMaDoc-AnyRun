@@ -48,47 +48,7 @@ async function loadConfigFromBackend() {
 }
 
 // ── Navigation ───────────────────────────────────────────────────────────────
-function showPage(id, el) {
-  if (typeof updateGuide === 'function') updateGuide();
-  const pageLabel = document.getElementById('workspace-page-label');
-  if (pageLabel) pageLabel.textContent = ({overview:'Tổng quan',home:'Bắt đầu',dashboard:'Kết quả phân tích',analyze:'Phân tích mới',playbook:'Kế hoạch khắc phục',evidence:'Bằng chứng nguồn',iocs:'IOC & SIEM',history:'Lịch sử'})[id] || 'Tổng quan';
-  const target = document.getElementById('page-' + id);
-  document.querySelectorAll('[id^="page-"]').forEach(p => {
-    p.style.display = p === target ? 'block' : 'none';
-    p.classList.remove('page-enter');
-  });
-  document.querySelectorAll('.nav-item').forEach(n => {
-    n.classList.remove('active');
-    n.removeAttribute('aria-current');
-  });
-  if (el) {
-    el.classList.add('active');
-    el.setAttribute('aria-current', 'page');
-  }
-  if (target) {
-    void target.offsetWidth;
-    target.classList.add('page-enter');
-    animateCards(target);
-    window.scrollTo({top:0,behavior:'instant'});
-  }
-}
-
-function switchTab(id) {
-  const paneId = 'pane-' + id.replace('tab-', '');
-  document.querySelectorAll('[role="tab"]').forEach(t => {
-    const active = t.id === id;
-    t.classList.toggle('active', active);
-    t.setAttribute('aria-selected', String(active));
-  });
-  document.querySelectorAll('[role="tabpanel"]').forEach(p => {
-    const active = p.id === paneId;
-    p.classList.toggle('active', active);
-    p.hidden = !active;
-  });
-}
-
 function openImportJson() {
-  showPage('analyze', document.querySelector('[data-page=analyze]'));
   switchTab('tab-import');
 }
 
@@ -336,7 +296,7 @@ async function analyzeJsonImport() {
 
 function handleFileSelect(inp) {
   selectedFile = inp.files[0];
-  if (selectedFile) document.getElementById('file-name').textContent = '📄 ' + selectedFile.name;
+  if (selectedFile) document.getElementById('file-name').textContent = '' + selectedFile.name;
 }
 
 function handleUploadZoneKey(e) {
@@ -348,7 +308,7 @@ function handleDrop(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.remove('dragover');
   selectedFile = e.dataTransfer.files[0];
-  if (selectedFile) document.getElementById('file-name').textContent = '📄 ' + selectedFile.name;
+  if (selectedFile) document.getElementById('file-name').textContent = '' + selectedFile.name;
 }
 
 function handleGhidraSelect(inp) {
@@ -742,7 +702,7 @@ function renderVirusTotalLink(fileInfo = {}) {
       Không có hash hợp lệ để tra VirusTotal. Mục này có thể là URL analysis, import thiếu main-object hash, hoặc bản ghi lịch sử chỉ có metadata.
     </div>`;
   }
-  return `<a href="https://www.virustotal.com/gui/file/${hash}" target="_blank" rel="noopener" title="Nếu VirusTotal trống: hash chưa từng được submit/public hoặc đây là hash demo/synthetic." style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent)">🔗 Xem trên VirusTotal</a>
+  return `<a href="https://www.virustotal.com/gui/file/${hash}" target="_blank" rel="noopener" title="Nếu VirusTotal trống: hash chưa từng được submit/public hoặc đây là hash demo/synthetic." style="display:inline-block;margin-top:12px;font-size:12px;color:var(--accent)">Xem trên VirusTotal</a>
     <div style="margin-top:6px;font-size:11px;color:var(--text2)">Tra cứu theo hash: <code>${esc(hash)}</code></div>`;
 }
 
@@ -802,7 +762,7 @@ function renderDashboard(d) {
     ${ml_html}
     ${cache_html}
     <div style="margin-top:14px;font-size:13px;color:var(--text2)">
-      🖥️ ${esc(d.os_env)} &nbsp;|&nbsp; ⏱️ ${esc(d.duration)}s &nbsp;|&nbsp;
+      ${esc(d.os_env)} &nbsp;|&nbsp; ${esc(d.duration)}s &nbsp;|&nbsp;
       <a href="${safeLink(d.analysis_url)}" target="_blank" style="color:var(--accent)">Xem trên Any.Run ↗</a>
     </div>`;
 
@@ -859,7 +819,7 @@ function renderDashboard(d) {
       <div class="stat-box"><div class="val" style="font-size:22px;color:var(--yellow)">${pr.registry.length}</div><div class="lbl">Registry keys</div></div>
     </div>
     ${pr.dropped.length ? `<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">FILES DROPPED</div>
-    ${pr.dropped.map(f=>`<div class="proc-item malicious">📄 ${esc(f.name)}</div>`).join('')}</div>` : ''}
+    ${pr.dropped.map(f=>`<div class="proc-item malicious">${esc(f.name)}</div>`).join('')}</div>` : ''}
     ${pr.registry.length ? `<div style="margin-top:12px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">REGISTRY KEYS</div>
     ${pr.registry.slice(0,8).map(k=>`<div class="proc-item" style="font-size:11px">${esc(k)}</div>`).join('')}</div>` : ''}`;
   animateCards(document.getElementById('dashboard'));
