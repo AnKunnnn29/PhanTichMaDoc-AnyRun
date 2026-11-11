@@ -17,7 +17,7 @@ class ValidationError(ValueError):
 
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-" r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
-REPORT_EXTENSIONS = {".json", ".md", ".txt"}
+REPORT_EXTENSIONS = {".json", ".md", ".txt", ".html", ".htm"}
 SANDBOX_SAMPLE_EXTENSIONS = {
     ".7z",
     ".bin",

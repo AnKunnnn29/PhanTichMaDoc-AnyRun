@@ -270,13 +270,13 @@ function handleJsonSelect(inp, kind) {
   const file = inp.files[0] || null;
   if (kind === 'report') selectedReportJson = file;
   if (kind === 'ioc') selectedIocJson = file;
-  const reportName = selectedReportJson ? selectedReportJson.name : 'chưa chọn Results .md / JSON report';
+  const reportName = selectedReportJson ? selectedReportJson.name : 'chưa chọn Results .md / JSON / HTML report';
   const iocName = selectedIocJson ? selectedIocJson.name : 'không có IOC JSON riêng';
   document.getElementById('json-import-result').textContent = `Report: ${reportName} | IOC: ${iocName}`;
 }
 
 async function analyzeJsonImport() {
-  if (!selectedReportJson) return toast('Chọn file Any.Run Results .md hoặc JSON report trước', 'err');
+  if (!selectedReportJson) return toast('Chọn file Any.Run Results .md, JSON hoặc trang báo cáo .html trước', 'err');
   const fd = new FormData();
   fd.append('report_file', selectedReportJson);
   if (selectedIocJson) fd.append('ioc_file', selectedIocJson);

@@ -47,6 +47,29 @@ class TestAnalyzeEndpoint:
         assert payload["ok"] is True
         assert payload["data"]["threat"]["threat_name"] == "Emotet"
 
+    def test_analyze_saved_report_html_runs_the_full_pipeline(self, flask_test_client):
+        from urllib.parse import quote
+        from test_public_report_context import VUE
+        page = '<html><body><script>window.vueData = "' + quote(json.dumps(VUE)) + '";</script></body></html>'
+        response = flask_test_client.post(
+            "/api/analyze/json",
+            data={"force_analyze": "true", "report_file": (io.BytesIO(page.encode("utf-8")), "report.html")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 200
+        data = response.get_json()["data"]
+        assert data["threat"]["threat_name"] == "WannaCry"
+        assert data["task_uuid"] == VUE["meta"]["uuid"]
+
+    def test_analyze_saved_html_without_report_data_returns_422(self, flask_test_client):
+        response = flask_test_client.post(
+            "/api/analyze/json",
+            data={"report_file": (io.BytesIO(b"<html><body>Login</body></html>"), "page.html")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 422
+        assert response.get_json()["code"] == "anyrun_html_no_report"
+
     def test_analyze_json_upload_with_empty_file_returns_400(self, flask_test_client):
         response = flask_test_client.post(
             "/api/analyze/json",

@@ -11,6 +11,7 @@ from ir_workspace.integrations.anyrun_public_report import (
     _download_public_vue_data,
     _extract_public_url,
     load_public_report,
+    load_saved_report_html,
 )
 
 
@@ -108,3 +109,26 @@ def test_summary_only_cache_is_skipped_for_a_fresh_fetch(tmp_path, monkeypatch):
     monkeypatch.setattr(public, '_download_public_vue_data', lambda url: full)
     report = load_public_report(TASK_UUID, source_ref=TASK_UUID, reports_dir=tmp_path)
     assert report['data']['content']['processes'][0]['pid'] == 1
+
+
+def saved_page(data):
+    """A browser-saved report page: the full vueData sits URL-encoded in an inline script."""
+    return ('<!DOCTYPE html><html><head><title>Malware analysis</title></head><body><div id="app"></div>'
+            '<script>window.vueData = "' + quote(json.dumps(data)) + '";</script>'
+            '<script src="./page_files/app.js"></script></body></html>')
+
+
+def test_saved_report_html_is_parsed_from_the_embedded_vue_data():
+    full = {**SUMMARY_ONLY, 'processes': PROCESSES}
+    report = load_saved_report_html(saved_page(full))
+    assert report['data']['analysis']['uuid'] == TASK_UUID
+    assert report['data']['content']['processes'][0]['pid'] == 1
+
+
+def test_saved_html_without_report_data_or_behaviour_is_refused():
+    with pytest.raises(AnyRunPublicReportError, match=r'Ctrl\+S') as error:
+        load_saved_report_html('<html><body>Login</body></html>')
+    assert error.value.code == 'anyrun_html_no_report'
+    with pytest.raises(AnyRunPublicReportError) as error:
+        load_saved_report_html(saved_page(SUMMARY_ONLY))
+    assert error.value.code == 'anyrun_report_incomplete'

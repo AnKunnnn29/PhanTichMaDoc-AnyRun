@@ -58,7 +58,7 @@ from ir_workspace.core.validation import (
 from ir_workspace.integrations.ghidra_analyzer import analyze_sample as analyze_sample_with_ghidra
 from ir_workspace.integrations.ghidra_analyzer import ghidra_status
 from ir_workspace.integrations.anyrun_client import AnyRunAuthError, AnyRunNotFoundError
-from ir_workspace.integrations.anyrun_public_report import AnyRunPublicReportError, load_public_report
+from ir_workspace.integrations.anyrun_public_report import AnyRunPublicReportError, load_public_report, load_saved_report_html
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = MAX_SANDBOX_UPLOAD_BYTES
@@ -287,6 +287,8 @@ def _load_report_upload(field_name, supplemental_text=""):
         )
     if filename.lower().endswith((".md", ".txt")):
         return markdown_to_anyrun_report(text, filename)
+    if filename.lower().endswith((".html", ".htm")):
+        return load_saved_report_html(text)
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
@@ -398,7 +400,7 @@ def analyze():
 @app.route("/api/analyze/json", methods=["POST"])
 @rate_limit(max_requests=30)
 def analyze_json_upload():
-    """Free-account workflow: import JSON/Markdown exported manually from Any.Run."""
+    """Free-account workflow: import JSON/Markdown exported from Any.Run, or a report page saved from the browser."""
     try:
         supplemental_text = request.form.get("supplemental_text", "")
         force_analyze = request.form.get("force_analyze", "").lower() in ("1", "true", "yes")
@@ -407,6 +409,8 @@ def analyze_json_upload():
         return jsonify(
             {"ok": True, "data": _build_payload(report_json, ioc_json, use_cache=not force_analyze, source="import")}
         )
+    except AnyRunPublicReportError as e:
+        return _error_response(str(e), e.status, e.code)
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))
     except Exception as e:

@@ -86,7 +86,7 @@
       <section class="overview-heading"><div><h1>Bắt đầu một cuộc điều tra.</h1><p class="page-description">Chọn báo cáo của bạn hoặc khám phá bằng một hồ sơ mô phỏng.</p></div></section>
       <p class="page-guidance" id="flow-status" role="status">Chưa mở hồ sơ.</p>
       <section class="start-panel" aria-label="Chọn cách bắt đầu">
-        <div class="start-main"><span class="source-format">.json / .md</span><h3>Báo cáo Any.Run</h3><p>Nhập Results.md / JSON hoặc dùng liên kết công khai.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết</button></div></div>
+        <div class="start-main"><span class="source-format">.json / .md / .html</span><h3>Báo cáo Any.Run</h3><p>Nhập Results.md / JSON, trang báo cáo đã lưu (.html) hoặc dùng liên kết công khai.</p><div class="action-row"><button type="button" class="btn btn-primary" onclick="startAnalysis()">Nhập báo cáo</button><button type="button" class="btn btn-outline" onclick="startAnalysis('uuid')">Dán liên kết</button></div></div>
         <div class="start-demo"><span class="source-format">demo / sandbox</span><h3>Dữ liệu mẫu</h3><p>Hồ sơ mô phỏng, không cần API key.</p><div class="action-row"><button type="button" class="btn btn-outline" onclick="runDemo('emotet')">Emotet</button><button type="button" class="btn btn-outline" onclick="runDemo('wannacry')">WannaCry</button><button type="button" class="btn btn-outline" onclick="runDemo('redline')">RedLine</button></div></div>
       </section>
       <details class="feature-guide workflow"><summary>Cách sử dụng</summary><ol><li><b>Nhập dữ liệu</b><button type="button" onclick="startAnalysis()">Chọn báo cáo</button></li><li><b>Đọc kết quả</b><button type="button" data-needs-analysis disabled onclick="goToResult('dashboard')">Xem kết quả</button></li><li><b>Xem xét khuyến nghị</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Mở kế hoạch</button></li><li><b>Xuất báo cáo</b><button type="button" data-needs-analysis disabled onclick="goToResult('playbook')">Xuất & bàn giao</button></li></ol></details>
@@ -195,11 +195,11 @@
 
         <!-- Import JSON pane -->
         <div aria-labelledby="tab-import" class="tab-pane active" id="pane-import" role="tabpanel">
-<p style="color:var(--text2);margin-bottom:16px;font-size:14px">Xuất Results.md hoặc JSON từ Any.Run rồi tải lên.</p>
+<p style="color:var(--text2);margin-bottom:16px;font-size:14px">Xuất Results.md hoặc JSON từ Any.Run rồi tải lên, hoặc mở trang báo cáo any.run/report/… trong trình duyệt, lưu bằng Ctrl+S và tải tệp .html lên.</p>
 <div class="report-input">
 <div class="form-group">
-<label for="report-json-input">Báo cáo Results.md / JSON</label>
-<input accept=".md,.txt,.json,text/markdown,text/plain,application/json" id="report-json-input" onchange="handleJsonSelect(this,'report')" type="file"/>
+<label for="report-json-input">Báo cáo Results.md / JSON / trang HTML đã lưu</label>
+<input accept=".md,.txt,.json,.html,.htm,text/markdown,text/plain,application/json,text/html" id="report-json-input" onchange="handleJsonSelect(this,'report')" type="file"/>
 </div>
 
 </div>

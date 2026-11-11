@@ -190,6 +190,32 @@ def _require_behaviour_data(data: dict) -> dict:
     )
 
 
+def load_saved_report_html(html: str) -> dict:
+    """Read a report page the analyst saved from their own browser (Ctrl+S).
+
+    The browser receives the full `window.vueData`; the saved file is parsed as text
+    only (never rendered), so scripts and resources inside it are not executed.
+    """
+    try:
+        data = _extract_vue_data(html)
+    except AnyRunPublicReportError as exc:
+        raise AnyRunPublicReportError(
+            "Tệp HTML không chứa dữ liệu báo cáo Any.Run (window.vueData). Hãy mở trang báo cáo dạng "
+            "any.run/report/<sha256>/<uuid> trong trình duyệt, đợi trang hiện đủ nội dung rồi lưu bằng Ctrl+S.",
+            "anyrun_html_no_report", 422,
+        ) from exc
+    task_uuid = _data_uuid(data)
+    if not task_uuid:
+        raise AnyRunPublicReportError("Trang HTML không có UUID của task Any.Run.", "anyrun_html_no_report", 422)
+    if not _has_behaviour_data(data):
+        raise AnyRunPublicReportError(
+            "Trang HTML đã lưu chỉ có thông tin chung của task, chưa có tiến trình, mạng, tệp và registry. "
+            "Hãy mở trang báo cáo trong trình duyệt, đợi hiện đủ các mục rồi lưu lại, hoặc dùng Export trên Any.Run.",
+            "anyrun_report_incomplete", 422,
+        )
+    return _public_vue_data_to_anyrun_report(data, task_uuid)
+
+
 def _data_uuid(data: dict) -> str:
     meta_uuid = str((data.get("meta") or {}).get("uuid") or "")
     if meta_uuid:
