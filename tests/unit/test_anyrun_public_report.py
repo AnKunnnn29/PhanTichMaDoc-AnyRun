@@ -21,6 +21,10 @@ PUBLIC_URL = (
     f"{TASK_UUID}"
 )
 
+PROCESSES = {"processesValues": [{"pid": 1, "rowData": {"threatLevel": 0, "values": [1, "test.exe", r"C:\test.exe", [], "explorer.exe"],
+                                                     "information": {"values": []}}}]}
+SUMMARY_ONLY = {"meta": {"uuid": TASK_UUID}, "seo": {}, "general": {"verdict": {"type": 3, "value": "Malicious activity"}}}
+
 
 def test_extract_public_url_keeps_full_report_reference():
     assert _extract_public_url(PUBLIC_URL) == PUBLIC_URL
@@ -28,7 +32,7 @@ def test_extract_public_url_keeps_full_report_reference():
 
 def test_uuid_only_resolves_public_report(tmp_path, monkeypatch):
     monkeypatch.setattr(public, 'resolve_public_task', lambda task: PUBLIC_URL)
-    monkeypatch.setattr(public, '_download_public_vue_data', lambda url: {'meta':{'uuid':TASK_UUID},'general':{}})
+    monkeypatch.setattr(public, '_download_public_vue_data', lambda url: {'meta':{'uuid':TASK_UUID},'general':{},'processes':PROCESSES})
     assert load_public_report(TASK_UUID, source_ref=TASK_UUID, reports_dir=tmp_path)['data']['analysis']['uuid']==TASK_UUID
 
 
@@ -61,7 +65,7 @@ def test_download_public_report_wraps_network_error(monkeypatch):
 @responses.activate
 def test_public_task_can_follow_matching_static_report(tmp_path,monkeypatch):
     task_url = f'https://app.any.run/tasks/{TASK_UUID}'
-    data={'meta':{'uuid':TASK_UUID},'general':{'mainObject':{'value':'test.exe'},'verdict':{'type':3,'value':'Malicious'}}}
+    data={'meta':{'uuid':TASK_UUID},'general':{'mainObject':{'value':'test.exe'},'verdict':{'type':3,'value':'Malicious'}},'processes':PROCESSES}
     monkeypatch.setattr(public,'resolve_public_task',lambda task:PUBLIC_URL)
     monkeypatch.setattr(public,'fetch_public_page',lambda url:SimpleNamespace(status_code=200,text='window.vueData = "'+quote(json.dumps(data))+'";'))
     report=load_public_report(TASK_UUID,source_ref=task_url,reports_dir=tmp_path)
@@ -85,3 +89,22 @@ def test_task_url_does_not_fetch_other_hosts(tmp_path,monkeypatch):
     monkeypatch.setattr(requests,'get',lambda *a,**kw:pytest.fail('Unexpected network request'))
     with pytest.raises(AnyRunPublicReportError):
         load_public_report(TASK_UUID,source_ref=f'https://app.any.run.attacker.example/tasks/{TASK_UUID}',reports_dir=tmp_path)
+
+
+def test_summary_only_public_page_is_refused_not_analysed_as_empty(tmp_path, monkeypatch):
+    # Any.Run now embeds only general/meta/seo and loads behaviour data with JavaScript.
+    monkeypatch.setattr(public, 'resolve_public_task', lambda task: PUBLIC_URL)
+    monkeypatch.setattr(public, '_download_public_vue_data', lambda url: SUMMARY_ONLY)
+    for ref in (TASK_UUID, PUBLIC_URL):
+        with pytest.raises(AnyRunPublicReportError, match='Export') as error:
+            load_public_report(TASK_UUID, source_ref=ref, reports_dir=tmp_path)
+        assert error.value.code == 'anyrun_report_incomplete' and error.value.status == 422
+
+
+def test_summary_only_cache_is_skipped_for_a_fresh_fetch(tmp_path, monkeypatch):
+    (tmp_path / 'anyrun_public_report_old.json').write_text(json.dumps(SUMMARY_ONLY), encoding='utf-8')
+    full = {**SUMMARY_ONLY, 'processes': PROCESSES}
+    monkeypatch.setattr(public, 'resolve_public_task', lambda task: PUBLIC_URL)
+    monkeypatch.setattr(public, '_download_public_vue_data', lambda url: full)
+    report = load_public_report(TASK_UUID, source_ref=TASK_UUID, reports_dir=tmp_path)
+    assert report['data']['content']['processes'][0]['pid'] == 1

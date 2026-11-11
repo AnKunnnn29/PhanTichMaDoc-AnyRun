@@ -49,10 +49,10 @@ def load_public_report(task_uuid: str, source_ref: str = "", reports_dir: str | 
         data = _download_public_vue_data(public_url)
         if _data_uuid(data) and _data_uuid(data) != task_uuid:
             raise AnyRunPublicReportError('Báo cáo trả về không khớp Task ID đã nhập.', 'anyrun_report_mismatch', 422)
-        return _public_vue_data_to_anyrun_report(data, task_uuid)
+        return _public_vue_data_to_anyrun_report(_require_behaviour_data(data), task_uuid)
 
     cached = _load_cached_public_vue_data(task_uuid, Path(reports_dir))
-    if cached:
+    if cached and _has_behaviour_data(cached):
         return _public_vue_data_to_anyrun_report(cached, task_uuid)
 
     task_url = _extract_task_url(source_ref, task_uuid)
@@ -67,7 +67,7 @@ def load_public_report(task_uuid: str, source_ref: str = "", reports_dir: str | 
         received_uuid = _data_uuid(data)
         if received_uuid and received_uuid != task_uuid:
             raise AnyRunPublicReportError("Báo cáo trả về không khớp Task ID đã nhập.", "anyrun_report_mismatch", 422)
-        return _public_vue_data_to_anyrun_report(data, task_uuid)
+        return _public_vue_data_to_anyrun_report(_require_behaviour_data(data), task_uuid)
 
     raise AnyRunPublicReportError(
         "Không tìm thấy public report HTML/JSON cho UUID này. Hãy paste link dạng "
@@ -166,6 +166,28 @@ def _extract_vue_data(html: str) -> dict:
         return json.loads(unquote(match.group(1)))
     except Exception as exc:
         raise AnyRunPublicReportError(f"Không parse được window.vueData: {exc}") from exc
+
+
+def _has_behaviour_data(data: dict) -> bool:
+    """A sandbox run always records at least the sample's own process or a detected behaviour."""
+    processes = (data.get("processes") or {}).get("processesValues") if isinstance(data.get("processes"), dict) else None
+    return bool(processes or data.get("behaviorActivities"))
+
+
+def _require_behaviour_data(data: dict) -> dict:
+    # The public page may embed only the summary (general/meta/seo) and load the rest with
+    # JavaScript after a browser check. Analysing that summary yields an empty case that
+    # reads as "the sample did nothing", so refuse it and point to the export workflow.
+    if _has_behaviour_data(data):
+        return data
+    raise AnyRunPublicReportError(
+        "Any.Run chỉ trả về thông tin chung của task (kết luận, mã băm), chưa có tiến trình, mạng, tệp và registry. "
+        "Trang báo cáo hiện tải các phần này bằng JavaScript sau bước kiểm tra trình duyệt nên máy chủ không đọc được; "
+        "phân tích trên dữ liệu này sẽ cho kết quả rỗng và dễ hiểu nhầm là mẫu không có hành vi. "
+        "Hãy mở task trên Any.Run, chọn Export để tải Results.md hoặc JSON rồi dùng Nhập báo cáo, "
+        "hoặc dùng API key có quyền đọc báo cáo.",
+        "anyrun_report_incomplete", 422,
+    )
 
 
 def _data_uuid(data: dict) -> str:
