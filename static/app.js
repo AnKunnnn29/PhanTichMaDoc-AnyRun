@@ -462,22 +462,23 @@ function codeEvidenceHtml(data) {
   const attached = data.static_analysis;
   const attachNote = attached
     ? (attached.hash_match
-      ? '<div class="inline-note">Đã gắn vào hồ sơ đang mở. Hash của mẫu có trong báo cáo sandbox; các bản xuất sẽ kèm đoạn mã này.</div>'
-      : '<div class="inline-note danger">Đã gắn vào hồ sơ đang mở, nhưng hash của mẫu không có trong báo cáo sandbox. Kiểm tra lại đây có đúng là mẫu của hồ sơ này không.</div>')
+      ? '<div class="inline-note">Đã gắn vào hồ sơ đang mở; hash khớp.</div>'
+      : '<div class="inline-note danger">Đã gắn vào hồ sơ đang mở, nhưng hash của mẫu không có trong hồ sơ.</div>')
     : (evidence.behaviors.length
-      ? '<div class="inline-note">Chưa gắn vào hồ sơ nào. Mở một hồ sơ sandbox trước rồi phân tích lại để đoạn mã xuất hiện trong báo cáo.</div>'
+      ? '<div class="inline-note">Chưa gắn vào hồ sơ nào. Mở hồ sơ trước rồi phân tích lại.</div>'
       : '');
   const behaviors = evidence.behaviors.map((b, i) => `
-    <details class="action-card" ${i < 2 ? 'open' : ''}>
+    <details class="action-card" ${i === 0 ? 'open' : ''}>
       <summary>${esc(b.title)} · ${esc(b.tactic)} · ${b.call_sites.length} vị trí gọi</summary>
       <div class="tag-list">${b.apis.map(a => `<span class="tag tag-hash">${esc(a.name)} ×${esc(a.call_count)}</span>`).join('')}</div>
-      ${b.call_sites.map(asmSiteHtml).join('')}
+      ${b.call_sites.slice(0, 1).map(asmSiteHtml).join('')}
+      ${b.call_sites.length > 1 ? `<details class="fold"><summary>Xem ${b.call_sites.length - 1} vị trí gọi khác</summary>${b.call_sites.slice(1).map(asmSiteHtml).join('')}</details>` : ''}
     </details>`).join('');
   return `
     <div class="ghidra-panel">
       <div class="card-title">Đoạn mã thực hiện hành vi (assembly)</div>
-      <div class="inline-note">${esc(evidence.note || '')}</div>
       ${attachNote}
+      <details class="fold"><summary>Cách hiểu đoạn mã này</summary><p>${esc(evidence.note || '')}</p></details>
       ${behaviors}
     </div>`;
 }
@@ -524,9 +525,6 @@ function renderGhidraResult(data) {
   document.getElementById('ghidra-result').innerHTML = `
     <div class="ghidra-panel">
       <div class="card-title">Kết luận nhanh</div>
-      <div class="inline-note">
-        <b>Loại phân tích:</b> Static analysis với Ghidra. File không được chạy, nên đây chưa phải phân tích động.
-      </div>
       <div class="ghidra-summary-grid compact">
         <div class="stat-box">
           <div class="val">${esc(assessment.verdict || 'Chưa đủ bằng chứng')}</div>
@@ -539,6 +537,7 @@ function renderGhidraResult(data) {
           <span class="badge ${enrich.dynamic_analysis ? 'clean' : 'medium'}">${enrich.dynamic_analysis ? 'runtime' : 'static only'}</span>
         </div>
       </div>
+      <details class="fold"><summary>Dấu hiệu và giới hạn của phân tích tĩnh</summary>
       <div class="ghidra-detail-grid">
         <div>
           <b>Dấu hiệu đang có</b>
@@ -549,6 +548,7 @@ function renderGhidraResult(data) {
           <ul class="compact-list">${limitsList || '<li>Cần sandbox/EDR để xác nhận hành vi khi chạy.</li>'}</ul>
         </div>
       </div>
+      </details>
     </div>
 
     <div class="ghidra-summary-grid">
@@ -607,6 +607,7 @@ function renderGhidraResult(data) {
       </div>
     </div>
 
+    <details class="fold"><summary>Gợi ý dịch ngược và bước tiếp theo</summary>
     <div class="ghidra-detail-grid">
       <div class="ghidra-panel">
         <div class="card-title">Reverse engineering leads</div>
@@ -618,9 +619,9 @@ function renderGhidraResult(data) {
       <div class="ghidra-panel">
         <div class="card-title">IR next steps</div>
         <ul class="ai-list">${(enrich.recommended_ir_actions || []).map(x => `<li>${esc(x)}</li>`).join('') || '<li>Đối chiếu hash, IOC và API với telemetry Any.Run/SIEM.</li>'}</ul>
-        <div class="inline-note">${esc(enrich.evidence_note || 'Static analysis là bằng chứng bổ sung cho điều tra runtime.')}</div>
       </div>
-    </div>`;
+    </div>
+    </details>`;
   animateCards(document.getElementById('ghidra-result'));
 }
 
@@ -825,6 +826,7 @@ function renderDashboard(d) {
 
   document.getElementById('card-threat').innerHTML = `
     <div class="card-title">Đánh giá mối đe dọa</div>
+    ${dataGapHtml(d)}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
       <span class="badge ${severityClass(lvl)}">${esc(p.severity)}</span>
       <span style="font-size:22px;font-weight:700;color:${severityColor(lvl)}">${esc(t.verdict)}</span>
@@ -877,8 +879,8 @@ function renderDashboard(d) {
       <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-domains" onclick="netTab('domains',this)">Domains (${net.domains.length})</button>
       <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="net-http" onclick="netTab('http',this)">HTTP (${net.http.length})</button>
     </div>
-    <div id="net-ips" class="tag-list">${net.ips.map(ip=>`<span class="tag tag-ip" title="Click để copy" onclick="copyEncoded('${encodeURIComponent(String(ip)).replace(/'/g, '%27')}')">${esc(ip)}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
-    <div id="net-domains" style="display:none" class="tag-list">${net.domains.map(d=>`<span class="tag tag-domain" onclick="copyEncoded('${encodeURIComponent(String(d)).replace(/'/g, '%27')}')">${esc(d)}</span>`).join('')||'<span style="color:var(--text2);font-size:13px">Không có</span>'}</div>
+    <div id="net-ips">${foldedTags(net.ips, 'tag-ip', '', 8)}</div>
+    <div id="net-domains" style="display:none">${foldedTags(net.domains, 'tag-domain', '', 8)}</div>
     <div id="net-http" style="display:none">
       ${net.http.length ? `<div class="table-wrap"><table><thead><tr><th>Method</th><th>URL</th><th>Status</th></tr></thead><tbody>
       ${net.http.map(h=>`<tr><td><span style="color:var(--accent);font-weight:600">${esc(h.method)}</span></td><td class="mono" style="word-break:break-all;max-width:400px">${esc(h.url)}</td><td>${esc(h.status)}</td></tr>`).join('')}
@@ -895,15 +897,16 @@ function renderDashboard(d) {
       <div class="stat-box"><div class="val" style="font-size:22px;color:var(--yellow)">${pr.registry.length}</div><div class="lbl">Registry keys</div></div>
     </div>
     ${pr.dropped.length ? `<div style="margin-top:8px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">FILES DROPPED</div>
-    ${pr.dropped.map(f=>`<div class="proc-item malicious">${esc(f.name)}</div>`).join('')}</div>` : ''}
+    ${pr.dropped.slice(0,8).map(f=>`<div class="proc-item malicious">${esc(f.name)}</div>`).join('')}
+    ${pr.dropped.length>8?`<details class="fold"><summary>Xem ${pr.dropped.length-8} tệp còn lại</summary>${pr.dropped.slice(8).map(f=>`<div class="proc-item malicious">${esc(f.name)}</div>`).join('')}</details>`:''}</div>` : ''}
     ${pr.registry.length ? `<div style="margin-top:12px"><div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">REGISTRY KEYS</div>
-    ${pr.registry.slice(0,8).map(k=>`<div class="proc-item" style="font-size:11px">${esc(k)}</div>`).join('')}</div>` : ''}`;
+    ${foldedTags(pr.registry, 'tag-file', 'overflow-wrap:anywhere', 8)}</div>` : ''}`;
   animateCards(document.getElementById('dashboard'));
 }
 
 function netTab(id, el) {
   ['ips','domains','http'].forEach(t => document.getElementById('net-'+t).style.display = 'none');
-  document.getElementById('net-'+id).style.display = id==='http'?'block':'flex';
+  document.getElementById('net-'+id).style.display = 'block';
   document.getElementById('net-'+id).style.flexWrap = 'wrap';
   el.parentElement.querySelectorAll('.tab').forEach(t => {
     const active = t === el;
@@ -923,6 +926,20 @@ function togglePhase(el) {
   icon.style.transform = body.classList.contains('open') ? '' : 'rotate(-90deg)';
 }
 
+// A long list shows its first entries; the rest stay one click away.
+function dataGapHtml(data) {
+  const gap = data.data_completeness;
+  if (!gap?.missing?.length) return '';
+  return `<details class="fold data-gap-warning"><summary>Thiếu ${gap.missing.length} nhóm dữ liệu nguồn</summary><p>${esc(gap.note || gap.missing.join(', '))}</p></details>`;
+}
+
+function foldedTags(values, cls, style, limit) {
+  if (!values.length) return '<span style="color:var(--text2)">Không có</span>';
+  const tag = v => `<button type="button" class="tag ${cls}" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="${escAttr(String(v))}" aria-label="Sao chép ${escAttr(String(v))}"${style ? ` style="${style}"` : ''}>${esc(v)}</button>`;
+  const rest = values.length > limit ? `<details class="fold"><summary>Xem ${values.length - limit} mục còn lại</summary><div class="tag-list">${values.slice(limit).map(tag).join('')}</div></details>` : '';
+  return `<div class="tag-list">${values.slice(0, limit).map(tag).join('')}</div>${rest}`;
+}
+
 function renderIOCs(d) {
   const b = d.playbook.ioc_blocklist;
   const exclusions = d.response_exclusions || [];
@@ -931,32 +948,33 @@ function renderIOCs(d) {
     <div class="grid-2">
       <div class="card">
         <div class="card-title">Địa chỉ IP (${b.ip_addresses.length})</div>
-        <div class="tag-list">${b.ip_addresses.map(v=>`<span class="tag tag-ip" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        ${foldedTags(b.ip_addresses, 'tag-ip', '', 8)}
       </div>
       <div class="card">
         <div class="card-title">Tên miền (${b.domains.length})</div>
-        <div class="tag-list">${b.domains.map(v=>`<span class="tag tag-domain" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        ${foldedTags(b.domains, 'tag-domain', '', 8)}
       </div>
       <div class="card">
         <div class="card-title">URL (${b.urls.length})</div>
-        <div class="tag-list">${b.urls.map(v=>`<span class="tag tag-url" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        ${foldedTags(b.urls, 'tag-url', 'word-break:break-all', 6)}
       </div>
       <div class="card">
         <div class="card-title">Mã băm tệp (${b.file_hashes.length})</div>
-        <div class="tag-list">${b.file_hashes.map(v=>`<span class="tag tag-hash" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')" title="Click để copy" style="word-break:break-all;font-size:10px">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+        ${foldedTags(b.file_hashes, 'tag-hash', 'word-break:break-all;font-size:10px', 6)}
       </div>
     </div>
     <div class="card">
       <div class="card-title">Tên tệp (${b.filenames.length})</div>
-      <div class="tag-list">${b.filenames.map(v=>`<span class="tag tag-file" onclick="copyEncoded('${encodeURIComponent(String(v)).replace(/'/g, '%27')}')">${esc(v)}</span>`).join('')||'<span style="color:var(--text2)">Không có</span>'}</div>
+      ${foldedTags(b.filenames, 'tag-file', '', 6)}
     </div>
     <div class="card">
-      <div class="card-title">Quy tắc tường lửa · PowerShell</div>
+      <details class="fold"><summary>Lệnh chặn tham khảo (${b.ip_addresses.length + b.domains.length})</summary>
+      <p>Đối chiếu đích và môi trường trước khi áp dụng.</p>
       <div class="code-block">${
         b.ip_addresses.map(ip=>`<span class="cmd-line">netsh advfirewall firewall add rule name="Block_${esc(ip)}" dir=out action=block remoteip=${esc(ip)}</span>`).join('\n')
         + (b.domains.length ? '\n\n<span class="cmd-comment"># Thêm vào C:\\Windows\\System32\\drivers\\etc\\hosts:</span>\n' +
           b.domains.map(d=>`<span class="cmd-line">0.0.0.0 ${esc(d)}</span>`).join('\n') : '')
-      }</div>
+      }</div></details>
     </div>`;
   animateCards(document.getElementById('ioc-content'));
 }
@@ -1140,7 +1158,7 @@ async function compareWithTriage(overview, dynamic, fromFile) {
   }
 }
 
-function renderSandboxComparison(data, root, add) {
+function renderSandboxComparison(data, root, add, fold) {
   if (!data.case_id) return;
   const section = add(root, 'section', undefined, 'card case-agent');
   add(section, 'h3', 'Đối chiếu đa nguồn sandbox');
@@ -1164,14 +1182,14 @@ function renderSandboxComparison(data, root, add) {
       }
       add(tr, 'td', d.jaccard == null ? '—' : d.jaccard.toFixed(2));
     }
-    add(section, 'p', cmp.note);
+    add(fold(section, 'Cách đọc bảng'), 'p', cmp.note);
   } else {
-    add(section, 'p', 'Chưa đối chiếu. Lấy báo cáo Triage của cùng mẫu để so sánh họ mã độc, đích mạng, ATT&CK và nhóm tác động.');
+    add(section, 'p', 'Chưa đối chiếu với nguồn thứ hai.');
   }
-  const controls = add(section, 'div', undefined, 'compare-controls');
-  const viaApi = add(controls, 'button', 'Lấy từ Triage và đối chiếu', 'btn btn-outline');
+  const viaApi = add(add(section, 'div', undefined, 'compare-controls'), 'button', 'Lấy từ Triage và đối chiếu', 'btn btn-outline');
   viaApi.type = 'button';
   viaApi.onclick = () => compareWithTriage(null, null, false);
+  const controls = add(fold(section, 'Dùng tệp JSON đã tải về'), 'div', undefined, 'compare-controls');
   const pick = (label) => {
     const wrap = add(controls, 'label', label + ' ');
     const input = add(wrap, 'input');
@@ -1198,63 +1216,90 @@ function renderEvidencePanel(data) {
     parent.appendChild(el);
     return el;
   };
+  // Secondary text lives behind a one-line summary so each card reads at a glance.
+  const fold = (parent, title, open = false) => {
+    const box = add(parent, 'details', undefined, 'fold');
+    box.open = open;
+    add(box, 'summary', title);
+    return box;
+  };
   const impact = data.impact_analysis;
   const codeBehaviors = data.static_analysis?.code_evidence?.behaviors || [];
+  if (data.data_completeness?.missing?.length) {
+    const warning = add(root, 'details', undefined, 'fold data-gap-warning');
+    add(warning, 'summary', `Thiếu ${data.data_completeness.missing.length} nhóm dữ liệu nguồn`);
+    add(warning, 'p', data.data_completeness.note);
+  }
   if (typeof renderDeepAnalysis === 'function') renderDeepAnalysis(data, root);
   if (impact) {
     const section = add(root, 'section', undefined, 'card case-agent');
     add(section, 'h3', 'Tác động và thiệt hại');
-    add(section, 'p', impact.categories.length ? `${impact.categories.length} nhóm tác động rút ra từ dữ liệu sandbox, kèm bằng chứng.` : impact.summary);
+    if (!impact.categories.length) add(section, 'p', impact.summary);
     const staticSample = data.static_analysis;
     if (codeBehaviors.length) {
       add(section, 'p', staticSample.hash_match
-        ? `Đoạn mã lấy từ ${staticSample.filename} (${staticSample.tool}); hash của tệp có trong hồ sơ này.`
-        : `Cảnh báo: đoạn mã lấy từ ${staticSample.filename} (${staticSample.tool}), tệp có hash không nằm trong hồ sơ này. Đây không phải bằng chứng về chính mẫu của báo cáo sandbox.`,
+        ? `Đoạn mã lấy từ ${staticSample.filename}; hash của tệp có trong hồ sơ này.`
+        : `Cảnh báo: đoạn mã lấy từ ${staticSample.filename}, tệp có hash không nằm trong hồ sơ này.`,
         staticSample.hash_match ? 'asm-source' : 'asm-source warn');
     }
     const sevText = {critical:'Nghiêm trọng',high:'Cao',medium:'Trung bình',low:'Thấp',info:'Thông tin'};
-    for (const c of impact.categories) {
+    impact.categories.forEach((c, index) => {
+      // Only the most severe group starts open; the rest are one line each until asked for.
       const box = add(section, 'details', undefined, 'action-card');
-      if (['critical', 'high'].includes(c.severity)) box.open = true;
+      box.open = index === 0;
       add(box, 'summary', `${c.title} · ${sevText[c.severity] || c.severity}`);
       const facts = add(box, 'ul');
-      for (const f of c.facts) add(facts, 'li', f);
-      add(box, 'p', `Ảnh hưởng: ${c.impact}`);
-      add(box, 'p', `Hướng xử lý: ${c.response_hint}`);
-      add(box, 'p', `Bằng chứng: ${c.evidence_ids.length} mục (xem chi tiết ở danh sách chỉ báo bên dưới).`);
-      const code = codeBehaviors.find(b => b.id === c.id);
-      for (const site of (code?.call_sites || []).slice(0, 2)) {
-        add(box, 'p', `Mã tương ứng trong mẫu (Ghidra, phân tích tĩnh): ${site.library || '?'}::${site.api} gọi tại ${site.address} trong hàm ${site.function || '?'}`, 'asm-caption');
-        add(box, 'pre', site.listing, 'code-block asm-listing');
+      for (const f of c.facts.slice(0, 4)) add(facts, 'li', f);
+      if (c.facts.length > 4) {
+        const rest = add(fold(box, `Xem thêm ${c.facts.length - 4} dữ kiện`), 'ul');
+        for (const f of c.facts.slice(4)) add(rest, 'li', f);
       }
+      const advice = fold(box, 'Ảnh hưởng và hướng xử lý');
+      add(advice, 'p', `Ảnh hưởng: ${c.impact}`);
+      add(advice, 'p', `Hướng xử lý: ${c.response_hint}`);
+      add(advice, 'p', `Bằng chứng: ${c.evidence_ids.length} mục, xem ở danh sách chỉ báo bên dưới.`);
+      const sites = (codeBehaviors.find(b => b.id === c.id)?.call_sites || []).slice(0, 2);
+      if (sites.length) {
+        const code = fold(box, `Mã lệnh tương ứng (${sites.length})`, index === 0);
+        for (const site of sites) {
+          add(code, 'p', `Mã tương ứng trong mẫu (Ghidra, phân tích tĩnh): ${site.library || '?'}::${site.api} gọi tại ${site.address} trong hàm ${site.function || '?'}`, 'asm-caption');
+          add(code, 'pre', site.listing, 'code-block asm-listing');
+        }
+      }
+    });
+    if ((impact.limitations || []).length) {
+      const limits = fold(section, 'Giới hạn của dữ liệu sandbox');
+      for (const note of impact.limitations) add(limits, 'p', note);
     }
-    for (const note of impact.limitations || []) add(section, 'p', note);
   }
-  renderSandboxComparison(data, root, add);
+  renderSandboxComparison(data, root, add, fold);
   const caseAgent = data.case_agent;
   if (caseAgent) {
     const section = add(root, 'section', undefined, 'card case-agent');
     add(section, 'h3', 'Agent điều tra hồ sơ');
     add(section, 'span', caseAgent.mode === 'llm' ? `AI · ${caseAgent.model}` : caseAgent.mode === 'fallback' ? 'AI chưa hoàn tất · Dùng quy tắc' : 'Theo quy tắc (chưa bật AI)', 'analysis-badge');
     const a = caseAgent.assessment;
-    add(section, 'p', a.summary);
     const sevLabel = {unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'};
-    add(section, 'p', `Ảnh hưởng: ${sevLabel[a.impact.severity] || a.impact.severity} — ${a.impact.summary}`);
-    for (const w of caseAgent.warnings || []) add(section, 'p', w, 'agent-warning');
-    // What the validator corrected stays visible, so the analyst knows the result was adjusted.
+    const assessment = fold(section, `Nhận định · Ảnh hưởng ${sevLabel[a.impact.severity] || a.impact.severity}`);
+    add(assessment, 'p', a.summary);
+    add(assessment, 'p', a.impact.summary);
+    // What the validator corrected stays one click away, with the count on the summary line.
     const fixes = a.mitre_corrections || [];
-    if (fixes.length) add(section, 'p', `Bộ kiểm tra đã chỉnh ${fixes.length} mã ATT&CK theo danh mục: ` + fixes.map(f => `${f.from} → ${f.to || 'bỏ'} (${f.reason})`).join('; '), 'agent-warning');
-    if (a.narrative_dropped) add(section, 'p', `Đã bỏ ${a.narrative_dropped} câu diễn biến không có bằng chứng đã đọc.`, 'agent-warning');
-    if (a.citations_dropped) add(section, 'p', `Đã lược ${a.citations_dropped} mã evidence agent dẫn nhưng chưa đọc; mỗi nhận định vẫn giữ ít nhất một nguồn đã đọc.`, 'agent-warning');
-    add(section, 'h4', `Chuỗi hành vi (${a.behavior_chain.length} giai đoạn)`);
-    const stages = add(section, 'ol');
+    const notes = [...(caseAgent.warnings || [])];
+    if (fixes.length) notes.push(`Bộ kiểm tra đã chỉnh ${fixes.length} mã ATT&CK theo danh mục: ` + fixes.map(f => `${f.from} → ${f.to || 'bỏ'} (${f.reason})`).join('; '));
+    if (a.narrative_dropped) notes.push(`Đã bỏ ${a.narrative_dropped} câu diễn biến không có bằng chứng đã đọc.`);
+    if (a.citations_dropped) notes.push(`Đã lược ${a.citations_dropped} mã evidence agent dẫn nhưng chưa đọc; mỗi nhận định vẫn giữ ít nhất một nguồn đã đọc.`);
+    if (notes.length) {
+      const checks = fold(section, `Ghi chú kiểm chứng (${notes.length})`);
+      for (const note of notes) add(checks, 'p', note, 'agent-warning');
+    }
+    const stages = add(fold(section, `Chuỗi hành vi (${a.behavior_chain.length} giai đoạn)`), 'ol');
     for (const s of a.behavior_chain) {
       const status = s.assessment_status === 'reported' ? 'nguồn báo cáo' : 'giả thuyết';
       add(stages, 'li', `${s.stage}${s.mitre.length ? ' · ' + s.mitre.join(', ') : ''} (${status}): ${s.summary} [${s.evidence_ids.length} evidence]`);
     }
     if (a.open_questions.length) {
-      add(section, 'h4', 'Cần xác minh trên hệ thống thật');
-      const qs = add(section, 'ul');
+      const qs = add(fold(section, `Cần xác minh trên hệ thống thật (${a.open_questions.length})`), 'ul');
       for (const q of a.open_questions) add(qs, 'li', q);
     }
     const trace = add(section, 'details');
@@ -1275,12 +1320,11 @@ function renderEvidencePanel(data) {
     for (const p of profiles) counts[p.role] = (counts[p.role] || 0) + 1;
     add(net, 'p', Object.entries(counts).map(([r, n]) => `${netRoleLabels[r] || r}: ${n}`).join(' · '));
     const ti = data.threat_intel_status;
-    if (ti) add(net, 'p', ti.enabled ? `Đã tra ThreatFox/URLhaus cho ${ti.looked_up} đích đáng ngờ${ti.errors ? ` (${ti.errors} lỗi)` : ''}. ${ti.note}` : 'Chưa tra threat intel (chưa cấu hình key abuse.ch hoặc là dữ liệu mẫu).');
     const notable = profiles.filter(p => !['benign_infrastructure', 'local_network'].includes(p.role));
-    if (!notable.length) add(net, 'p', 'Không có đích mạng đáng ngờ: toàn bộ lưu lượng là hạ tầng hợp lệ hoặc mạng nội bộ của sandbox, nên không đưa vào danh sách chặn.');
+    if (!notable.length) add(net, 'p', 'Không có đích mạng đáng ngờ; không đưa đích nào vào danh sách chặn.');
+    if (ti) add(fold(net, ti.enabled ? `Đã tra threat intel cho ${ti.looked_up} đích` : 'Chưa tra threat intel'), 'p', ti.enabled ? `Nguồn ThreatFox/URLhaus${ti.errors ? `, ${ti.errors} lỗi` : ''}. ${ti.note}` : 'Chưa cấu hình key abuse.ch hoặc đây là dữ liệu mẫu.');
     for (const p of notable) {
       const item = add(net, 'details', undefined, 'action-card');
-      if (notable.length <= 3) item.open = true;
       add(item, 'summary', `${p.value} · ${netRoleLabels[p.role] || p.role}`);
       add(item, 'p', p.summary);
       add(item, 'p', `Ảnh hưởng: ${p.impact}`);
@@ -1322,6 +1366,7 @@ function renderEvidencePanel(data) {
       const details = add(list, 'details', undefined, 'action-card');
       add(details, 'summary', `${item.value} · ${f.network_role ? netRoleLabels[f.network_role] || f.network_role : roleLabels[f.role] || 'Chưa phân loại'}`);
       add(details, 'p', f.explanation);
+      if (f.purpose) add(details, 'p', `Mục đích: ${f.purpose}`);
       add(details, 'p', `Mức nguy cơ: ${{unknown:'Chưa xác định',low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Nghiêm trọng'}[f.severity] || 'Chưa xác định'}`);
       add(details, 'p', `Ảnh hưởng: ${f.potential_impact}`);
       add(details, 'p', `Cần xác minh: ${f.verification_needed}`);
@@ -1350,7 +1395,7 @@ function renderEvidencePanel(data) {
   reviewRoot.replaceChildren();
   const review = add(reviewRoot, 'section', undefined, 'card');
   add(review, 'h3', 'Quyết định xem xét');
-  add(review, 'p', 'Duyệt, từ chối hoặc yêu cầu bổ sung cho một đề xuất. Trạng thái này chưa chứng minh công việc đã được thực hiện.');
+  add(review, 'p', 'Duyệt không có nghĩa là công việc đã được thực hiện.');
   const select = add(review, 'select'); select.setAttribute('aria-label', 'Chọn khuyến nghị');
   for (const action of data.playbook.actions) {
     const statusLabel = {pending:'Chờ xem xét',approved:'Đã duyệt',rejected:'Từ chối',changes_requested:'Cần bổ sung'}[action.status] || action.status;

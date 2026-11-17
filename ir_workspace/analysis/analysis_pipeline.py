@@ -19,6 +19,7 @@ from ir_workspace.analysis.operational_guidance import apply_guidance
 from ir_workspace.integrations.network_intel import build_network_profiles, enrich_network_profiles
 from ir_workspace.analysis.impact_analysis import analyze_impact
 from ir_workspace.analysis.code_evidence import code_evidence_markdown
+from ir_workspace.analysis.completeness import data_completeness
 from ir_workspace.analysis.sandbox_compare import comparison_lines
 from ir_workspace.analysis.remediation import build_case_actions, merge_actions
 from ir_workspace.analysis.deep_analysis import build_deep_analysis, family_catalog
@@ -169,6 +170,7 @@ def run_pipeline(report, iocs, source="manual"):
         "network_profiles": network_profiles, "threat_intel_status": threat_intel, "impact_analysis": impact, "mitre_mappings": mappings,
         **deep,
         "mitre_catalog": catalog_meta,
+        "data_completeness": data_completeness(report),
         "response_exclusions": excluded,
         "analysis_status": "insufficient_data" if result.threat_info.verdict == "Unknown" else "completed_with_review_required",
         "nist": {"revision": "SP 800-61 Rev.3", "framework": "CSF 2.0", "mapping": "local operational mapping; not a compliance certification"},
@@ -192,9 +194,14 @@ def research_markdown(payload: dict) -> str:
              f"Case: {safe(payload.get('case_id'))}",
              f"Agent: {safe(agent['mode'])}; model: {safe(agent['model'])}; prompt: {safe(agent['prompt_version'])}",
              "Kiểm tra tham chiếu không thay thế đánh giá tính đúng đắn của nhận định bởi analyst.", "",
-             "| IOC ID | Vai trò dự kiến | Nguy cơ giả định | Diễn giải | Ảnh hưởng | Cần xác minh | Evidence |", "|---|---|---|---|---|---|---|"]
+             *([safe((payload.get("data_completeness") or {}).get("note")), ""]
+               if (payload.get("data_completeness") or {}).get("note") else []),
+             "| IOC ID | Vai trò dự kiến | Mục đích | Nguy cơ giả định | Diễn giải | Ảnh hưởng | Cần xác minh | Evidence |",
+             "|---|---|---|---|---|---|---|---|"]
     for row in agent["findings"]:
-        lines.append("| " + " | ".join(safe(row[k]) for k in ("ioc_id", "role", "severity", "explanation", "potential_impact", "verification_needed", "evidence_ids")) + " |")
+        cells = [row["ioc_id"], row["role"], row.get("purpose", ""), row["severity"], row["explanation"],
+                 row["potential_impact"], row["verification_needed"], row["evidence_ids"]]
+        lines.append("| " + " | ".join(safe(cell) for cell in cells) + " |")
     impact = payload.get("impact_analysis")
     if impact and impact["categories"]:
         lines += ["", "### Tác động và thiệt hại", "", safe(impact["summary"]), ""]

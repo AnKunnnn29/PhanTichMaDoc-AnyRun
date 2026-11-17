@@ -68,6 +68,30 @@ def test_rules_mode_builds_baseline_without_model(monkeypatch, wannacry):
     assert c2["evidence_ids"] and not any(is_protected_destination(by_id[i]["value"]) for i in c2["evidence_ids"])
 
 
+def test_single_shot_submits_with_preloaded_evidence_in_one_call(monkeypatch, wannacry):
+    import json
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    monkeypatch.setenv('AGENT_STRATEGY', 'single_shot')
+    def answer(messages):
+        opening = json.loads(messages[1]['content'])
+        assert opening['context'] and 'Một lượt' in opening['hint']
+        refs = [e['id'] for e in bundle['evidence'] if e['type'] == 'process'
+                and e['id'] in opening['context']['get_process_tree']]
+        assert refs
+        return {'tool': 'submit_assessment', 'assessment': valid_assessment(bundle, actions, refs)}
+    calls = scripted(monkeypatch, [answer])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert len(calls) == 1 and case['mode'] == 'llm' and case['max_steps'] == 1
+
+
+def test_single_shot_cannot_execute_model_requested_tools(monkeypatch, wannacry):
+    bundle, behavior, mappings, actions, threat, _ = wannacry
+    monkeypatch.setenv('AGENT_STRATEGY', 'single_shot')
+    calls = scripted(monkeypatch, [{'tool': 'lookup_hash', 'args': {'hash': 'a' * 64}}])
+    case = investigate_case(bundle, behavior, mappings, actions, threat)
+    assert len(calls) == 1 and case['mode'] == 'fallback' and not case['external_lookups']
+
+
 def test_pipeline_attaches_agent_decision_to_every_action(wannacry):
     *_, playbook = wannacry
     assert all(a.agent_decision in {"recommend", "defer"} and a.agent_rationale for a in playbook.actions)

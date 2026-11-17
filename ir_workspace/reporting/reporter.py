@@ -721,6 +721,8 @@ def _research_lines(data):
         return ["No evidence-agent metadata in this legacy report."]
     lines = [f"Case: {data.get('case_id')} | Agent: {agent['mode']} | Model: {agent['model']}",
              "Reference integrity is not semantic accuracy. Recommendations require analyst review."]
+    if (data.get("data_completeness") or {}).get("note"):
+        lines.append(data["data_completeness"]["note"])
     case = data.get("case_agent")
     if case:
         a = case["assessment"]
@@ -734,6 +736,7 @@ def _research_lines(data):
     lines += comparison_lines(data)
     for row in agent["findings"]:
         lines += [f"{row['ioc_id']} | {row['role']} | {row['assessment_status']}", row["explanation"],
+                  "Mục đích: " + row.get("purpose", "chưa ghi nhận"),
                   row["potential_impact"], row["verification_needed"], "Evidence: " + ", ".join(row["evidence_ids"])]
     for row in data["evidence_bundle"]["evidence"]:
         lines.append(f"{row['id']} | {row['type']}: {row['value']} | {row['source_id']}{row['source_path']} | SHA256 {row['source_sha256']}")

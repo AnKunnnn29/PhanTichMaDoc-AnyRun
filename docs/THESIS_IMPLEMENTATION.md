@@ -80,6 +80,28 @@ CLI sử dụng cùng pipeline:
 
 ## Chuẩn bị chương thực nghiệm
 
+### Chạy lặp và so sánh cấu hình
+
+`evaluation.py` đọc `.env` của dự án và giữ các biến đã đặt trong môi trường. So sánh cùng bộ báo cáo:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation.py --manifest evaluation_manifest.json --configs rules,single_shot,agent --runs 3 --output reports/comparison
+```
+
+- `rules`: chỉ luật, không gọi mô hình.
+- `single_shot`: một lời gọi mô hình cho mỗi nhóm IOC và một lời gọi riêng để đánh giá hồ sơ; dữ kiện được cấp sẵn, không gọi công cụ theo yêu cầu mô hình.
+- `agent`: mô hình tự chọn công cụ chỉ đọc trong giới hạn số bước và thời gian của pipeline.
+
+Hai cấu hình LLM dùng chung `AGENT_PROVIDER` và model trong `.env`. Các lần chạy không dùng cache phân tích; tra cứu threat intel là yếu tố ngoài nên nên đặt `NETWORK_INTEL_LOOKUPS=0` khi đo riêng pipeline.
+
+Manifest có thể bỏ `expected` hoặc dùng `null` với báo cáo chưa gán nhãn: khi đó chỉ ghi thời gian, tham chiếu và trạng thái, không sinh điểm chính xác. Khi có `expected` hoặc các nhãn ngữ nghĩa, phải có `label_reviewer`; `expected` phải bao gồm toàn bộ chỉ báo được chấm. Không lấy đầu ra của parser làm nhãn độc lập.
+
+Mỗi cấu hình/lượt có payload, `summary.json`, `results.md`, `manual_review.csv`; thư mục gốc có `comparison.json` và `comparison.md`. Kết quả ghi tỷ lệ fallback, thống kê thời gian, điểm theo từng lượt và độ ổn định của quyết định có cấu trúc. `completed_aggregate` và `completed_stability` chỉ giữ các lượt hoàn tất LLM (với cấu hình luật thì giữ các lượt luật). Lượt `partial`, `fallback` hay LLM chưa chạy không được xem là LLM thành công. Độ ổn định không đo câu chữ hoặc độ đúng của kết luận.
+
+Điểm IOC, tác động, ATT&CK và danh sách chặn đo phần luật dùng chung; dùng rubric để chấm riêng phần diễn giải và quyết định của LLM. Các lần lặp cùng mẫu không phải mẫu độc lập; khoảng tin cậy gộp chỉ mang tính mô tả. Muốn so sánh chất lượng, cần báo cáo số mẫu độc lập và nhãn do người chấm xác nhận.
+
+Đợt kiểm tra ngày 17/11/2026 trên hai báo cáo công khai đã lưu có 18 lượt (3 cấu hình × 3 lần × 2 mẫu). Cả 12 lượt LLM gặp DeepSeek HTTP 402 và dùng quy tắc dự phòng; chưa có kết quả so sánh chất lượng LLM. Giữ DeepSeek và chạy lại sau theo quyết định của người dùng. Xem [biên bản tiến độ](PROGRESS_2026-11-17.md).
+
 `evaluation.py --demo` ghi `reports/evaluation/summary.json`, một JSON mỗi ca và `manual_review.csv`.
 Demo không có nhãn độc lập nên `extraction` là null; không tự tạo ground truth từ parser đang được chấm.
 Thời gian là một lượt chưa cache mỗi ca, chưa phải nghiên cứu tăng tốc có ý nghĩa thống kê.
