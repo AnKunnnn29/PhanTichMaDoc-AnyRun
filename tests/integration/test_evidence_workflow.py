@@ -108,10 +108,7 @@ def test_ghidra_listing_is_stored_with_the_case_and_reaches_every_export(flask_t
     from ir_workspace.analysis.code_evidence import build_code_evidence
 
     data = upload(flask_test_client, emotet_report)
-    summary = {"ghidra_version": "12.1.2", "call_counts": {"RegSetValueExA": 1}, "call_sites": [{
-        "api": "RegSetValueExA", "base_api": "RegSetValue", "library": "ADVAPI32.DLL", "function": "FUN_00401000",
-        "address": "0040102b", "instructions": [{"address": "0040102b", "bytes": "ff 15 00 a0 40 00",
-                                                 "text": "CALL dword ptr [0x0040a000]", "comment": "<b>x</b>", "is_call": True}]}]}
+    summary = _summary(comment="<b>x</b>")
     monkeypatch.setattr(app_module, "analyze_sample_with_ghidra", lambda path, timeout=180: {
         "triage": {"filename": "s.exe", "sha256": "c" * 64, "md5": "", "size": 4},
         "ghidra": {"status": "ok", "summary": summary}, "code_evidence": build_code_evidence(summary)})
@@ -126,8 +123,8 @@ def test_ghidra_listing_is_stored_with_the_case_and_reaches_every_export(flask_t
     assert load_case(data["case_id"])["static_analysis"]["sha256"] == "c" * 64
     assert upload(flask_test_client, emotet_report, force=False)["static_analysis"]["sha256"] == "c" * 64
     for fmt in ("markdown", "html", "pdf"):
-        exported = flask_test_client.post("/api/export", json={"format": fmt, "data": {"case_id": data["case_id"]}}).get_json()
-        raw = Path(exported["path"]).read_bytes()
+        export = flask_test_client.post("/api/export", json={"format": fmt, "data": {"case_id": data["case_id"]}})
+        raw = Path(export.get_json()["path"]).read_bytes()
         if fmt == "pdf":
             assert raw.startswith(b"%PDF")
             continue
@@ -136,3 +133,37 @@ def test_ghidra_listing_is_stored_with_the_case_and_reaches_every_export(flask_t
         marker = ">> 0040102b  ff 15 00 a0 40 00"
         assert (marker if fmt == "markdown" else marker.replace(">", "&gt;")) in text
         assert fmt == "markdown" or "<b>x</b>" not in text
+
+
+def _summary(comment="ADVAPI32.DLL::RegSetValueExA"):
+    instruction = {"address": "0040102b", "bytes": "ff 15 00 a0 40 00",
+                   "text": "CALL dword ptr [0x0040a000]", "comment": comment, "is_call": True}
+    site = {"api": "RegSetValueExA", "base_api": "RegSetValue", "library": "ADVAPI32.DLL",
+            "function": "FUN_00401000", "address": "0040102b", "instructions": [instruction]}
+    return {"ghidra_version": "12.1.2", "call_counts": {"RegSetValueExA": 1}, "call_sites": [site]}
+
+
+def test_ghidra_vm_result_is_imported_without_a_sample_on_the_host(flask_test_client, emotet_report):
+    data = upload(flask_test_client, emotet_report)
+    sha = data["file"]["sha256"]
+    result = {"triage": {"filename": "sample.exe", "sha256": sha, "md5": "d" * 32, "size": 2048},
+              "ghidra": {"status": "ok", "summary": _summary()}}
+
+    def send(payload, case_id):
+        return flask_test_client.post(
+            "/api/ghidra/import", content_type="multipart/form-data",
+            data={"result_file": (io.BytesIO(json.dumps(payload).encode()), "result.json"), "case_id": case_id})
+
+    assert send(result, "case-missing").status_code == 400
+    imported = send(result, data["case_id"]).get_json()
+    assert imported["ok"] is True
+    rec = imported["data"]["static_analysis"]
+    assert rec["hash_match"] is True and rec["analysis_origin"] == "vm_headless"
+    assert load_case(data["case_id"])["static_analysis"]["sha256"] == sha.lower()
+
+    text = flask_test_client.post("/api/export", json={"format": "markdown", "data": {"case_id": data["case_id"]}})
+    exported = Path(text.get_json()["path"]).read_text(encoding="utf-8")
+    assert ">> 0040102b  ff 15 00 a0 40 00" in exported
+    # A sample whose hash is not in the case still imports, but is flagged.
+    result["triage"]["sha256"] = "e" * 64
+    assert send(result, data["case_id"]).get_json()["data"]["static_analysis"]["hash_match"] is False

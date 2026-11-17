@@ -1,5 +1,8 @@
+import pytest
+
 from ir_workspace.analysis.code_evidence import (
-    TRACKED_APIS, build_code_evidence, code_evidence_markdown, format_listing, report_blocks, static_record)
+    MAX_IMPORT_SITES, TRACKED_APIS, build_code_evidence, code_evidence_markdown, format_listing,
+    import_vm_analysis, report_blocks, static_record)
 
 SITE = {
     "api": "RegSetValueExA", "base_api": "RegSetValue", "library": "ADVAPI32.DLL",
@@ -81,3 +84,55 @@ def test_markdown_listing_cannot_be_closed_by_a_string_from_the_sample():
 def test_reports_without_static_analysis_get_no_section():
     assert report_blocks({}) is None
     assert code_evidence_markdown({"static_analysis": {"code_evidence": {"behaviors": []}}}) == ""
+
+
+def _vm_result(sha256="a" * 64):
+    return {"analysis_origin": "vm_headless",
+            "triage": {"filename": "sample.exe", "sha256": sha256, "md5": "d" * 32, "size": 4096},
+            "ghidra": {"status": "ok", "summary": SUMMARY},
+            "code_evidence": {"behaviors": [{"id": "forged", "call_sites": []}]}}
+
+
+def _case(*sha):
+    return {"evidence_bundle": {"evidence": [{"type": "sha256", "value": s} for s in sha]}}
+
+
+def test_import_matches_hash_and_rebuilds_evidence_from_summary():
+    record = import_vm_analysis(_vm_result("A" * 64), _case("a" * 64))
+
+    assert record["hash_match"] is True
+    assert record["analysis_origin"] == "vm_headless"
+    # The forged code_evidence in the upload is ignored; it is rebuilt from the summary.
+    assert {b["id"] for b in record["code_evidence"]["behaviors"]} == {"persistence", "data_encryption"}
+    assert record["sha256"] == "a" * 64
+
+
+def test_import_flags_a_sample_whose_hash_is_not_in_the_case():
+    record = import_vm_analysis(_vm_result("b" * 64), _case("a" * 64))
+
+    assert record["hash_match"] is False
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda r: r.pop("triage"),
+    lambda r: r.pop("ghidra"),
+    lambda r: r["ghidra"].pop("summary"),
+    lambda r: r["triage"].update(sha256="not-a-hash"),
+])
+def test_import_rejects_malformed_results(mutate):
+    result = _vm_result()
+    mutate(result)
+    with pytest.raises(ValueError):
+        import_vm_analysis(result, _case("a" * 64))
+
+
+def test_import_caps_oversized_uploads():
+    result = _vm_result()
+    result["ghidra"]["summary"] = {
+        "ghidra_version": "12.1.2", "call_counts": {"RegSetValueExA": 1},
+        "call_sites": [dict(SITE, instructions=SITE["instructions"] * 200)] * (MAX_IMPORT_SITES + 50)}
+
+    record = import_vm_analysis(result, _case("a" * 64))
+
+    # Grouping still applies its own per-run caps; the point is the import does not choke.
+    assert record["code_evidence"]["behaviors"]

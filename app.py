@@ -12,7 +12,7 @@ from pathlib import Path
 from dataclasses import asdict
 from ir_workspace.analysis.analysis_pipeline import run_pipeline, analysis_key, research_markdown
 from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action, attach_static_analysis
-from ir_workspace.analysis.code_evidence import static_record
+from ir_workspace.analysis.code_evidence import static_record, import_vm_analysis
 from ir_workspace.storage.runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
 
 if sys.platform == "win32" and __name__ == "__main__":
@@ -459,6 +459,27 @@ def ghidra_analyze_upload():
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+
+@app.route("/api/ghidra/import", methods=["POST"])
+@rate_limit(max_requests=8)
+def ghidra_import_result():
+    """Attach a Ghidra result analysed in an isolated VM. No sample ever touches this host."""
+    try:
+        case_id = (request.form.get("case_id") or "").strip()
+        case = load_case(case_id) if case_id else None
+        if not case:
+            raise ValidationError("Cần mở một hồ sơ sandbox trước khi nhập kết quả Ghidra từ VM")
+        analysis = _load_json_upload("result_file", required=True)
+        record = import_vm_analysis(analysis, case)
+        if not record["code_evidence"]["behaviors"]:
+            raise ValidationError("Kết quả Ghidra không có lệnh gọi API theo dõi để gắn vào hồ sơ")
+        attach_static_analysis(case_id, record)
+        return jsonify({"ok": True, "data": {"static_analysis": record}})
+    except (ValidationError, ValueError) as e:
+        return _error_response(str(e))
+    except Exception as e:
+        return _error_response(str(e), 500, "ghidra_error")
 
 
 @app.route("/api/submit/url", methods=["POST"])

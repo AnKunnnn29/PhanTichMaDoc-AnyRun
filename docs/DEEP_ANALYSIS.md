@@ -33,6 +33,15 @@ Trong **Ghidra trên máy**, khi một hồ sơ sandbox đang mở, kết quả 
 
 Giới hạn: mẫu bị pack chỉ lộ đoạn giải nén; mẫu .NET không có lệnh gọi import dạng này (dùng ILSpy/dnSpy); API gọi qua địa chỉ tính lúc chạy không được nhận ra. Khi đó kết quả ghi rõ là không tìm thấy, không coi là sạch.
 
+### Phân tích mẫu thật trong máy ảo
+
+Để có assembly của chính mẫu mã độc mà không để tệp `.exe` chạm máy thật, phân tích trong máy ảo cô lập rồi chỉ mang file JSON kết quả ra:
+
+1. Trong VM (snapshot, tắt mạng, không shared folder): `python start.py` chuẩn bị Ghidra/JDK, rồi `python -m ir_workspace.cli.analyze_sample "mau.exe" -o result.json`. `analyze_sample.py` gọi đúng `analyze_sample()` và ghi ra JSON gồm triage, summary và các vị trí gọi — chỉ metadata và văn bản disassembly, không có mã thực thi.
+2. Chép `result.json` ra máy thật. Trong tab **Ghidra trên máy → Nhập kết quả từ máy ảo**, chọn file khi hồ sơ sandbox tương ứng đang mở. `/api/ghidra/import` làm sạch JSON không tin cậy (chỉ đọc trường đã biết, giới hạn kích thước, dựng lại `code_evidence` từ summary ở phía server), đối chiếu SHA256 với hồ sơ rồi lưu kèm.
+
+Vì mẫu thật khớp hash hồ sơ, cảnh báo hash biến mất và đoạn assembly là của chính con mã độc. Mẫu không bao giờ chạy hay nằm trên máy thật; thứ ra khỏi VM chỉ là JSON.
+
 ## Đối chiếu họ và agent
 
 `data/family_expectations.json` chứa tập `uses` cho WannaCry S0366, Emotet S0367 và RedLine Stealer S1240, trích từ STIX Enterprise ATT&CK 19.2. URL, SHA256 nguồn và relationship ID được lưu cùng dữ liệu. Khi chạy phân tích không cần Internet để tải danh mục.

@@ -413,6 +413,41 @@ async function analyzeGhidraFile() {
   }
 }
 
+let selectedGhidraJson = null;
+
+function handleGhidraJsonSelect(inp) {
+  selectedGhidraJson = inp.files[0] || null;
+  const nameEl = document.getElementById('ghidra-json-name');
+  if (nameEl) nameEl.textContent = selectedGhidraJson ? selectedGhidraJson.name : 'Chưa chọn file JSON';
+}
+
+async function importGhidraResult() {
+  if (!selectedGhidraJson) return toast('Chọn file result.json từ máy ảo trước', 'err');
+  if (!G.data?.case_id) return toast('Mở một hồ sơ sandbox trước khi gắn kết quả', 'err');
+  const fd = new FormData();
+  fd.append('result_file', selectedGhidraJson);
+  fd.append('case_id', G.data.case_id);
+  document.getElementById('ghidra-result').innerHTML = `
+    <div class="ghidra-loading loading-wrap compact"><div class="spinner"></div><p>Đang nhập kết quả từ máy ảo...</p></div>`;
+  try {
+    const r = await fetch('/api/ghidra/import', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    const rec = j.data.static_analysis;
+    G.data.static_analysis = rec;
+    renderGhidraResult({
+      triage: { filename: rec.filename, sha256: rec.sha256, md5: rec.md5, size: rec.size },
+      ghidra: { status: 'ok', summary: { language: rec.language, executable_format: rec.executable_format } },
+      ir_enrichment: {}, code_evidence: rec.code_evidence, static_analysis: rec,
+    });
+    renderEvidencePanel(G.data);
+    toast(rec.hash_match ? 'Đã gắn kết quả; hash khớp hồ sơ' : 'Đã gắn kết quả (hash không khớp hồ sơ)');
+  } catch (e) {
+    document.getElementById('ghidra-result').innerHTML = `<div class="inline-note danger">${esc(e.message)}</div>`;
+    toast(e.message, 'err');
+  }
+}
+
 function asmSiteHtml(site) {
   const lines = String(site.listing || '').split(/\r?\n/)
     .map(line => line.startsWith('>>') ? `<span class="asm-call">${esc(line)}</span>` : esc(line)).join('\n');
@@ -1106,6 +1141,13 @@ function renderEvidencePanel(data) {
     const section = add(root, 'section', undefined, 'card case-agent');
     add(section, 'h3', 'Tác động và thiệt hại');
     add(section, 'p', impact.categories.length ? `${impact.categories.length} nhóm tác động rút ra từ dữ liệu sandbox, kèm bằng chứng.` : impact.summary);
+    const staticSample = data.static_analysis;
+    if (codeBehaviors.length) {
+      add(section, 'p', staticSample.hash_match
+        ? `Đoạn mã lấy từ ${staticSample.filename} (${staticSample.tool}); hash của tệp có trong hồ sơ này.`
+        : `Cảnh báo: đoạn mã lấy từ ${staticSample.filename} (${staticSample.tool}), tệp có hash không nằm trong hồ sơ này. Đây không phải bằng chứng về chính mẫu của báo cáo sandbox.`,
+        staticSample.hash_match ? 'asm-source' : 'asm-source warn');
+    }
     const sevText = {critical:'Nghiêm trọng',high:'Cao',medium:'Trung bình',low:'Thấp',info:'Thông tin'};
     for (const c of impact.categories) {
       const box = add(section, 'details', undefined, 'action-card');

@@ -6,22 +6,24 @@ the sandbox observed, and says so when the sandbox observed nothing matching.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 # Behaviour id -> title, ATT&CK tactic and the imported API base names that implement it.
 # Ids shared with impact_analysis categories let the two be shown side by side. Base names
-# cover the A/W/Ex variants (RegSetValue matches RegSetValueExA).
+# cover the A/W/Ex variants (RegSetValue matches RegSetValueExA). Within a behaviour the
+# APIs are listed most telling first; call sites are shown in that order.
 BEHAVIOR_APIS = {
     "data_encryption": {
         "title": "Mã hóa dữ liệu", "tactic": "Impact",
-        "apis": ["CryptAcquireContext", "CryptGenKey", "CryptImportKey", "CryptDeriveKey", "CryptEncrypt",
-                 "BCryptEncrypt"]},
+        "apis": ["CryptEncrypt", "BCryptEncrypt", "CryptGenKey", "CryptImportKey", "CryptDeriveKey",
+                 "CryptAcquireContext"]},
     "credential_theft": {
         "title": "Thu thập thông tin/dữ liệu", "tactic": "Credential Access / Collection",
         "apis": ["CryptUnprotectData", "GetAsyncKeyState", "SetWindowsHookEx", "GetClipboardData", "BitBlt"]},
     "persistence": {
         "title": "Cơ chế tự khởi động", "tactic": "Persistence",
-        "apis": ["RegSetValue", "RegCreateKey", "CreateService", "StartService"]},
+        "apis": ["RegSetValue", "CreateService", "StartService", "RegCreateKey"]},
     "defense_impairment": {
         "title": "Né tránh phòng thủ / tiêm tiến trình", "tactic": "Defense Evasion",
         "apis": ["IsDebuggerPresent", "CheckRemoteDebuggerPresent", "CreateRemoteThread", "WriteProcessMemory",
@@ -77,6 +79,7 @@ def build_code_evidence(summary: dict) -> dict:
         apis = [{"name": name, "call_count": n} for name, n in sorted(counts.items())
                 if _base_api(name) in spec["apis"]]
         rows = [{**site, "listing": format_listing(site)} for site in sites if site.get("base_api") in spec["apis"]]
+        rows.sort(key=lambda site: spec["apis"].index(site["base_api"]))
         if apis or rows:
             behaviors.append({"id": behavior_id, "title": spec["title"], "tactic": spec["tactic"],
                               "apis": apis, "call_sites": rows})
@@ -99,6 +102,65 @@ def static_record(analysis: dict, case: dict) -> dict:
         "executable_format": summary.get("executable_format", ""),
         "code_evidence": analysis.get("code_evidence") or build_code_evidence(summary),
     }
+
+
+MAX_IMPORT_SITES = 500
+MAX_IMPORT_INSTRUCTIONS = 64
+SHA256_RE = re.compile(r"[0-9a-fA-F]{64}")
+
+
+def _clip(value, limit: int = 400) -> str:
+    text = str(value)
+    return text[:limit] if len(text) > limit else text
+
+
+def import_vm_analysis(analysis: dict, case: dict) -> dict:
+    """Build the static record from a result produced in a VM.
+
+    The JSON is untrusted input from a file, so only known fields are read, sizes are
+    capped, and the code evidence is rebuilt from the summary server-side rather than
+    trusting any pre-built listing in the upload.
+    """
+    if not isinstance(analysis, dict):
+        raise ValueError("Kết quả Ghidra phải là JSON object")
+    triage = analysis.get("triage")
+    ghidra = analysis.get("ghidra")
+    if not isinstance(triage, dict) or not isinstance(ghidra, dict):
+        raise ValueError("Kết quả thiếu phần 'triage' hoặc 'ghidra'")
+    summary = ghidra.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("Kết quả thiếu 'ghidra.summary'; chạy lại Ghidra trong VM")
+    if not SHA256_RE.fullmatch(str(triage.get("sha256", ""))):
+        raise ValueError("Kết quả thiếu SHA256 hợp lệ của mẫu")
+
+    sites = []
+    for site in (summary.get("call_sites") or [])[:MAX_IMPORT_SITES]:
+        if not isinstance(site, dict):
+            continue
+        instructions = [
+            {"address": _clip(row.get("address"), 32), "bytes": _clip(row.get("bytes"), 64),
+             "text": _clip(row.get("text"), 200), "comment": _clip(row.get("comment"), 160),
+             "is_call": bool(row.get("is_call"))}
+            for row in (site.get("instructions") or [])[:MAX_IMPORT_INSTRUCTIONS] if isinstance(row, dict)
+        ]
+        sites.append({"api": _clip(site.get("api"), 80), "base_api": _clip(site.get("base_api"), 80),
+                      "library": _clip(site.get("library"), 120), "function": _clip(site.get("function"), 120),
+                      "address": _clip(site.get("address"), 32), "instructions": instructions})
+    counts = {_clip(name, 80): value for name, value in (summary.get("call_counts") or {}).items()
+              if isinstance(value, int) and value >= 0}
+
+    size = triage.get("size")
+    clean = {
+        "triage": {"filename": _clip(triage.get("filename"), 200), "sha256": str(triage.get("sha256")).lower(),
+                   "md5": _clip(triage.get("md5"), 64), "size": size if isinstance(size, int) else 0},
+        "ghidra": {"summary": {"ghidra_version": _clip(summary.get("ghidra_version"), 40),
+                               "language": _clip(summary.get("language"), 80),
+                               "executable_format": _clip(summary.get("executable_format"), 80),
+                               "call_sites": sites, "call_counts": counts}},
+    }
+    record = static_record(clean, case)
+    record["analysis_origin"] = "vm_headless"
+    return record
 
 
 def report_blocks(payload: dict) -> dict | None:
