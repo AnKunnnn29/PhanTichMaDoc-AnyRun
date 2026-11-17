@@ -56,6 +56,32 @@ def vendor_verdicts(intel):
     return rows
 
 
+def family_samples(signature, limit=100):
+    """Recent samples the source labels with one malware signature. Only the signature name is sent."""
+    key=os.getenv('MALWAREBAZAAR_AUTH_KEY','').strip()
+    if not key:return {'status':'not_configured','samples':[]}
+    if not re.fullmatch(r'[A-Za-z0-9 ._-]{2,60}',str(signature)):return {'status':'invalid_signature','samples':[]}
+    try:
+        response=requests.post(ENDPOINT,headers={'Auth-Key':key},timeout=(4,25),
+                               data={'query':'get_siginfo','signature':signature,'limit':max(1,min(int(limit),1000))})
+        if response.status_code in (401,403):return {'status':'auth_error','samples':[]}
+        if response.status_code==429:return {'status':'rate_limited','samples':[]}
+        body=response.json() if response.status_code==200 else None
+    except (requests.RequestException,ValueError,TypeError):
+        return {'status':'unavailable','samples':[]}
+    if not isinstance(body,dict) or body.get('query_status')!='ok' or not isinstance(body.get('data'),list):
+        return {'status':'not_found' if isinstance(body,dict) and body.get('query_status') in ('signature_not_found','no_results') else 'unavailable','samples':[]}
+    samples=[]
+    for row in body['data']:
+        sha=str(row.get('sha256_hash','')).lower() if isinstance(row,dict) else ''
+        if not re.fullmatch('[a-f0-9]{64}',sha):continue
+        trid=' '.join(str(t) for t in row.get('trid') or []) if isinstance(row.get('trid'),list) else ''
+        samples.append({'sha256':sha,'file_name':str(row.get('file_name') or '')[:200].replace('\n',' '),
+                        'file_type':str(row.get('file_type') or '')[:20],'file_size':row.get('file_size') if isinstance(row.get('file_size'),int) else 0,
+                        'first_seen':str(row.get('first_seen') or '')[:25],'dotnet':'.net' in trid.lower() or 'mono' in trid.lower()})
+    return {'status':'ok','samples':samples}
+
+
 def lookup_hash(value):
     value=str(value).lower().strip()
     if not re.fullmatch(r'(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})',value):

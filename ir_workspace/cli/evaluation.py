@@ -15,7 +15,9 @@ from pathlib import Path
 
 from ir_workspace.ai.analysis_agent import agent_settings
 from ir_workspace.analysis.analysis_pipeline import run_pipeline
+from ir_workspace.analysis.evaluation_metrics import LABEL_KEYS, aggregate, results_markdown, score_case
 from ir_workspace.analysis.evidence import digest, normalize, validate_bundle
+from ir_workspace.integrations.triage_report import is_triage_report, triage_to_report
 from ir_workspace.reporting.reporter import _report_payload
 
 TYPES = {"ip", "domain", "url", "md5", "sha1", "sha256", "file", "process", "registry", "mutex"}
@@ -68,10 +70,20 @@ def load_manifest(path):
         ids.add(row["id"])
         if not row.get("label_reviewer") or not isinstance(row.get("expected"), list):
             raise ValueError("Each case requires label_reviewer and an exhaustive expected list")
+        for key in LABEL_KEYS:
+            if key in row and not (isinstance(row[key], list) and all(isinstance(v, str) for v in row[key])):
+                raise ValueError(f"{key} must be a list of strings")
         def read(name):
             return json.loads((path.parent / row[name]).read_text(encoding="utf-8-sig"))
-        cases.append({**row, "report": read("report_file"),
-                      "iocs": read("ioc_file") if row.get("ioc_file") else {}})
+        case = {**row, "report": read("report_file"), "iocs": read("ioc_file") if row.get("ioc_file") else {}}
+        if row.get("second_report_file"):
+            # A second sandbox's report of the same sample; a Triage overview is converted first.
+            second = read("second_report_file")
+            if is_triage_report(second):
+                dynamic = [read("second_dynamic_file")] if row.get("second_dynamic_file") else []
+                second = triage_to_report(second, dynamic)
+            case["second_report"] = second
+        cases.append(case)
     return cases
 
 
@@ -100,6 +112,14 @@ def evaluate(cases, output):
             row["by_type"] = {kind: score_extraction([o for o in expected if o["type"] == kind],
                                                      [o for o in predicted if o["type"] == kind]) for kind in sorted(TYPES)}
             row["label_reviewer"] = case["label_reviewer"]
+        second = None
+        if case.get("second_report"):
+            sandbox = (case["second_report"].get("data", {}).get("analysis", {}).get("sandbox") or {})
+            source = "triage:" + str(sandbox.get("sample_id", "")) if sandbox.get("name") == "Triage" else "second"
+            second = _report_payload(*run_pipeline(case["second_report"], {}, source=source))
+            (output / f"case_{index + 1:03d}_second.json").write_text(
+                json.dumps(second, ensure_ascii=False, indent=2), encoding="utf-8")
+        row["labels"] = score_case(case, payload, second)
         rows.append(row)
         rubric.append({"case_id": case["id"], "reviewer": "", "ioc_role_1_5": "",
                        "behavior_reasoning_1_5": "", "mitre_support_1_5": "", "response_safety_1_5": "",
@@ -110,8 +130,11 @@ def evaluate(cases, output):
                "limitations": ["Synthetic demos have no independent labels and no accuracy score.",
                    "Reference integrity verifies provenance, not correctness of conclusions.",
                    "Label expected must include ALL supported observables, including filenames and processes.",
-                   "Report precision/recall separately from human-rated semantic quality."]}
+                   "Report precision/recall separately from human-rated semantic quality.",
+                   "Agreement between two sandboxes is not accuracy; it is reported in its own table."]}
+    summary["aggregate"] = aggregate(rows)
     (output / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output / "results.md").write_text(results_markdown(summary["aggregate"]), encoding="utf-8")
     with (output / "manual_review.csv").open("w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rubric[0]))
         writer.writeheader()

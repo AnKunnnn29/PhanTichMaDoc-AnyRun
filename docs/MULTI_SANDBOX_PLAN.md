@@ -10,7 +10,21 @@ Lập ngày 17/11/2026. Trạng thái: bước 0–2 đã có mã, chờ API key
 | 0. Nguồn tìm mẫu | Đã kiểm tra thật: MalwareBazaar trả `vendor_intel` có liên kết Any.Run, Triage, CAPE, VMRay cho cùng một SHA256 (mẫu `c34af1f1…` có báo cáo Triage `260317-xlg6lafz9j`). |
 | 1. Nhập báo cáo Triage | `triage_client.py`, `triage_report.py`. Tải `overview.json` lên như một báo cáo cũng chạy được pipeline. Mới kiểm thử bằng fixture dựng theo tài liệu, **chưa chạy với phản hồi thật của Triage**. |
 | 2. Đối chiếu | `sandbox_compare.py`, route `POST /api/cases/<id>/compare/triage`, thẻ "Đối chiếu đa nguồn sandbox" trong Bằng chứng nguồn, mục tương ứng trong bản xuất. |
-| 3–5 | Chưa làm: thu thập và gán nhãn bộ mẫu, mở rộng `evaluation.py`, viết phần thực nghiệm. |
+| 3. Bộ mẫu | Có công cụ `python -m ir_workspace.cli.find_samples`: tra MalwareBazaar theo họ, giữ mẫu có báo cáo trên cả Any.Run và Triage, ưu tiên PE native. Lần chạy đầu ra 30 ứng viên (5 mẫu cho mỗi họ WannaCry, Emotet/Heodo, RedLine, AgentTesla, AsyncRAT, LockBit) trong `reports/evaluation/candidates.csv`. **Chưa thu thập báo cáo, chưa gán nhãn, chưa có 10 mẫu lành tính.** |
+| 4. Đánh giá | `evaluation.py` nhận thêm nhãn `reference_family`, `expected_impacts`, `expected_techniques`, `expected_block` và nguồn thứ hai (`second_report_file`, `second_dynamic_file`). Kết quả chấm theo từng nguồn và khi gộp, kèm khoảng tin cậy Wilson 95%, bảng đồng thuận theo chiều, xuất `summary.json` và `results.md`. Chưa có số liệu vì chưa có nhãn. |
+| 5 | Chưa làm: viết phần thực nghiệm khi có số liệu. |
+
+Ví dụ một ca trong manifest:
+
+```json
+{"id": "wannacry-1", "label_reviewer": "Người gán nhãn", "report_file": "anyrun/wannacry-1.json",
+ "second_report_file": "triage/wannacry-1.overview.json", "second_dynamic_file": "triage/wannacry-1.behavioral1.json",
+ "expected": [{"type": "ip", "value": "203.0.113.5"}],
+ "reference_family": ["WannaCry"], "expected_impacts": ["data_encryption", "persistence"],
+ "expected_techniques": ["T1486", "T1053.005"], "expected_block": []}
+```
+
+`expected` phải liệt kê đủ mọi observable; các nhãn còn lại là tùy chọn và nhãn nào vắng thì không được chấm. `expected_block: []` nghĩa là không đích nào đáng chặn, nên mọi đề xuất chặn là chặn nhầm.
 
 Việc cần làm để chạy thật: tạo tài khoản Researcher tại tria.ge, đặt `TRIAGE_API_KEY` trong `.env`, mở hồ sơ rồi bấm "Lấy từ Triage và đối chiếu". Sau lần chạy thật đầu tiên cần rà lại `triage_report.py` với JSON thật, vì tài liệu mô tả `tasks` theo hai dạng khác nhau và không có ví dụ cho `report_triage.json`.
 
