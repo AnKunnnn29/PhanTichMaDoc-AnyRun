@@ -25,6 +25,14 @@ Nạp `mscoree.dll`/`clr.dll`/`coreclr.dll` ghi nhận thành phần runtime .NE
 
 `vaultcli.dll`, `dpapi.dll`, `rstrtmgr.dll`, `samlib.dll` chỉ sinh suy luận năng lực yếu; không kết luận đánh cắp mật khẩu hay mã hóa. DLL phổ biến như advapi32/bcrypt không sinh cảnh báo năng lực. Các dữ kiện metadata/module là evidence, không trở thành IOC chặn.
 
+## Bằng chứng mức mã lệnh (assembly)
+
+Trong **Ghidra trên máy**, khi một hồ sơ sandbox đang mở, kết quả phân tích mẫu được lưu cùng hồ sơ đó. `MalwareSummaryExporter.java` duyệt mọi lệnh `CALL`, lần theo thunk và con trỏ IAT tới hàm import, rồi xuất 10 lệnh trước và 3 lệnh sau mỗi lệnh gọi (địa chỉ, byte, mnemonic, chuỗi hoặc API mà toán hạng trỏ tới). Tối đa 3 vị trí cho mỗi API, 60 vị trí cho mỗi mẫu; số lệnh gọi thật vẫn được đếm đủ.
+
+`code_evidence.py` gom các vị trí gọi theo hành vi (`BEHAVIOR_APIS`), dùng chung ID với nhóm tác động của `impact_analysis.py`. Bản xuất Markdown/HTML/PDF in listing và ghi rõ từng hành vi **khớp** nhóm tác động sandbox đã quan sát hay chỉ là năng lực có trong mã. Listing chứng minh mã có trong tệp, không chứng minh mã đã chạy. Nếu hash của mẫu không có trong hồ sơ, báo cáo in cảnh báo thay vì ngầm coi là cùng một tệp.
+
+Giới hạn: mẫu bị pack chỉ lộ đoạn giải nén; mẫu .NET không có lệnh gọi import dạng này (dùng ILSpy/dnSpy); API gọi qua địa chỉ tính lúc chạy không được nhận ra. Khi đó kết quả ghi rõ là không tìm thấy, không coi là sạch.
+
 ## Đối chiếu họ và agent
 
 `data/family_expectations.json` chứa tập `uses` cho WannaCry S0366, Emotet S0367 và RedLine Stealer S1240, trích từ STIX Enterprise ATT&CK 19.2. URL, SHA256 nguồn và relationship ID được lưu cùng dữ liệu. Khi chạy phân tích không cần Internet để tải danh mục.

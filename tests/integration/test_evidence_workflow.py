@@ -101,3 +101,38 @@ def test_restored_slim_copy_does_not_replace_full_history_payload(flask_test_cli
     assert all("content" in src for src in stored["evidence_bundle"]["sources"])
     reopened = flask_test_client.get("/api/cases/" + data["case_id"]).get_json()["data"]
     assert all("content" not in src for src in reopened["evidence_bundle"]["sources"])
+
+
+def test_ghidra_listing_is_stored_with_the_case_and_reaches_every_export(flask_test_client, emotet_report, monkeypatch):
+    import app as app_module
+    from ir_workspace.analysis.code_evidence import build_code_evidence
+
+    data = upload(flask_test_client, emotet_report)
+    summary = {"ghidra_version": "12.1.2", "call_counts": {"RegSetValueExA": 1}, "call_sites": [{
+        "api": "RegSetValueExA", "base_api": "RegSetValue", "library": "ADVAPI32.DLL", "function": "FUN_00401000",
+        "address": "0040102b", "instructions": [{"address": "0040102b", "bytes": "ff 15 00 a0 40 00",
+                                                 "text": "CALL dword ptr [0x0040a000]", "comment": "<b>x</b>", "is_call": True}]}]}
+    monkeypatch.setattr(app_module, "analyze_sample_with_ghidra", lambda path, timeout=180: {
+        "triage": {"filename": "s.exe", "sha256": "c" * 64, "md5": "", "size": 4},
+        "ghidra": {"status": "ok", "summary": summary}, "code_evidence": build_code_evidence(summary)})
+
+    def analyze(case_id):
+        return flask_test_client.post("/api/ghidra/analyze", content_type="multipart/form-data", data={
+            "sample_file": (io.BytesIO(b"MZ.."), "s.exe"), "case_id": case_id})
+
+    assert analyze("case-missing").status_code == 400
+    attached = analyze(data["case_id"]).get_json()["data"]["static_analysis"]
+    assert attached["hash_match"] is False and attached["tool"] == "Ghidra 12.1.2"
+    assert load_case(data["case_id"])["static_analysis"]["sha256"] == "c" * 64
+    assert upload(flask_test_client, emotet_report, force=False)["static_analysis"]["sha256"] == "c" * 64
+    for fmt in ("markdown", "html", "pdf"):
+        exported = flask_test_client.post("/api/export", json={"format": fmt, "data": {"case_id": data["case_id"]}}).get_json()
+        raw = Path(exported["path"]).read_bytes()
+        if fmt == "pdf":
+            assert raw.startswith(b"%PDF")
+            continue
+        text = raw.decode("utf-8")
+        # A code fence shows markup literally; HTML has to escape it.
+        marker = ">> 0040102b  ff 15 00 a0 40 00"
+        assert (marker if fmt == "markdown" else marker.replace(">", "&gt;")) in text
+        assert fmt == "markdown" or "<b>x</b>" not in text

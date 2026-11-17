@@ -364,6 +364,10 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   margin-top: 10px;
 }
 .code-block .cmd-comment { color: #7b8794; }
+/* Disassembly keeps its columns: scroll sideways instead of wrapping. */
+.asm-listing { white-space: pre; word-break: normal; overflow-x: auto; max-height: 380px; }
+.asm-listing .asm-call { display: inline-block; min-width: 100%; background: #fff3bf; color: #7a4b00; font-weight: 600; }
+.asm-caption { margin-top: 12px; font-size: 13px; }
 .code-block .cmd-line   { color: #087f5b; }
 
 /* ── IOC tags ── */

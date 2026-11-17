@@ -11,7 +11,8 @@ from functools import wraps
 from pathlib import Path
 from dataclasses import asdict
 from ir_workspace.analysis.analysis_pipeline import run_pipeline, analysis_key, research_markdown
-from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action
+from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action, attach_static_analysis
+from ir_workspace.analysis.code_evidence import static_record
 from ir_workspace.storage.runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
 
 if sys.platform == "win32" and __name__ == "__main__":
@@ -439,8 +440,17 @@ def ghidra_analyze_upload():
             timeout = max(30, min(600, int(timeout_raw)))
         except ValueError:
             timeout = 180
+        case_id = (request.form.get("case_id") or "").strip()
+        case = load_case(case_id) if case_id else None
+        if case_id and not case:
+            raise ValidationError("Không tìm thấy hồ sơ để gắn kết quả Ghidra")
         tmp_path = _save_temp_upload(request.files["sample_file"])
         result = analyze_sample_with_ghidra(tmp_path, timeout=timeout)
+        result["triage"]["filename"] = request.files["sample_file"].filename or result["triage"]["filename"]
+        if case and result["code_evidence"]["behaviors"]:
+            # Stored with the case so every export shows the listing beside the sandbox findings.
+            result["static_analysis"] = static_record(result, case)
+            attach_static_analysis(case_id, result["static_analysis"])
         return jsonify({"ok": True, "data": result})
     except (ValidationError, ValueError) as e:
         return _error_response(str(e))

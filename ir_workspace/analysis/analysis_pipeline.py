@@ -18,6 +18,7 @@ from ir_workspace.ai.response_policy import exclusions
 from ir_workspace.analysis.operational_guidance import apply_guidance
 from ir_workspace.integrations.network_intel import build_network_profiles, enrich_network_profiles
 from ir_workspace.analysis.impact_analysis import analyze_impact
+from ir_workspace.analysis.code_evidence import code_evidence_markdown
 from ir_workspace.analysis.remediation import build_case_actions, merge_actions
 from ir_workspace.analysis.deep_analysis import build_deep_analysis, family_catalog
 
@@ -201,6 +202,7 @@ def research_markdown(payload: dict) -> str:
             lines += ["", "Ảnh hưởng: " + safe(c["impact"]), "Hướng xử lý: " + safe(c["response_hint"]),
                       "Evidence: " + safe(", ".join(c["evidence_ids"][:10])), ""]
         lines += ["- " + safe(x) for x in impact["limitations"]]
+    lines += code_evidence_markdown(payload).splitlines()
     profiles = [p for p in (payload.get("network_profiles") or {}).values()
                 if p["role"] not in {"benign_infrastructure", "local_network"}]
     if payload.get("network_profiles"):

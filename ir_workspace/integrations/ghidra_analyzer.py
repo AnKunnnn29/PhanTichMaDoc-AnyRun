@@ -9,6 +9,7 @@ small local triage pass.
 from __future__ import annotations
 
 from ir_workspace.paths import PROJECT_ROOT
+from ir_workspace.analysis.code_evidence import TRACKED_APIS, build_code_evidence
 
 import hashlib
 import base64
@@ -320,6 +321,7 @@ def run_ghidra_headless(path: str, timeout: int = 180) -> dict:
             "-postScript",
             script_name,
             str(output_json),
+            ",".join(TRACKED_APIS),
             "-deleteProject",
         ]
         started = time.time()
@@ -374,6 +376,7 @@ def analyze_sample(path: str, timeout: int = 180) -> dict:
         "triage": triage,
         "ghidra": ghidra,
         "ir_enrichment": build_ir_enrichment(triage, ghidra),
+        "code_evidence": build_code_evidence(ghidra.get("summary") or {}),
     }
 
 

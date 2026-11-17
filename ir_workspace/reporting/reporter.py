@@ -691,12 +691,27 @@ def build_html_report(data: dict[str, Any]) -> str:
   <h2>8. IR Playbook</h2>
   <div class="card"><strong>Biện pháp ưu tiên:</strong> {_html(playbook.get("mitigation", ""))}</div>
   {action_html}
+  {_code_evidence_html(data)}
   <h2>Evidence / Agent / Review</h2>
   <pre style="white-space:pre-wrap;overflow-wrap:anywhere">{_html(chr(10).join(_research_lines(data)))}</pre>
 </main>
 </body>
 </html>
 """
+
+
+def _code_evidence_html(data):
+    from ir_workspace.analysis.code_evidence import report_blocks
+    blocks = report_blocks(data)
+    if not blocks:
+        return ""
+    parts = [f"<h2>{_html(blocks['heading'])}</h2>", _html_list(blocks["intro"])]
+    for b in blocks["behaviors"]:
+        parts.append(f"<h3>{_html(b['title'])}</h3><p>{_html(b['status'])}</p><p><strong>API:</strong> {_html(b['apis'])}</p>")
+        for site in b["sites"]:
+            parts.append(f"<p>{_html(site['caption'])}</p>"
+                         f"<pre style=\"overflow-x:auto;font-size:12px\">{_html(site['listing'])}</pre>")
+    return "".join(parts)
 
 
 def _research_lines(data):
@@ -944,6 +959,27 @@ def export_payload_pdf(data: dict[str, Any], filename: str | Path) -> Path:
         add_para(action.get("description", ""))
         if action.get("commands"):
             add_para("Commands: " + " | ".join(action.get("commands", [])[:4]))
+
+    from ir_workspace.analysis.code_evidence import report_blocks
+    blocks = report_blocks(data)
+    if blocks:
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Preformatted
+        # The sheet's fonts were swapped for proportional Vietnamese ones; a listing needs fixed width.
+        mono = ParagraphStyle("Listing", parent=styles["Code"], fontName="Courier", fontSize=7.5, leading=9, leftIndent=0)
+        add_para(blocks["heading"], "Heading2")
+        for line in blocks["intro"]:
+            add_para(line)
+        for b in blocks["behaviors"]:
+            add_para(b["title"], "Heading3")
+            add_para(b["status"])
+            add_para("API: " + b["apis"])
+            for site in b["sites"]:
+                add_para(site["caption"])
+                # Courier has no glyphs outside Latin-1; a listing is ASCII apart from string literals.
+                listing = site["listing"].encode("latin-1", "replace").decode("latin-1")
+                story.append(Preformatted(listing, mono, maxLineLength=110, newLineChars="      "))
+                story.append(Spacer(1, 6))
 
     add_para("Evidence / Agent / Review", "Heading2")
     for line in _research_lines(data):

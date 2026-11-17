@@ -25,6 +25,7 @@ def _connect():
         db.execute("CREATE TABLE IF NOT EXISTS decisions (seq INTEGER PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id), "
                    "action_id TEXT NOT NULL, decision TEXT NOT NULL, reviewer TEXT NOT NULL, reason TEXT NOT NULL, "
                    "created_at TEXT NOT NULL, UNIQUE(case_id, action_id, seq))")
+        db.execute("CREATE TABLE IF NOT EXISTS static_analyses (case_id TEXT PRIMARY KEY REFERENCES cases(id), payload TEXT NOT NULL)")
         with db:
             yield db
     finally:
@@ -35,6 +36,14 @@ def save_case(payload: dict) -> None:
     case_id = payload["case_id"]
     with _connect() as db:
         db.execute("INSERT OR IGNORE INTO cases(id,fingerprint,payload) VALUES (?,?,?)", (case_id, payload["analysis_fingerprint"], json.dumps(payload, ensure_ascii=False)))
+
+
+def attach_static_analysis(case_id: str, record: dict) -> None:
+    """Keep the latest static analysis of the sample next to its sandbox case."""
+    with _connect() as db:
+        if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
+            raise KeyError("Không tìm thấy phân tích")
+        db.execute("INSERT OR REPLACE INTO static_analyses(case_id,payload) VALUES (?,?)", (case_id, json.dumps(record, ensure_ascii=False)))
 
 
 def find_case(fingerprint: str) -> dict | None:
@@ -50,6 +59,9 @@ def load_case(case_id: str) -> dict | None:
             return None
         payload = json.loads(row[0])
         decisions = db.execute("SELECT seq,action_id,decision,reviewer,reason,created_at FROM decisions WHERE case_id=? ORDER BY seq", (case_id,)).fetchall()
+        static = db.execute("SELECT payload FROM static_analyses WHERE case_id=?", (case_id,)).fetchone()
+    if static:
+        payload["static_analysis"] = json.loads(static[0])
     events = [dict(zip(("revision", "action_id", "decision", "reviewer", "reason", "created_at"), row)) for row in decisions]
     payload["review_history"] = events
     payload["review_revision"] = events[-1]["revision"] if events else 0

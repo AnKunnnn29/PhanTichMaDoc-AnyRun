@@ -388,6 +388,7 @@ async function analyzeGhidraFile() {
   const fd = new FormData();
   fd.append('sample_file', selectedGhidraFile);
   fd.append('timeout', document.getElementById('ghidra-timeout')?.value || '180');
+  if (G.data?.case_id) fd.append('case_id', G.data.case_id);
   document.getElementById('ghidra-result').innerHTML = `
     <div class="ghidra-loading loading-wrap compact">
       <div class="spinner"></div>
@@ -401,11 +402,49 @@ async function analyzeGhidraFile() {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderGhidraResult(j.data);
-    toast('Phân tích tĩnh hoàn tất!');
+    if (j.data.static_analysis && G.data) {
+      G.data.static_analysis = j.data.static_analysis;
+      renderEvidencePanel(G.data);
+    }
+    toast(j.data.static_analysis ? 'Đã gắn đoạn mã vào hồ sơ đang mở' : 'Phân tích tĩnh hoàn tất!');
   } catch (e) {
     document.getElementById('ghidra-result').innerHTML = `<div class="inline-note danger">${esc(e.message)}</div>`;
     toast(e.message, 'err');
   }
+}
+
+function asmSiteHtml(site) {
+  const lines = String(site.listing || '').split(/\r?\n/)
+    .map(line => line.startsWith('>>') ? `<span class="asm-call">${esc(line)}</span>` : esc(line)).join('\n');
+  return `<p class="asm-caption">${esc(site.library || '?')}::${esc(site.api)} gọi tại <code>${esc(site.address)}</code>
+    trong hàm <code>${esc(site.function || 'không thuộc hàm nào')}</code></p>
+    <pre class="code-block asm-listing">${lines}</pre>`;
+}
+
+function codeEvidenceHtml(data) {
+  const evidence = data.code_evidence;
+  if (!evidence || (data.ghidra || {}).status !== 'ok') return '';
+  const attached = data.static_analysis;
+  const attachNote = attached
+    ? (attached.hash_match
+      ? '<div class="inline-note">Đã gắn vào hồ sơ đang mở. Hash của mẫu có trong báo cáo sandbox; các bản xuất sẽ kèm đoạn mã này.</div>'
+      : '<div class="inline-note danger">Đã gắn vào hồ sơ đang mở, nhưng hash của mẫu không có trong báo cáo sandbox. Kiểm tra lại đây có đúng là mẫu của hồ sơ này không.</div>')
+    : (evidence.behaviors.length
+      ? '<div class="inline-note">Chưa gắn vào hồ sơ nào. Mở một hồ sơ sandbox trước rồi phân tích lại để đoạn mã xuất hiện trong báo cáo.</div>'
+      : '');
+  const behaviors = evidence.behaviors.map((b, i) => `
+    <details class="action-card" ${i < 2 ? 'open' : ''}>
+      <summary>${esc(b.title)} · ${esc(b.tactic)} · ${b.call_sites.length} vị trí gọi</summary>
+      <div class="tag-list">${b.apis.map(a => `<span class="tag tag-hash">${esc(a.name)} ×${esc(a.call_count)}</span>`).join('')}</div>
+      ${b.call_sites.map(asmSiteHtml).join('')}
+    </details>`).join('');
+  return `
+    <div class="ghidra-panel">
+      <div class="card-title">Đoạn mã thực hiện hành vi (assembly)</div>
+      <div class="inline-note">${esc(evidence.note || '')}</div>
+      ${attachNote}
+      ${behaviors}
+    </div>`;
 }
 
 function renderGhidraResult(data) {
@@ -520,6 +559,8 @@ function renderGhidraResult(data) {
         ${ghidra.error ? `<div class="inline-note danger">${esc(ghidra.error)}</div>` : ''}
       </div>
     </div>
+
+    ${codeEvidenceHtml(data)}
 
     <div class="ghidra-panel">
       <div class="card-title">IOC tĩnh để đối chiếu Any.Run</div>
@@ -1059,6 +1100,7 @@ function renderEvidencePanel(data) {
     return el;
   };
   const impact = data.impact_analysis;
+  const codeBehaviors = data.static_analysis?.code_evidence?.behaviors || [];
   if (typeof renderDeepAnalysis === 'function') renderDeepAnalysis(data, root);
   if (impact) {
     const section = add(root, 'section', undefined, 'card case-agent');
@@ -1074,6 +1116,11 @@ function renderEvidencePanel(data) {
       add(box, 'p', `Ảnh hưởng: ${c.impact}`);
       add(box, 'p', `Hướng xử lý: ${c.response_hint}`);
       add(box, 'p', `Bằng chứng: ${c.evidence_ids.length} mục (xem chi tiết ở danh sách chỉ báo bên dưới).`);
+      const code = codeBehaviors.find(b => b.id === c.id);
+      for (const site of (code?.call_sites || []).slice(0, 2)) {
+        add(box, 'p', `Mã tương ứng trong mẫu (Ghidra, phân tích tĩnh): ${site.library || '?'}::${site.api} gọi tại ${site.address} trong hàm ${site.function || '?'}`, 'asm-caption');
+        add(box, 'pre', site.listing, 'code-block asm-listing');
+      }
     }
     for (const note of impact.limitations || []) add(section, 'p', note);
   }
