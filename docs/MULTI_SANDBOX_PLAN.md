@@ -1,6 +1,18 @@
 # Plan: thêm sandbox thứ hai, đối chiếu đa nguồn và đo độ chính xác
 
-Lập ngày 17/11/2026. Trạng thái: đề xuất, chưa triển khai.
+Lập ngày 17/11/2026. Trạng thái: bước 0–2 đã có mã, chờ API key Triage để chạy trên dữ liệu thật; bước 3–5 chưa làm.
+
+## 0. Tiến độ (17/11/2026)
+
+| Bước | Trạng thái |
+|---|---|
+| 0. Xác nhận Triage | Đã đọc tài liệu chính thức: tìm theo hash `GET /api/v0/search?query=sha256:…`, báo cáo `…/samples/{id}/overview.json` và `…/{id}/behavioralN/report_triage.json`. API trả 401 khi không có key, kể cả với mẫu công khai. Chưa tìm thấy giới hạn tần suất được công bố. |
+| 0. Nguồn tìm mẫu | Đã kiểm tra thật: MalwareBazaar trả `vendor_intel` có liên kết Any.Run, Triage, CAPE, VMRay cho cùng một SHA256 (mẫu `c34af1f1…` có báo cáo Triage `260317-xlg6lafz9j`). |
+| 1. Nhập báo cáo Triage | `triage_client.py`, `triage_report.py`. Tải `overview.json` lên như một báo cáo cũng chạy được pipeline. Mới kiểm thử bằng fixture dựng theo tài liệu, **chưa chạy với phản hồi thật của Triage**. |
+| 2. Đối chiếu | `sandbox_compare.py`, route `POST /api/cases/<id>/compare/triage`, thẻ "Đối chiếu đa nguồn sandbox" trong Bằng chứng nguồn, mục tương ứng trong bản xuất. |
+| 3–5 | Chưa làm: thu thập và gán nhãn bộ mẫu, mở rộng `evaluation.py`, viết phần thực nghiệm. |
+
+Việc cần làm để chạy thật: tạo tài khoản Researcher tại tria.ge, đặt `TRIAGE_API_KEY` trong `.env`, mở hồ sơ rồi bấm "Lấy từ Triage và đối chiếu". Sau lần chạy thật đầu tiên cần rà lại `triage_report.py` với JSON thật, vì tài liệu mô tả `tasks` theo hai dạng khác nhau và không có ví dụ cho `report_triage.json`.
 
 ## 1. Mục tiêu
 

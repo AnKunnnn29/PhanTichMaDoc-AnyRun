@@ -1122,6 +1122,70 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+async function compareWithTriage(overview, dynamic, fromFile) {
+  if (fromFile && !overview) return toast('Chọn file overview.json của Triage trước', 'err');
+  const fd = new FormData();
+  if (overview) fd.append('report_file', overview);
+  if (dynamic) fd.append('dynamic_file', dynamic);
+  toast('Đang phân tích báo cáo Triage và đối chiếu...');
+  try {
+    const r = await fetch(`/api/cases/${encodeURIComponent(G.data.case_id)}/compare/triage`, { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    G.data.sandbox_comparison = j.data.sandbox_comparison;
+    renderEvidencePanel(G.data);
+    toast('Đã đối chiếu với Triage');
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+function renderSandboxComparison(data, root, add) {
+  if (!data.case_id) return;
+  const section = add(root, 'section', undefined, 'card case-agent');
+  add(section, 'h3', 'Đối chiếu đa nguồn sandbox');
+  const cmp = data.sandbox_comparison;
+  if (cmp) {
+    const a = cmp.labels.a, b = cmp.labels.b;
+    const relation = cmp.relation === 'same_file' ? 'cùng một tệp' : 'mẫu của nguồn này nằm trong lần chạy của nguồn kia';
+    const mean = cmp.mean_jaccard == null ? '' : ` · đồng thuận trung bình ${Math.round(cmp.mean_jaccard * 100)}%`;
+    add(section, 'p', `${a} và ${b} · ${relation}${mean}`);
+    const table = add(section, 'table', undefined, 'compare-table');
+    const head = add(add(table, 'thead'), 'tr');
+    for (const title of ['Chiều đối chiếu', 'Cả hai', `Chỉ ${a}`, `Chỉ ${b}`, 'Jaccard']) add(head, 'th', title);
+    const body = add(table, 'tbody');
+    for (const d of cmp.dimensions) {
+      const tr = add(body, 'tr');
+      add(tr, 'td', d.title);
+      for (const key of ['both', 'only_a', 'only_b']) {
+        const td = add(tr, 'td');
+        add(td, 'b', d.counts[key]);
+        if (d[key].length) add(td, 'div', d[key].slice(0, 6).join(', ') + (d.counts[key] > 6 ? ' …' : ''), 'compare-items');
+      }
+      add(tr, 'td', d.jaccard == null ? '—' : d.jaccard.toFixed(2));
+    }
+    add(section, 'p', cmp.note);
+  } else {
+    add(section, 'p', 'Chưa đối chiếu. Lấy báo cáo Triage của cùng mẫu để so sánh họ mã độc, đích mạng, ATT&CK và nhóm tác động.');
+  }
+  const controls = add(section, 'div', undefined, 'compare-controls');
+  const viaApi = add(controls, 'button', 'Lấy từ Triage và đối chiếu', 'btn btn-outline');
+  viaApi.type = 'button';
+  viaApi.onclick = () => compareWithTriage(null, null, false);
+  const pick = (label) => {
+    const wrap = add(controls, 'label', label + ' ');
+    const input = add(wrap, 'input');
+    input.type = 'file';
+    input.accept = '.json';
+    return input;
+  };
+  const overview = pick('overview.json');
+  const dynamic = pick('report_triage.json (tùy chọn)');
+  const viaFile = add(controls, 'button', 'Đối chiếu từ file', 'btn btn-outline');
+  viaFile.type = 'button';
+  viaFile.onclick = () => compareWithTriage(overview.files[0], dynamic.files[0], true);
+}
+
 function renderEvidencePanel(data) {
   const root = document.getElementById('evidence-content');
   if (!root) return;
@@ -1166,6 +1230,7 @@ function renderEvidencePanel(data) {
     }
     for (const note of impact.limitations || []) add(section, 'p', note);
   }
+  renderSandboxComparison(data, root, add);
   const caseAgent = data.case_agent;
   if (caseAgent) {
     const section = add(root, 'section', undefined, 'card case-agent');

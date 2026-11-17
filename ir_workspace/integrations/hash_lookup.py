@@ -41,6 +41,21 @@ def configured():
     return bool(os.getenv('MALWAREBAZAAR_AUTH_KEY','').strip())
 
 
+def vendor_verdicts(intel):
+    """What each sandbox/vendor indexed by the source says about the same file: family, verdict and report link."""
+    rows=[]
+    for vendor,entry in list(intel.items())[:24] if isinstance(intel,dict) else []:
+        entry=entry[0] if isinstance(entry,list) and entry else entry
+        if not isinstance(entry,dict):continue
+        text=lambda *names: next((str(entry[n])[:120].replace('\n',' ') for n in names if isinstance(entry.get(n),(str,int)) and str(entry[n]).strip()),'')
+        link=text('analysis_url','link','report_link','analysis_link')
+        row={'vendor':str(vendor)[:40],'family':text('malware_family','family_name','threat_name','detection'),
+             'verdict':text('verdict','status','threat_level'),'score':text('score'),
+             'link':link if link.startswith('https://') else ''}
+        if row['family'] or row['verdict'] or row['score']:rows.append(row)
+    return rows
+
+
 def lookup_hash(value):
     value=str(value).lower().strip()
     if not re.fullmatch(r'(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})',value):
@@ -73,6 +88,7 @@ def lookup_hash(value):
                     'family':clean('signature'),'file_type':clean('file_type'),
                     'first_seen':clean('first_seen'),'last_seen':clean('last_seen'),
                     'tags':[str(t)[:80].replace('\n',' ') for t in (row.get('tags') or [])[:12]] if isinstance(row.get('tags'),list) else [],
+                    'vendors':vendor_verdicts(row.get('vendor_intel')),
                     'source_url':'https://bazaar.abuse.ch/sample/'+sha+'/','retrieved_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
         else:return {'status':'unavailable','hash':value}
     except (requests.RequestException,ValueError,TypeError,KeyError):
@@ -102,6 +118,9 @@ def format_lookup(result):
         'Nhãn liên quan: '+(', '.join(result['tags']) or 'Chưa có'),
         'Ghi nhận đầu tiên (UTC): '+(result['first_seen'] or 'Chưa có'),
         'Ghi nhận gần nhất (UTC): '+(result['last_seen'] or 'Chưa có'),
+        *(['Nhận định của các sandbox/nhà cung cấp khác về cùng tệp: '+'; '.join(
+            v['vendor']+': '+(v['family'] or 'không nêu họ')+(' ('+(v['verdict'] or 'điểm '+v['score'])+')' if v['verdict'] or v['score'] else '')
+            for v in result['vendors'])] if result.get('vendors') else []),
         'Đây là dữ liệu tham chiếu bên ngoài, không xác nhận endpoint của bạn đã nhiễm. Đối chiếu với bằng chứng trong hồ sơ trước khi xử lý.'])
 
 

@@ -730,6 +730,8 @@ def _research_lines(data):
                   for s in a["behavior_chain"]]
         lines += [f"Action {row['action_id']}: {row['decision']} P{row['priority']} - {row['rationale']}" for row in a["action_plan"]]
     lines += deep_report_lines(data)
+    from ir_workspace.analysis.sandbox_compare import comparison_lines
+    lines += comparison_lines(data)
     for row in agent["findings"]:
         lines += [f"{row['ioc_id']} | {row['role']} | {row['assessment_status']}", row["explanation"],
                   row["potential_impact"], row["verification_needed"], "Evidence: " + ", ".join(row["evidence_ids"])]

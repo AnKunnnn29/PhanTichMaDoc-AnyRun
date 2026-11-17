@@ -1,0 +1,20 @@
+{
+  "_note": "Synthetic test fixture shaped after the Triage API docs. Not a real Triage report.",
+  "version": "0.3.0",
+  "sample": {"id": "260317-xlg6lafz9j", "target": "Install.exe", "size": 3514368, "score": 10,
+             "md5": "84c82835a5d21bbcf75a61706d8ab549", "sha1": "5ff465afaabcbf0150d1a3ab2c2e74f3a4426467",
+             "sha256": "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07",
+             "iocs": {"ips": ["185.173.38.57"], "domains": ["www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"],
+                      "urls": ["http://185.173.38.57/payload.bin"]}},
+  "tasks": {"260317-xlg6lafz9j-behavioral1": {"kind": "behavioral", "status": "reported", "score": 10,
+            "tags": ["family:wannacry", "ransomware", "persistence"], "platform": "windows10-2004_x64"},
+            "260317-xlg6lafz9j-static1": {"kind": "static", "status": "reported"}},
+  "analysis": {"score": 10, "family": ["wannacry"], "tags": ["family:wannacry", "ransomware", "worm"]},
+  "targets": [{"tasks": ["behavioral1"], "score": 10, "target": "Install.exe", "family": ["wannacry"],
+               "signatures": [{"label": "wannacry", "name": "WannaCry", "score": 10, "tags": ["ransomware"],
+                               "desc": "WannaCry is a ransomware cryptoworm."}]}],
+  "signatures": [{"name": "Modifies file permissions", "score": 6, "ttp": ["T1222"]}],
+  "extracted": [{"tasks": ["behavioral1"],
+                 "ransom_note": {"family": "wannacry", "wallets": ["13AM4VW2dhxYgXeQepoHkHSQuy6NgaEb94"],
+                                 "note": "Ooops, your files have been encrypted!"}}]
+}

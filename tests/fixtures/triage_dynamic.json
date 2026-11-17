@@ -1,0 +1,44 @@
+{
+  "_note": "Synthetic test fixture shaped after the Triage API docs. Not a real Triage report.",
+  "version": "0.3.0",
+  "sample": {"id": "260317-xlg6lafz9j", "sha256": "c34af1f1f238747d6839ce6857138e97d722443c4e2a794c072c236228ceaa07"},
+  "task": {"id": "260317-xlg6lafz9j-behavioral1"},
+  "analysis": {"score": 10, "tags": ["family:wannacry", "ransomware"], "ttp": ["T1486", "T1053.005"]},
+  "processes": [
+    {"procid": 1, "procid_parent": 0, "pid": 4120, "ppid": 3300, "cmd": "\"C:\\Users\\Admin\\Install.exe\"",
+     "image": "C:\\Users\\Admin\\Install.exe", "orig": true, "started": 1200},
+    {"procid": 2, "procid_parent": 1, "pid": 4388, "ppid": 4120, "cmd": ["attrib", "+h", "."],
+     "image": "C:\\Windows\\SysWOW64\\attrib.exe", "orig": false, "started": 2400},
+    {"procid": 3, "procid_parent": 1, "pid": 4500, "ppid": 4120,
+     "cmd": "schtasks /create /tn System /tr C:\\Users\\Admin\\AppData\\Roaming\\System.exe /sc ONLOGON /rl HIGHEST",
+     "image": "C:\\Windows\\SysWOW64\\schtasks.exe", "orig": false, "started": 2600}
+  ],
+  "signatures": [
+    {"name": "Wannacry family", "score": 10, "tags": ["family:wannacry", "ransomware"], "desc": "WannaCry ransomware."},
+    {"name": "Renames multiple (61) files with added filename extension", "score": 9, "ttp": ["T1486"],
+     "indicators": [{"pid": 4120, "procid": 1, "description": "File renamed C:\\Users\\Admin\\Desktop\\a.rtf => a.rtf.WNCRY"}]},
+    {"name": "Scheduled Task/Job: Scheduled Task", "score": 7, "ttp": ["T1053.005"], "indicators": [{"pid": 4500}]},
+    {"name": "Not a technique", "score": 1, "ttp": ["bogus", "T99"]}
+  ],
+  "network": {
+    "flows": [
+      {"id": 1, "src": "10.127.0.5:49712", "dst": "185.173.38.57:80", "proto": "tcp", "pid": 4120, "procid": 1,
+       "domain": "", "country": "RU", "as_org": "Example Hosting"},
+      {"id": 2, "src": "10.127.0.5:52311", "dst": "8.8.8.8:53", "proto": "udp", "country": "US", "as_org": "GOOGLE"}
+    ],
+    "requests": [
+      {"flow": 2, "index": 0, "dns_request": {"domains": ["www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"]}},
+      {"flow": 2, "index": 1, "dns_response": {"domains": ["www.iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com"],
+                                               "ip": ["104.16.173.80"]}},
+      {"flow": 1, "index": 0, "http_request": {"method": "GET", "url": "http://185.173.38.57/payload.bin",
+                                               "headers": ["Host: 185.173.38.57", "User-Agent: Mozilla/5.0"]}}
+    ]
+  },
+  "dumped": [
+    {"at": 3000, "pid": 4120, "path": "C:\\Windows\\rar.exe", "name": "files/0x000700000001e5b2-12.dat", "kind": "martian",
+     "md5": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sha256": "0b0db30f2727dc44b6f6380c9cf2e333346c1b2593e4a943b7017fbe485a87fd"},
+    {"at": 3100, "pid": 4120, "name": "memory/4120-0-0x0000000000400000-0x0000000000a5c000-memory.dmp", "kind": "region",
+     "sha256": "1111111111111111111111111111111111111111111111111111111111111111"}
+  ],
+  "extracted": []
+}

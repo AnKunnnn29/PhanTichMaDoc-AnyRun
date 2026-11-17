@@ -11,8 +11,11 @@ from functools import wraps
 from pathlib import Path
 from dataclasses import asdict
 from ir_workspace.analysis.analysis_pipeline import run_pipeline, analysis_key, research_markdown
-from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action, attach_static_analysis
+from ir_workspace.storage.case_store import find_case, save_case, load_case, review_action, attach_static_analysis, attach_comparison
 from ir_workspace.analysis.code_evidence import static_record, import_vm_analysis
+from ir_workspace.analysis.sandbox_compare import compare_payloads
+from ir_workspace.integrations.triage_report import TriageReportError, is_triage_report, triage_to_report
+from ir_workspace.integrations.triage_client import TriageError, fetch_report as fetch_triage_report, find_sample as find_triage_sample
 from ir_workspace.storage.runtime_storage import cloud_mode, reports_dir as runtime_reports_dir
 
 if sys.platform == "win32" and __name__ == "__main__":
@@ -291,9 +294,11 @@ def _load_report_upload(field_name, supplemental_text=""):
     if filename.lower().endswith((".html", ".htm")):
         return load_saved_report_html(text)
     try:
-        return json.loads(text)
+        loaded = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValidationError("File .json không chứa JSON hợp lệ; dùng .md/.txt cho báo cáo văn bản") from exc
+    # A Triage overview report is converted to the shape the pipeline reads.
+    return triage_to_report(loaded) if is_triage_report(loaded) else loaded
 
 
 def _save_temp_upload(upload, max_bytes=MAX_SANDBOX_UPLOAD_BYTES):
@@ -480,6 +485,47 @@ def ghidra_import_result():
         return _error_response(str(e))
     except Exception as e:
         return _error_response(str(e), 500, "ghidra_error")
+
+
+def _triage_report_for_case(case):
+    """The Triage analysis of the case's sample: an uploaded overview, or fetched by hash."""
+    if request.files.get("report_file"):
+        overview = _load_json_upload("report_file")
+        dynamic = _load_json_upload("dynamic_file", required=False)
+        return triage_to_report(overview, [dynamic] if dynamic else [])
+    from ir_workspace.integrations.hash_lookup import case_hash_candidates
+    missing = None
+    for _label, value in case_hash_candidates(case)[:4]:
+        try:
+            return fetch_triage_report(find_triage_sample(value))
+        except TriageError as exc:
+            if exc.code != "triage_not_found":
+                raise
+            missing = exc
+    raise missing or TriageError("Hồ sơ không có SHA256 để tìm trên Triage", 400, "invalid_hash")
+
+
+@app.route("/api/cases/<case_id>/compare/triage", methods=["POST"])
+@rate_limit(max_requests=6)
+def compare_case_with_triage(case_id):
+    """Analyse the same sample's Triage report and store the dimension-by-dimension comparison."""
+    try:
+        case = load_case(case_id)
+        if not case:
+            return _error_response("Không tìm thấy phân tích", 404)
+        report = _triage_report_for_case(case)
+        sample_id = report["data"]["analysis"]["sandbox"]["sample_id"]
+        other = _build_payload(report, {}, source="triage:" + sample_id)
+        comparison = compare_payloads(case, other)
+        comparison["sandbox_url"] = report["data"]["analysis"]["sandbox"]["url"]
+        attach_comparison(case_id, comparison)
+        return jsonify({"ok": True, "data": {"sandbox_comparison": comparison}})
+    except TriageError as e:
+        return _error_response(str(e), e.status, e.code)
+    except (TriageReportError, ValidationError, ValueError) as e:
+        return _error_response(str(e))
+    except Exception as e:
+        return _error_response(str(e), 500, "internal_error")
 
 
 @app.route("/api/submit/url", methods=["POST"])
